@@ -35,7 +35,7 @@ function migrate(d: Database.Database) {
   CREATE TABLE IF NOT EXISTS habits (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
-    emoji TEXT DEFAULT '✅',
+    emoji TEXT DEFAULT 'check_circle',              -- Material-Symbol-Name
     target_per_week INTEGER DEFAULT 7,
     created_at TEXT DEFAULT (datetime('now'))
   );

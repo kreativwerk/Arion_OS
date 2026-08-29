@@ -5,7 +5,7 @@ export const TABLES: Record<string, { columns: string[]; orderBy?: string }> = {
     columns: ["title", "notes", "horizon", "due_date", "recurrence", "project", "priority", "done", "completed_at", "source", "submitted_by", "accepted"],
     orderBy: "done ASC, due_date IS NULL, due_date ASC, priority ASC",
   },
-  habits: { columns: ["name", "emoji", "target_per_week"] },
+  habits: { columns: ["name", "emoji", "target_per_week"], orderBy: "id ASC" },
   clipboard_items: { columns: ["content", "label", "pinned"], orderBy: "pinned DESC, created_at DESC" },
   calendar_events: { columns: ["title", "date", "start_time", "end_time", "location", "notes", "source"], orderBy: "date ASC, start_time ASC" },
   knowledge_notes: { columns: ["title", "body", "scope", "partner", "tags", "updated_at"], orderBy: "updated_at DESC" },

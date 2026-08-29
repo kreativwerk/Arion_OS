@@ -41,7 +41,7 @@ export default function MailPage() {
         <div className="space-y-5">
           <Card>
             <CardHeader title="Ungelesen & wichtig" subtitle={`${unread.length} Mails`} />
-            {unread.length === 0 && <EmptyState text="Alles gelesen. 📭" />}
+            {unread.length === 0 && <EmptyState text="Alles gelesen." />}
             {unread.map((m) => (
               <Row key={m.id}>
                 <div className="flex-1 min-w-0">

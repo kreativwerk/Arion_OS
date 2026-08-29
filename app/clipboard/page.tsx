@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Card, PageHeader, Button, Input, TextArea, EmptyState } from "@/components/ui";
+import { Card, PageHeader, Button, Input, TextArea, EmptyState, Icon } from "@/components/ui";
 import { useTable } from "@/lib/client";
 
 type Clip = { id: number; content: string; label: string; pinned: number; created_at: string };
@@ -60,8 +60,8 @@ export default function ClipboardPage() {
           <Card key={c.id} className="group">
             <div className="p-4">
               <div className="flex items-center justify-between gap-2 mb-1.5">
-                <span className="text-[12px] font-semibold text-ink-2">
-                  {c.pinned ? "📌 " : ""}
+                <span className="text-[12px] font-semibold text-ink-2 inline-flex items-center gap-1.5">
+                  {c.pinned ? <Icon name="push_pin" size={14} className="text-accent" /> : null}
                   {c.label || "Ohne Titel"}
                 </span>
                 <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
@@ -78,7 +78,7 @@ export default function ClipboardPage() {
               </div>
               <button
                 onClick={() => copy(c)}
-                className="w-full text-left bg-ground rounded-[10px] px-3.5 py-2.5 text-[13px] font-mono break-all hover:ring-2 hover:ring-accent/30 transition-all"
+                className="w-full text-left bg-inset rounded-[10px] px-3.5 py-2.5 text-[13px] font-mono break-all hover:ring-2 hover:ring-accent/30 transition-all"
                 title="Klicken zum Kopieren"
               >
                 {copiedId === c.id ? <span className="text-good font-sans">✓ Kopiert</span> : c.content}

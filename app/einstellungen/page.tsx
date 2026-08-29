@@ -151,7 +151,7 @@ export default function SettingsPage() {
                 Codriver ruft mit dem Token diesen Endpunkt auf – die Aufgabe landet in deinem{" "}
                 <Badge tone="accent">Eingang</Badge> im Aufgaben-Modul und wartet auf deine Annahme:
               </p>
-              <pre className="bg-ground rounded-[10px] p-3 text-[11px] font-mono overflow-x-auto">
+              <pre className="bg-inset rounded-[10px] p-3 text-[11px] font-mono overflow-x-auto">
 {`POST /api/external/tasks
 Authorization: Bearer arion_…
 

@@ -2,21 +2,22 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Icon } from "@/components/ui";
 
 const NAV: { href: string; label: string; icon: string }[] = [
-  { href: "/", label: "Heute", icon: "☀️" },
-  { href: "/aufgaben", label: "Aufgaben", icon: "☑️" },
-  { href: "/gewohnheiten", label: "Gewohnheiten", icon: "🔁" },
-  { href: "/kalender", label: "Kalender", icon: "📅" },
-  { href: "/mail", label: "Mail-Digest", icon: "✉️" },
-  { href: "/post", label: "Briefpost", icon: "📬" },
-  { href: "/wissen", label: "Wissen", icon: "🧠" },
-  { href: "/vertraege", label: "Verträge", icon: "📄" },
-  { href: "/clipboard", label: "Clipboard", icon: "📋" },
-  { href: "/watcher", label: "Portale", icon: "🔭" },
-  { href: "/slack", label: "Slack", icon: "💬" },
-  { href: "/assistent", label: "Jarvis", icon: "✨" },
-  { href: "/einstellungen", label: "Einstellungen", icon: "⚙️" },
+  { href: "/", label: "Heute", icon: "sunny" },
+  { href: "/aufgaben", label: "Aufgaben", icon: "task_alt" },
+  { href: "/gewohnheiten", label: "Gewohnheiten", icon: "autorenew" },
+  { href: "/kalender", label: "Kalender", icon: "calendar_month" },
+  { href: "/mail", label: "Mail-Digest", icon: "mail" },
+  { href: "/post", label: "Briefpost", icon: "markunread_mailbox" },
+  { href: "/wissen", label: "Wissen", icon: "school" },
+  { href: "/vertraege", label: "Verträge", icon: "contract" },
+  { href: "/clipboard", label: "Clipboard", icon: "content_paste" },
+  { href: "/watcher", label: "Portale", icon: "travel_explore" },
+  { href: "/slack", label: "Slack", icon: "forum" },
+  { href: "/assistent", label: "Jarvis", icon: "auto_awesome" },
+  { href: "/einstellungen", label: "Einstellungen", icon: "settings" },
 ];
 
 export default function Sidebar() {
@@ -35,10 +36,10 @@ export default function Sidebar() {
               key={item.href}
               href={item.href}
               className={`flex items-center gap-2.5 px-2.5 h-9 rounded-[10px] text-[13px] font-medium transition-all ${
-                active ? "bg-accent-soft text-accent" : "text-ink-2 hover:bg-ground hover:text-ink"
+                active ? "bg-accent-soft text-accent" : "text-ink-2 hover:bg-inset hover:text-ink"
               }`}
             >
-              <span className="text-[15px] w-5 text-center">{item.icon}</span>
+              <Icon name={item.icon} size={19} className="w-5 text-center" />
               {item.label}
             </Link>
           );

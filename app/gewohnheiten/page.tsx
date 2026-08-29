@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Card, PageHeader, Button, Input, EmptyState } from "@/components/ui";
+import { Card, PageHeader, Button, Input, EmptyState, Icon, MaybeIcon } from "@/components/ui";
 import { useTable, todayIso } from "@/lib/client";
 
 type Habit = { id: number; name: string; emoji: string; target_per_week: number };
@@ -19,7 +19,7 @@ export default function HabitsPage() {
   const { rows: habits, create, remove } = useTable<Habit>("habits");
   const [logs, setLogs] = useState<Log[]>([]);
   const [name, setName] = useState("");
-  const [emoji, setEmoji] = useState("✅");
+  const [emoji, setEmoji] = useState("check_circle");
 
   const days = lastDays(7);
 
@@ -56,7 +56,12 @@ export default function HabitsPage() {
 
       <Card className="mb-5">
         <div className="p-4 flex gap-2.5 items-center">
-          <Input className="!w-16 text-center" value={emoji} onChange={(e) => setEmoji(e.target.value)} />
+          <Input
+            className="!w-44 text-center"
+            title="Material-Icon-Name, z.B. directions_run"
+            value={emoji}
+            onChange={(e) => setEmoji(e.target.value)}
+          />
           <Input
             placeholder="Neue Gewohnheit …"
             value={name}
@@ -96,7 +101,7 @@ export default function HabitsPage() {
                 {habits.map((h) => (
                   <tr key={h.id} className="border-t border-line group">
                     <td className="py-3 text-[13px] font-medium">
-                      <span className="mr-2">{h.emoji}</span>
+                      <MaybeIcon value={h.emoji} size={17} className="mr-2 text-ink-2" />
                       {h.name}
                       <span className="text-[11px] text-ink-3 ml-2">
                         {weekCount(h.id)}/{h.target_per_week ?? 7}
@@ -109,7 +114,7 @@ export default function HabitsPage() {
                           className={`w-7 h-7 rounded-[9px] border transition-all text-[13px] ${
                             has(h.id, d)
                               ? "bg-good border-good text-white"
-                              : "bg-ground border-line hover:border-ink-3"
+                              : "bg-inset border-line hover:border-ink-3"
                           }`}
                         >
                           {has(h.id, d) ? "✓" : ""}
@@ -117,7 +122,14 @@ export default function HabitsPage() {
                       </td>
                     ))}
                     <td className="text-right text-[13px] font-semibold">
-                      {streak(h.id) > 0 ? `🔥 ${streak(h.id)}` : "–"}
+                      {streak(h.id) > 0 ? (
+                        <span className="inline-flex items-center gap-1">
+                          <Icon name="local_fire_department" size={15} className="text-warn" />
+                          {streak(h.id)}
+                        </span>
+                      ) : (
+                        "–"
+                      )}
                     </td>
                     <td className="text-right pl-3">
                       <button

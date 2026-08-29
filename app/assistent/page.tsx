@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui";
+import { Button, Icon } from "@/components/ui";
 
 type Msg = { id?: number; role: "user" | "assistant"; content: string };
 
@@ -50,7 +50,10 @@ export default function AssistantPage() {
     <div className="flex flex-col h-[calc(100vh-64px)]">
       <div className="flex items-end justify-between mb-4">
         <div>
-          <h1 className="text-[28px] font-bold tracking-tight">✨ Jarvis</h1>
+          <h1 className="text-[28px] font-bold tracking-tight inline-flex items-center gap-2.5">
+            <Icon name="auto_awesome" size={26} className="text-accent" />
+            Jarvis
+          </h1>
           <p className="text-[14px] text-ink-2 mt-1">
             Kennt deine Aufgaben, Verträge, Post, Mails, Termine und dein Wissen.
           </p>

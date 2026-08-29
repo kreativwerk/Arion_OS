@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Card, CardHeader, Badge, EmptyState, Row } from "@/components/ui";
+import { Card, CardHeader, Badge, EmptyState, Row, Icon, MaybeIcon } from "@/components/ui";
 import { fmtDate, todayIso } from "@/lib/client";
 
 type Dash = {
@@ -56,7 +56,8 @@ export default function TodayPage() {
         <p className="text-[15px] text-ink-2 mt-1">{dateStr}</p>
         {data.inboxCount > 0 && (
           <Link href="/aufgaben" className="inline-flex items-center gap-2 mt-3 px-3.5 h-8 rounded-full bg-accent-soft text-accent text-[13px] font-medium">
-            📥 {data.inboxCount} neue {data.inboxCount === 1 ? "Aufgabe" : "Aufgaben"} von Mitarbeitern im Eingang →
+            <Icon name="inbox" size={16} /> {data.inboxCount} neue{" "}
+            {data.inboxCount === 1 ? "Aufgabe" : "Aufgaben"} von Mitarbeitern im Eingang →
           </Link>
         )}
       </div>
@@ -68,7 +69,7 @@ export default function TodayPage() {
             subtitle={`${data.tasksToday.length} ${data.tasksToday.length === 1 ? "Aufgabe" : "Aufgaben"}`}
             action={<Link href="/aufgaben" className="text-[12px] text-accent">Alle →</Link>}
           />
-          {data.tasksToday.length === 0 && <EmptyState text="Nichts fällig – freier Kopf. 🎉" />}
+          {data.tasksToday.length === 0 && <EmptyState text="Nichts fällig – freier Kopf." />}
           {data.tasksToday.map((t) => (
             <Row key={t.id}>
               <button
@@ -101,10 +102,10 @@ export default function TodayPage() {
                   className={`flex items-center gap-2 px-3.5 h-9 rounded-full border text-[13px] font-medium transition-all ${
                     done
                       ? "bg-good/15 border-good/30 text-good"
-                      : "bg-ground border-line text-ink-2 hover:border-ink-3"
+                      : "bg-inset border-line text-ink-2 hover:border-ink-3"
                   }`}
                 >
-                  <span>{h.emoji}</span>
+                  <MaybeIcon value={h.emoji} size={17} />
                   {h.name}
                   {done && <span>✓</span>}
                 </button>
@@ -176,7 +177,7 @@ export default function TodayPage() {
           )}
           {data.watcherEvents.map((w) => (
             <Row key={`w${w.id}`}>
-              <span className="text-[15px]">🔭</span>
+              <Icon name="travel_explore" className="text-ink-2" />
               <div className="flex-1 min-w-0">
                 <div className="text-[13px] font-medium truncate">{w.title}</div>
                 <div className="text-[11px] text-ink-3">{w.watcher_name}</div>
@@ -185,7 +186,7 @@ export default function TodayPage() {
           ))}
           {data.slack.map((s) => (
             <Row key={`s${s.id}`}>
-              <span className="text-[15px]">💬</span>
+              <Icon name="forum" className="text-ink-2" />
               <div className="flex-1 min-w-0">
                 <div className="text-[13px] font-medium truncate">{s.text}</div>
                 <div className="text-[11px] text-ink-3">{s.from_person} · {s.channel}</div>

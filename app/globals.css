@@ -1,41 +1,32 @@
 @import "tailwindcss";
+@import "material-symbols/outlined.css";
 
+/* Arion OS – dunkles Design (Apple-Vorbild, dark-only) */
 @theme {
-  --color-ground: #f5f5f7;
-  --color-card: #ffffff;
-  --color-ink: #1d1d1f;
-  --color-ink-2: #6e6e73;
-  --color-ink-3: #a1a1a6;
-  --color-line: rgba(0, 0, 0, 0.08);
-  --color-accent: #0071e3;
-  --color-accent-soft: #eaf3fe;
-  --color-good: #34c759;
+  --color-ground: #000000;      /* Seitenhintergrund */
+  --color-card: #1c1c1e;        /* Karten */
+  --color-inset: #2c2c2e;       /* Eingabefelder, Code, vertiefte Flächen */
+  --color-ink: #f5f5f7;
+  --color-ink-2: #a1a1a6;
+  --color-ink-3: #6e6e73;
+  --color-line: rgba(255, 255, 255, 0.1);
+  --color-accent: #0a84ff;
+  --color-accent-soft: rgba(10, 132, 255, 0.16);
+  --color-good: #30d158;
   --color-warn: #ff9f0a;
-  --color-bad: #ff3b30;
+  --color-bad: #ff453a;
 
   --radius-card: 18px;
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto,
     "Helvetica Neue", Arial, sans-serif;
 
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.04);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-ground: #000000;
-    --color-card: #1c1c1e;
-    --color-ink: #f5f5f7;
-    --color-ink-2: #98989d;
-    --color-ink-3: #636366;
-    --color-line: rgba(255, 255, 255, 0.12);
-    --color-accent: #0a84ff;
-    --color-accent-soft: rgba(10, 132, 255, 0.16);
-  }
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.25);
 }
 
 html {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  color-scheme: dark;
 }
 
 body {
@@ -55,4 +46,12 @@ body {
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--color-ink-3) transparent;
+}
+
+/* Material Symbols: Grundeinstellung */
+.material-symbols-outlined {
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 20;
+  line-height: 1;
+  vertical-align: middle;
+  user-select: none;
 }

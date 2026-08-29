@@ -2,7 +2,33 @@
 
 import { ReactNode } from "react";
 
-/* Minimales UI-Kit im Apple-Stil: Karten, Buttons, Inputs, Badges, Segmented Control. */
+/* Minimales UI-Kit im Apple-Stil (dark): Karten, Buttons, Inputs, Badges, Segmented Control, Icons. */
+
+/** Google Material Symbol. `name` ist der Icon-Name, z.B. "calendar_month". */
+export function Icon({
+  name,
+  size = 18,
+  className = "",
+}: {
+  name: string;
+  size?: number;
+  className?: string;
+}) {
+  return (
+    <span aria-hidden className={`material-symbols-outlined shrink-0 ${className}`} style={{ fontSize: size }}>
+      {name}
+    </span>
+  );
+}
+
+/** Rendert Material-Icon-Namen als Icon; alles andere (z.B. alte Emojis) als Text. */
+export function MaybeIcon({ value, size = 18, className = "" }: { value: string; size?: number; className?: string }) {
+  return /^[a-z0-9_]+$/.test(value) ? (
+    <Icon name={value} size={size} className={className} />
+  ) : (
+    <span className={className}>{value}</span>
+  );
+}
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
@@ -80,7 +106,7 @@ export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       {...props}
-      className={`h-9 px-3 rounded-[10px] bg-ground border border-line text-[13px] outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all w-full ${props.className ?? ""}`}
+      className={`h-9 px-3 rounded-[10px] bg-inset border border-line text-[13px] outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all w-full ${props.className ?? ""}`}
     />
   );
 }
@@ -89,7 +115,7 @@ export function TextArea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement
   return (
     <textarea
       {...props}
-      className={`px-3 py-2 rounded-[10px] bg-ground border border-line text-[13px] outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all w-full ${props.className ?? ""}`}
+      className={`px-3 py-2 rounded-[10px] bg-inset border border-line text-[13px] outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all w-full ${props.className ?? ""}`}
     />
   );
 }
@@ -98,7 +124,7 @@ export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
       {...props}
-      className={`h-9 px-2.5 rounded-[10px] bg-ground border border-line text-[13px] outline-none focus:border-accent transition-all ${props.className ?? ""}`}
+      className={`h-9 px-2.5 rounded-[10px] bg-inset border border-line text-[13px] outline-none focus:border-accent transition-all ${props.className ?? ""}`}
     />
   );
 }
@@ -111,7 +137,7 @@ export function Badge({
   tone?: "neutral" | "accent" | "good" | "warn" | "bad";
 }) {
   const styles = {
-    neutral: "bg-ground text-ink-2",
+    neutral: "bg-inset text-ink-2",
     accent: "bg-accent-soft text-accent",
     good: "bg-good/15 text-good",
     warn: "bg-warn/15 text-warn",
@@ -134,7 +160,7 @@ export function Segmented<T extends string>({
   onChange: (v: T) => void;
 }) {
   return (
-    <div className="inline-flex bg-ground border border-line rounded-full p-0.5">
+    <div className="inline-flex bg-inset border border-line rounded-full p-0.5">
       {options.map((o) => (
         <button
           key={o.value}

@@ -20,10 +20,10 @@ export function seed(d: Database) {
   task.run("Digitalisierung Briefpost vollständig einführen", "", "long", iso(90), null, "Organisation", 2);
 
   const habit = d.prepare("INSERT INTO habits (name, emoji, target_per_week) VALUES (?,?,?)");
-  habit.run("Sport / Bewegung", "🏃", 4);
-  habit.run("Inbox Zero am Abend", "📥", 5);
-  habit.run("Lesen (20 Min)", "📚", 5);
-  habit.run("Kein Handy nach 22 Uhr", "🌙", 7);
+  habit.run("Sport / Bewegung", "directions_run", 4);
+  habit.run("Inbox Zero am Abend", "inbox", 5);
+  habit.run("Lesen (20 Min)", "menu_book", 5);
+  habit.run("Kein Handy nach 22 Uhr", "bedtime", 7);
 
   const log = d.prepare("INSERT OR IGNORE INTO habit_logs (habit_id, date) VALUES (?,?)");
   log.run(1, iso(-1));

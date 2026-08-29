@@ -101,7 +101,7 @@ export default function PostPage() {
                 </button>
               </div>
               {l.summary && (
-                <p className="text-[13px] text-ink-2 mt-3 bg-ground rounded-[10px] px-3.5 py-2.5">{l.summary}</p>
+                <p className="text-[13px] text-ink-2 mt-3 bg-inset rounded-[10px] px-3.5 py-2.5">{l.summary}</p>
               )}
             </div>
           </Card>
