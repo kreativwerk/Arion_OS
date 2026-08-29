@@ -6,6 +6,8 @@ import { Card, CardHeader, Badge, EmptyState, Row } from "@/components/ui";
 import { fmtDate, todayIso } from "@/lib/client";
 
 type Dash = {
+  config: Record<string, string>;
+  inboxCount: number;
   tasksToday: { id: number; title: string; priority: number; recurrence: string | null; project: string }[];
   habits: { id: number; name: string; emoji: string }[];
   habitLogsToday: { habit_id: number }[];
@@ -47,8 +49,16 @@ export default function TodayPage() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-[32px] font-bold tracking-tight">{greeting}.</h1>
+        <h1 className="text-[32px] font-bold tracking-tight">
+          {greeting}
+          {data.config?.user_name ? `, ${data.config.user_name}` : ""}.
+        </h1>
         <p className="text-[15px] text-ink-2 mt-1">{dateStr}</p>
+        {data.inboxCount > 0 && (
+          <Link href="/aufgaben" className="inline-flex items-center gap-2 mt-3 px-3.5 h-8 rounded-full bg-accent-soft text-accent text-[13px] font-medium">
+            📥 {data.inboxCount} neue {data.inboxCount === 1 ? "Aufgabe" : "Aufgaben"} von Mitarbeitern im Eingang →
+          </Link>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">

@@ -16,6 +16,7 @@ const NAV: { href: string; label: string; icon: string }[] = [
   { href: "/watcher", label: "Portale", icon: "🔭" },
   { href: "/slack", label: "Slack", icon: "💬" },
   { href: "/assistent", label: "Jarvis", icon: "✨" },
+  { href: "/einstellungen", label: "Einstellungen", icon: "⚙️" },
 ];
 
 export default function Sidebar() {

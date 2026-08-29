@@ -163,8 +163,58 @@ function migrate(d: Database.Database) {
     content TEXT NOT NULL,
     created_at TEXT DEFAULT (datetime('now'))
   );
+
+  -- Kundenspezifische Konfiguration (White-Label: pro Installation/Kunde)
+  CREATE TABLE IF NOT EXISTS app_config (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL DEFAULT ''
+  );
+
+  -- API-Tokens für externe Zulieferer (z.B. Codriver, Scanner, Watcher-Jobs)
+  CREATE TABLE IF NOT EXISTS api_tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    label TEXT NOT NULL,                           -- z.B. 'Codriver'
+    token_hash TEXT NOT NULL UNIQUE,               -- sha256 des Tokens
+    created_at TEXT DEFAULT (datetime('now')),
+    last_used TEXT
+  );
   `);
+
+  // Spalten-Migrationen für bestehende Datenbanken
+  addColumn(d, "tasks", "source", "TEXT DEFAULT 'eigen'");        // 'eigen' | 'codriver' | ...
+  addColumn(d, "tasks", "submitted_by", "TEXT DEFAULT ''");       // Name des Mitarbeiters
+  addColumn(d, "tasks", "accepted", "INTEGER DEFAULT 1");         // 0 = wartet im Eingang
 
   const row = d.prepare("SELECT COUNT(*) AS n FROM knowledge_notes").get() as { n: number };
   if (row.n === 0) seed(d);
+  seedConfigDefaults(d);
+}
+
+function addColumn(d: Database.Database, table: string, column: string, def: string) {
+  const cols = d.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (!cols.some((c) => c.name === column)) {
+    d.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${def}`);
+  }
+}
+
+/** Fehlende Konfigurationsschlüssel mit Standardwerten anlegen (idempotent). */
+function seedConfigDefaults(d: Database.Database) {
+  const defaults: Record<string, string> = {
+    app_name: "Arion OS",
+    user_name: "",
+    company: "Arion Logistics",
+    partners: "Amazon, Arval, LeasePlan",
+    employee_app: "Codriver",
+    about_me:
+      "Ich führe Arion Logistics, ein Logistikunternehmen. Wichtige Partner: Amazon (Vendor Central), " +
+      "Arval und LeasePlan (Fahrzeugleasing). Meine Briefpost wird von Mitarbeitern gescannt und digital " +
+      "zugestellt. Mitarbeiter tragen mir Aufgaben über unsere eigene App Codriver ein.",
+  };
+  const ins = d.prepare("INSERT OR IGNORE INTO app_config (key, value) VALUES (?,?)");
+  for (const [k, v] of Object.entries(defaults)) ins.run(k, v);
+}
+
+export function getConfig(): Record<string, string> {
+  const rows = db().prepare("SELECT key, value FROM app_config").all() as { key: string; value: string }[];
+  return Object.fromEntries(rows.map((r) => [r.key, r.value]));
 }

@@ -2,7 +2,7 @@
  *  und welche Spalten dabei geschrieben werden dürfen. */
 export const TABLES: Record<string, { columns: string[]; orderBy?: string }> = {
   tasks: {
-    columns: ["title", "notes", "horizon", "due_date", "recurrence", "project", "priority", "done", "completed_at"],
+    columns: ["title", "notes", "horizon", "due_date", "recurrence", "project", "priority", "done", "completed_at", "source", "submitted_by", "accepted"],
     orderBy: "done ASC, due_date IS NULL, due_date ASC, priority ASC",
   },
   habits: { columns: ["name", "emoji", "target_per_week"] },

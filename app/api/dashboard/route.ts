@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { db, getConfig } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -10,9 +10,12 @@ export async function GET() {
 
   const tasksToday = d
     .prepare(
-      "SELECT * FROM tasks WHERE done = 0 AND due_date IS NOT NULL AND due_date <= ? ORDER BY priority ASC, due_date ASC"
+      "SELECT * FROM tasks WHERE done = 0 AND accepted = 1 AND due_date IS NOT NULL AND due_date <= ? ORDER BY priority ASC, due_date ASC"
     )
     .all(today);
+  const inboxCount = (
+    d.prepare("SELECT COUNT(*) AS n FROM tasks WHERE done = 0 AND accepted = 0").get() as { n: number }
+  ).n;
   const habits = d.prepare("SELECT * FROM habits").all();
   const habitLogsToday = d.prepare("SELECT habit_id FROM habit_logs WHERE date = ?").all(today);
   const events = d
@@ -44,6 +47,8 @@ export async function GET() {
 
   return NextResponse.json({
     today,
+    config: getConfig(),
+    inboxCount,
     tasksToday,
     habits,
     habitLogsToday,

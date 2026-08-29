@@ -1,4 +1,4 @@
-import { db } from "@/lib/db";
+import { db, getConfig } from "@/lib/db";
 
 /**
  * Jarvis-Engine.
@@ -108,9 +108,24 @@ async function claudeAnswer(question: string, history: { role: string; content: 
   if (!apiKey) return localAnswer(question);
 
   const context = buildContext(question);
-  const system = `Du bist Jarvis, der persönliche Assistent des Nutzers in seiner App "Arion OS".
-Du kennst seine Aufgaben, Gewohnheiten, Verträge, Briefpost, wichtigen E-Mails, Termine, sein Wissen und das seiner Firma (Arion Logistics) und ihrer Partner (u.a. Amazon, Arval, LeasePlan).
-Antworte kurz, präzise, auf Deutsch, wie ein exzellenter Chief of Staff. Nutze ausschließlich den folgenden Datenkontext als Faktenbasis:
+  const cfg = getConfig();
+  const profile = [
+    cfg.user_name ? `Name des Nutzers: ${cfg.user_name}.` : "",
+    cfg.company ? `Firma: ${cfg.company}.` : "",
+    cfg.partners ? `Wichtige Partner: ${cfg.partners}.` : "",
+    cfg.employee_app ? `Mitarbeiter-App für Aufgaben: ${cfg.employee_app}.` : "",
+    cfg.about_me ? `Über den Nutzer (selbst hinterlegt): ${cfg.about_me}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const system = `Du bist Jarvis, der persönliche Assistent des Nutzers in seiner App "${cfg.app_name || "Arion OS"}".
+Du kennst seine Aufgaben, Gewohnheiten, Verträge, Briefpost, wichtigen E-Mails, Termine, sein Wissen und das seiner Firma und ihrer Partner.
+
+PROFIL DES NUTZERS:
+${profile}
+
+Antworte kurz, präzise, auf Deutsch, wie ein exzellenter Chief of Staff. Nutze ausschließlich Profil und den folgenden Datenkontext als Faktenbasis:
 
 ${context}`;
 

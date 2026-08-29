@@ -14,10 +14,13 @@ type Task = {
   project: string;
   priority: number;
   done: number;
+  source: string;
+  submitted_by: string;
+  accepted: number;
 };
 
 export default function TasksPage() {
-  const { rows, reload, create, remove } = useTable<Task>("tasks");
+  const { rows, reload, create, update, remove } = useTable<Task>("tasks");
   const [horizon, setHorizon] = useState<"short" | "long">("short");
   const [title, setTitle] = useState("");
   const [due, setDue] = useState("");
@@ -46,7 +49,8 @@ export default function TasksPage() {
     setProject("");
   };
 
-  const open = rows.filter((t) => t.horizon === horizon && !t.done);
+  const inbox = rows.filter((t) => !t.accepted && !t.done);
+  const open = rows.filter((t) => t.horizon === horizon && !t.done && t.accepted);
   const doneRows = rows.filter((t) => t.horizon === horizon && t.done);
   const recLabel: Record<string, string> = { daily: "täglich", weekly: "wöchentlich", monthly: "monatlich" };
 
@@ -66,6 +70,33 @@ export default function TasksPage() {
           />
         }
       />
+
+      {inbox.length > 0 && (
+        <Card className="mb-5 border-accent/30">
+          <div className="px-5 pt-3.5 pb-1 flex items-center gap-2">
+            <span className="text-[13px] font-semibold">Eingang von Mitarbeitern</span>
+            <Badge tone="accent">{inbox.length}</Badge>
+          </div>
+          {inbox.map((t) => (
+            <Row key={t.id}>
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] font-medium">{t.title}</div>
+                <div className="text-[11px] text-ink-3">
+                  von {t.submitted_by || "unbekannt"} · über {t.source}
+                  {t.due_date ? ` · fällig ${fmtDate(t.due_date)}` : ""}
+                  {t.notes ? ` · ${t.notes}` : ""}
+                </div>
+              </div>
+              <Button variant="ghost" onClick={() => update(t.id, { accepted: 1 } as Partial<Task>)}>
+                Annehmen
+              </Button>
+              <Button variant="danger" onClick={() => remove(t.id)}>
+                Ablehnen
+              </Button>
+            </Row>
+          ))}
+        </Card>
+      )}
 
       <Card className="mb-5">
         <div className="p-4 grid grid-cols-1 md:grid-cols-[1fr_150px_150px_150px_90px_auto] gap-2.5 items-center">
@@ -108,6 +139,9 @@ export default function TasksPage() {
                 {t.project ? ` · ${t.project}` : ""}
               </div>
             </div>
+            {t.source && t.source !== "eigen" && (
+              <Badge tone="accent">von {t.submitted_by || t.source}</Badge>
+            )}
             {t.recurrence && <Badge tone="accent">{recLabel[t.recurrence] ?? t.recurrence}</Badge>}
             {t.priority === 1 && <Badge tone="bad">hoch</Badge>}
             {t.priority === 3 && <Badge>niedrig</Badge>}

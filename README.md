@@ -31,7 +31,15 @@ der App gelöscht und durch echte Daten ersetzt werden.
 | **Clipboard** | Textbausteine, IBANs, Kundennummern, Links – ein Klick kopiert |
 | **Portale** | Watcher für Vendor Central, Arval-Portal etc. – neue Aufgaben/Infos laufen als Meldungen ein |
 | **Slack** | Nur Nachrichten von definierten wichtigen Personen |
-| **Jarvis** | Chat-Assistent, der alle Daten der App kennt; mit `ANTHROPIC_API_KEY` antwortet er frei formuliert über die Claude API |
+| **Jarvis** | Chat-Assistent, der alle Daten der App **und dein Profil** kennt; mit `ANTHROPIC_API_KEY` antwortet er frei formuliert über die Claude API |
+| **Einstellungen** | Profil („Über mich" für Jarvis), White-Label (App-Name), API-Tokens für externe Apps |
+
+## Mitarbeiter-Aufgaben über Codriver
+
+Mitarbeiter können über die firmeneigene App **Codriver** Aufgaben eintragen:
+Token unter *Einstellungen → API-Zugänge* erstellen, dann `POST /api/external/tasks`
+(siehe [`docs/CODRIVER.md`](docs/CODRIVER.md)). Eingetragene Aufgaben landen im
+**Eingang** und werden erst nach Annahme Teil der To-do-Liste.
 
 ## Konfiguration
 
@@ -45,6 +53,11 @@ cp .env.example .env.local
 
 - [`docs/ARCHITEKTUR.md`](docs/ARCHITEKTUR.md) – Aufbau, Datenmodell, Designprinzipien
 - [`docs/INTEGRATIONEN.md`](docs/INTEGRATIONEN.md) – Anbindung von IMAP-Postfächern, Slack, Kalender, Portal-Watchern, Brief-Scans und Claude API
+- [`docs/CODRIVER.md`](docs/CODRIVER.md) – API für die Mitarbeiter-App (Aufgaben-Eingang)
+- [`docs/SAAS.md`](docs/SAAS.md) – Verkaufsfähigkeit: White-Label heute, Multi-Tenant-Fahrplan
+
+Projekt-Skills für die Entwicklung mit Claude Code liegen unter `.claude/skills/`:
+`/gstack` (Architektur-Disziplin), `/grillme` (kritische Scope-Prüfung), `/taste` (Design-Regeln).
 
 ## Stack
 
