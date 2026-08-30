@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Card, PageHeader, Button, Input, TextArea, Select, Segmented, EmptyState, Badge } from "@/components/ui";
 import { useTable } from "@/lib/client";
+import DocumentsSection from "@/components/DocumentsSection";
 
 type Note = {
   id: number;
@@ -100,6 +101,8 @@ export default function KnowledgePage() {
           </div>
         </Card>
       )}
+
+      <DocumentsSection scope={scope} query={query} />
 
       {filtered.length === 0 && (
         <Card>

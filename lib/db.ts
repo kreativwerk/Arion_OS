@@ -270,6 +270,28 @@ function schemaStatements(dialect: "sqlite" | "postgres"): string[] {
       created_at TEXT DEFAULT ${NOW},
       last_used TEXT
     )`,
+    `CREATE TABLE IF NOT EXISTS documents (
+      ${ID}, ${WS},
+      title TEXT NOT NULL,
+      filename TEXT NOT NULL,
+      mime TEXT DEFAULT '',
+      size INTEGER DEFAULT 0,
+      category TEXT DEFAULT 'Allgemein',
+      scope TEXT NOT NULL DEFAULT 'unternehmen',
+      partner TEXT DEFAULT '',
+      tags TEXT DEFAULT '',
+      note TEXT DEFAULT '',
+      created_at TEXT DEFAULT ${NOW}
+    )`,
+    dialect === "sqlite"
+      ? `CREATE TABLE IF NOT EXISTS document_blobs (
+          document_id INTEGER PRIMARY KEY,
+          data BLOB NOT NULL
+        )`
+      : `CREATE TABLE IF NOT EXISTS document_blobs (
+          document_id bigint PRIMARY KEY,
+          data bytea NOT NULL
+        )`,
     `CREATE TABLE IF NOT EXISTS push_subscriptions (
       ${ID},
       endpoint TEXT NOT NULL UNIQUE,

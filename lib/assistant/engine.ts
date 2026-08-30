@@ -30,6 +30,7 @@ export async function buildContext(question: string): Promise<string> {
   const all = !wants([
     "aufgabe", "todo", "vertrag", "versicherung", "kündig", "wissen", "amazon", "arval", "leaseplan",
     "post", "brief", "mail", "termin", "kalender", "habit", "gewohnheit", "slack", "portal", "watcher",
+    "dokument", "datei", "wartung", "handbuch", "police",
   ]);
 
   if (all || wants(["aufgabe", "todo", "heute", "woche"])) {
@@ -60,6 +61,16 @@ export async function buildContext(question: string): Promise<string> {
       ? rows
       : await d.all<Row>("SELECT title, body, scope, partner FROM knowledge_notes LIMIT 8");
     parts.push("WISSEN:\n" + fallback.map((r) => `- [${r.scope}${r.partner ? "/" + r.partner : ""}] ${r.title}: ${r.body}`).join("\n"));
+  }
+  if (all || wants(["dokument", "datei", "wartung", "handbuch", "police", "wissen", "vertrag"])) {
+    const rows = await d.all<Row>(
+      "SELECT title, filename, category, scope, partner, tags, created_at FROM documents ORDER BY created_at DESC LIMIT 12"
+    );
+    if (rows.length)
+      parts.push(
+        "ABGELEGTE DOKUMENTE:\n" +
+          rows.map((r) => `- ${r.title} (${r.category}${r.partner ? ", Partner: " + r.partner : ""}, Datei: ${r.filename}${r.tags ? ", Tags: " + r.tags : ""})`).join("\n")
+      );
   }
   if (all || wants(["post", "brief", "scan"])) {
     const rows = await d.all<Row>(
