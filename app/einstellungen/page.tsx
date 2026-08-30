@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Card, CardHeader, PageHeader, Button, Input, TextArea, Row, EmptyState, Badge } from "@/components/ui";
 import { fmtDate } from "@/lib/client";
+import PushSettings from "@/components/PushSettings";
 
 type Token = { id: number; label: string; created_at: string; last_used: string | null };
 
@@ -99,6 +100,7 @@ export default function SettingsPage() {
         </Card>
 
         <div className="space-y-5">
+          <PushSettings />
           <Card>
             <CardHeader
               title="API-Zugänge"

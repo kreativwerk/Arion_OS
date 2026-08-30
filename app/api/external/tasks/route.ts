@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { verifyExternalToken } from "@/lib/external-auth";
+import { sendPushToAll } from "@/lib/push";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +50,13 @@ export async function POST(req: NextRequest) {
      VALUES (?,?,?,?,?,?,?,?,0)`,
     [title, notes, "short", dueDate, project, priority, tokenInfo.label.toLowerCase(), submittedBy]
   );
+
+  // Push auf die installierte PWA – Fehler beim Senden blockieren den Eingang nicht.
+  sendPushToAll({
+    title: `Neue Aufgabe von ${submittedBy}`,
+    body: title,
+    url: "/aufgaben",
+  }).catch(() => {});
 
   return NextResponse.json({ ok: true, id, status: "im Eingang – wartet auf Annahme" }, { status: 201 });
 }

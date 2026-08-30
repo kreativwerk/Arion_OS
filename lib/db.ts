@@ -34,6 +34,12 @@ let _db: Promise<DB> | null = null;
 
 export function getDb(): Promise<DB> {
   if (!_db) {
+    if (!process.env.DATABASE_URL && process.env.VERCEL) {
+      throw new Error(
+        "DATABASE_URL fehlt: Auf Vercel gibt es kein beschreibbares Dateisystem für SQLite. " +
+          "Bitte in den Vercel-Projekteinstellungen die DATABASE_URL des Supabase-Projekts 'Arion OS' setzen (siehe docs/DEPLOY.md)."
+      );
+    }
     _db = (process.env.DATABASE_URL ? initPostgres(process.env.DATABASE_URL) : initSqlite()).then(
       async (d) => {
         await ensureSchema(d);
@@ -263,6 +269,14 @@ function schemaStatements(dialect: "sqlite" | "postgres"): string[] {
       token_hash TEXT NOT NULL UNIQUE,
       created_at TEXT DEFAULT ${NOW},
       last_used TEXT
+    )`,
+    `CREATE TABLE IF NOT EXISTS push_subscriptions (
+      ${ID},
+      endpoint TEXT NOT NULL UNIQUE,
+      p256dh TEXT NOT NULL,
+      auth TEXT NOT NULL,
+      user_agent TEXT DEFAULT '',
+      created_at TEXT DEFAULT ${NOW}
     )`,
   ];
 }
