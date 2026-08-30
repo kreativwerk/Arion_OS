@@ -18,11 +18,20 @@ type Dash = {
 };
 
 const TILES = [
-  { key: "slack", label: "Benachrichtigungen", icon: "notifications", href: "/slack" },
+  { key: "slack", label: "Slack", icon: "notifications", href: "/slack" },
   { key: "mail", label: "Mail", icon: "mail", href: "/mail" },
-  { key: "letters", label: "Briefpost", icon: "markunread_mailbox", href: "/post" },
+  { key: "letters", label: "Post", icon: "markunread_mailbox", href: "/post" },
   { key: "watcher", label: "Portale", icon: "travel_explore", href: "/watcher" },
 ] as const;
+
+/** ISO-Kalenderwoche (KW) */
+function isoWeek(d: Date): number {
+  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const day = t.getUTCDay() || 7;
+  t.setUTCDate(t.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+  return Math.ceil(((t.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
+}
 
 export default function TodayPage() {
   const [data, setData] = useState<Dash | null>(null);
@@ -83,10 +92,6 @@ export default function TodayPage() {
   if (!data) return <p className="text-ink-3 text-[13px]">Lade …</p>;
 
   const doneHabits = new Set(data.habitLogsToday.map((l) => l.habit_id));
-  const eventsToday = data.events.filter((e) => e.date === todayIso());
-  const summary = evening
-    ? `Noch offen: ${data.tasksToday.length} ${data.tasksToday.length === 1 ? "Aufgabe" : "Aufgaben"} · Gewohnheiten ${doneHabits.size}/${data.habits.length}`
-    : `${data.tasksToday.length} ${data.tasksToday.length === 1 ? "Aufgabe" : "Aufgaben"} · ${eventsToday.length} ${eventsToday.length === 1 ? "Termin" : "Termine"} heute · ${data.counts.mail + data.counts.letters + data.counts.slack + data.counts.watcher} Neues im Posteingang`;
 
   return (
     <div>
@@ -126,8 +131,8 @@ export default function TodayPage() {
             </button>
           </div>
         </div>
-        <p className="text-[14px] text-ink-2 mt-1">
-          {dateStr} · {summary}
+        <p className="text-[12px] text-ink-3 mt-1">
+          {dateStr} · KW {isoWeek(now)}
         </p>
         {data.inboxCount > 0 && (
           <Link
@@ -140,8 +145,8 @@ export default function TodayPage() {
         )}
       </div>
 
-      {/* Triage: 4 Kacheln */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+      {/* Triage: 4 kompakte Kacheln nebeneinander */}
+      <div className="grid grid-cols-4 gap-2 mb-5">
         {TILES.map((t) => {
           const n = data.counts[t.key];
           const active = n > 0;
@@ -149,24 +154,15 @@ export default function TodayPage() {
             <Link
               key={t.key}
               href={t.href}
-              className={`bg-card border rounded-card p-4 transition-all hover:border-accent/40 ${
-                active ? "border-line" : "border-line opacity-70"
+              className={`bg-card border border-line rounded-[14px] py-2.5 px-1 flex flex-col items-center gap-1 transition-all hover:border-accent/40 ${
+                active ? "" : "opacity-60"
               }`}
             >
-              <div className="flex items-start justify-between">
-                <div
-                  className={`w-9 h-9 rounded-[11px] flex items-center justify-center ${
-                    active ? "bg-accent-soft text-accent" : "bg-inset text-ink-3"
-                  }`}
-                >
-                  <Icon name={t.icon} size={20} />
-                </div>
-                <span className={`text-[26px] font-bold leading-none ${active ? "" : "text-ink-3"}`}>
-                  {n}
-                </span>
+              <div className="flex items-center gap-1.5">
+                <Icon name={t.icon} size={17} className={active ? "text-accent" : "text-ink-3"} />
+                <span className={`text-[17px] font-bold leading-none ${active ? "" : "text-ink-3"}`}>{n}</span>
               </div>
-              <div className="text-[12px] text-ink-2 mt-3">{t.label}</div>
-              <div className="text-[11px] text-ink-3">{active ? "ungelesen" : "alles erledigt"}</div>
+              <span className="text-[11px] text-ink-3 truncate max-w-full">{t.label}</span>
             </Link>
           );
         })}
@@ -193,18 +189,13 @@ export default function TodayPage() {
               </div>
             }
           />
-          <div className="flex-1 overflow-y-auto max-h-[340px]">
+          <div className="flex-1 overflow-y-auto max-h-[460px] min-h-[220px]">
             {data.tasksToday.length === 0 && <EmptyState text="Nichts fällig – freier Kopf." />}
             {data.tasksToday.map((t) => (
-              <Row key={t.id}>
+              <Row key={t.id} className="py-3.5">
                 <CheckCircle onComplete={() => completeTask(t.id)} />
-                <div className="flex-1 min-w-0">
-                  <div className="text-[13px] font-medium truncate">{t.title}</div>
-                  <div className="text-[11px] text-ink-3">
-                    {t.project || " "}
-                    {t.source !== "eigen" && t.submitted_by ? ` · von ${t.submitted_by}` : ""}
-                  </div>
-                </div>
+                <div className="flex-1 min-w-0 text-[14px] font-medium truncate">{t.title}</div>
+                {t.source !== "eigen" && t.submitted_by && <Badge tone="accent">{t.submitted_by}</Badge>}
                 {t.recurrence && <Icon name="autorenew" size={15} className="text-ink-3" />}
                 {t.priority === 1 && <Badge tone="bad">hoch</Badge>}
               </Row>

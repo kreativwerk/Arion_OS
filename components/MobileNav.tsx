@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icon } from "@/components/ui";
@@ -17,6 +18,28 @@ const RIGHT = [
  *  Arion-Logo als runder Button heraus – der Zugang zum Arion Bot. */
 export default function MobileNav() {
   const pathname = usePathname();
+
+  // iOS schiebt fixierte Elemente über die Bildschirmtastatur – solange ein
+  // Eingabefeld fokussiert ist, blenden wir die Leiste deshalb aus.
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  useEffect(() => {
+    const isField = (el: unknown): boolean =>
+      el instanceof HTMLElement && ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName);
+    const onFocusIn = (e: FocusEvent) => {
+      if (isField(e.target)) setKeyboardOpen(true);
+    };
+    const onFocusOut = () => {
+      setTimeout(() => {
+        if (!isField(document.activeElement)) setKeyboardOpen(false);
+      }, 100);
+    };
+    document.addEventListener("focusin", onFocusIn);
+    document.addEventListener("focusout", onFocusOut);
+    return () => {
+      document.removeEventListener("focusin", onFocusIn);
+      document.removeEventListener("focusout", onFocusOut);
+    };
+  }, []);
 
   const item = (href: string, label: string, icon: string) => {
     const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
@@ -37,7 +60,11 @@ export default function MobileNav() {
   const botActive = pathname.startsWith("/assistent");
 
   return (
-    <nav className="lg:hidden fixed z-50 inset-x-4 bottom-[max(24px,calc(env(safe-area-inset-bottom)+8px))] max-w-[420px] mx-auto">
+    <nav
+      className={`lg:hidden fixed z-50 inset-x-4 bottom-[max(24px,calc(env(safe-area-inset-bottom)+8px))] max-w-[420px] mx-auto transition-all duration-200 ${
+        keyboardOpen ? "translate-y-[140%] opacity-0 pointer-events-none" : ""
+      }`}
+    >
       <div className="relative h-[72px] rounded-full border border-line bg-[rgba(18,20,21,0.9)] backdrop-blur-xl shadow-[0_10px_40px_rgba(0,0,0,0.55)] flex items-stretch px-2">
         {LEFT.map((i) => item(i.href, i.label, i.icon))}
 
