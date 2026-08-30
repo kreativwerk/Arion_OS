@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withApi } from "@/lib/api-error";
 import { getDb, getConfig } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
 const ALLOWED_KEYS = ["app_name", "user_name", "company", "partners", "employee_app", "about_me"];
 
-export async function GET() {
+export const GET = withApi(async () => {
   return NextResponse.json(await getConfig());
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withApi(async (req: NextRequest) => {
   const body = (await req.json()) as Record<string, string>;
   const d = await getDb();
   for (const key of ALLOWED_KEYS) {
@@ -21,4 +22,4 @@ export async function POST(req: NextRequest) {
     }
   }
   return NextResponse.json(await getConfig());
-}
+});

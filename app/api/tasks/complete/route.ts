@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withApi } from "@/lib/api-error";
 import { getDb, nowExpr } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -7,7 +8,7 @@ type TaskRow = { id: number; recurrence: string | null; due_date: string | null;
 
 /** Aufgabe abhaken. Wiederkehrende Aufgaben werden nicht "erledigt",
  *  sondern auf den nächsten Termin weitergeschoben. */
-export async function POST(req: NextRequest) {
+export const POST = withApi(async (req: NextRequest) => {
   const { id, undo } = (await req.json()) as { id: number; undo?: boolean };
   const d = await getDb();
   const task = await d.get<TaskRow>("SELECT id, recurrence, due_date, done FROM tasks WHERE id = ?", [id]);
@@ -36,4 +37,4 @@ export async function POST(req: NextRequest) {
 
   const row = await d.get("SELECT * FROM tasks WHERE id = ?", [id]);
   return NextResponse.json(row);
-}
+});

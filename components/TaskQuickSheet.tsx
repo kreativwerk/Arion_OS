@@ -29,6 +29,7 @@ export default function TaskQuickSheet({
   const [showDue, setShowDue] = useState(false);
   const [showRecurrence, setShowRecurrence] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -52,20 +53,30 @@ export default function TaskQuickSheet({
     const t = title.trim();
     if (!t || saving) return;
     setSaving(true);
-    await fetch("/api/data/tasks", {
-      method: "POST",
-      body: JSON.stringify({
-        title: t,
-        notes,
-        horizon: defaultHorizon,
-        due_date: due || (defaultHorizon === "short" ? todayIso() : null),
-        recurrence: recurrence || null,
-        priority,
-      }),
-    });
-    setSaving(false);
-    onCreated();
-    onClose();
+    setError("");
+    try {
+      const res = await fetch("/api/data/tasks", {
+        method: "POST",
+        body: JSON.stringify({
+          title: t,
+          notes,
+          horizon: defaultHorizon,
+          due_date: due || (defaultHorizon === "short" ? todayIso() : null),
+          recurrence: recurrence || null,
+          priority,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.error ?? `Server-Fehler ${res.status}`);
+      }
+      onCreated();
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const cyclePriority = () => setPriority(priority === 2 ? 1 : priority === 1 ? 3 : 2);
@@ -135,6 +146,8 @@ export default function TaskQuickSheet({
             ))}
           </div>
         )}
+
+        {error && <p className="text-[12px] text-bad mt-2 break-words">{error}</p>}
 
         <div className="flex items-center justify-between mt-2 pt-1">
           <div className="flex items-center gap-1">

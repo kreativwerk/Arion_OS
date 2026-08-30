@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
+import { withApi } from "@/lib/api-error";
 import { getDb, getConfig } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
 /** Aggregierte Daten für die "Heute"-Ansicht. */
-export async function GET() {
+export const GET = withApi(async () => {
   const d = await getDb();
   const today = new Date().toISOString().slice(0, 10);
 
@@ -80,4 +81,4 @@ export async function GET() {
     slack,
     contractsDue,
   });
-}
+});

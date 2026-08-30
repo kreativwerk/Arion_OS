@@ -52,6 +52,15 @@ body {
   scrollbar-color: var(--color-ink-3) transparent;
 }
 
+/* iOS-Zoom beim Fokussieren verhindern: Eingaben auf Mobilgeräten mind. 16px */
+@media (max-width: 1023px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
 /* Material Symbols: Grundeinstellung */
 .material-symbols-outlined {
   font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 20;

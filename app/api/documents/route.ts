@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withApi } from "@/lib/api-error";
 import { getDb } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -9,15 +10,15 @@ export const dynamic = "force-dynamic";
 
 const MAX_SIZE = 8 * 1024 * 1024; // 8 MB (Vercel-Request-Limit liegt bei ~4,5 MB)
 
-export async function GET() {
+export const GET = withApi(async () => {
   const d = await getDb();
   const rows = await d.all(
     "SELECT id, title, filename, mime, size, category, scope, partner, tags, note, created_at FROM documents ORDER BY created_at DESC"
   );
   return NextResponse.json(rows);
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withApi(async (req: NextRequest) => {
   const form = await req.formData();
   const file = form.get("file");
   if (!(file instanceof File)) return NextResponse.json({ error: "Datei fehlt" }, { status: 400 });
@@ -52,13 +53,13 @@ export async function POST(req: NextRequest) {
     [id]
   );
   return NextResponse.json(row, { status: 201 });
-}
+});
 
-export async function DELETE(req: NextRequest) {
+export const DELETE = withApi(async (req: NextRequest) => {
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id fehlt" }, { status: 400 });
   const d = await getDb();
   await d.run("DELETE FROM document_blobs WHERE document_id = ?", [id]);
   await d.run("DELETE FROM documents WHERE id = ?", [id]);
   return NextResponse.json({ ok: true });
-}
+});

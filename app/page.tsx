@@ -26,11 +26,22 @@ const TILES = [
 
 export default function TodayPage() {
   const [data, setData] = useState<Dash | null>(null);
+  const [apiError, setApiError] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const reload = async () => {
-    const res = await fetch("/api/dashboard", { cache: "no-store" });
-    if (res.ok) setData(await res.json());
+    try {
+      const res = await fetch("/api/dashboard", { cache: "no-store" });
+      if (res.ok) {
+        setData(await res.json());
+        setApiError("");
+      } else {
+        const body = await res.json().catch(() => null);
+        setApiError(body?.error ?? `Server-Fehler ${res.status}`);
+      }
+    } catch (e) {
+      setApiError(e instanceof Error ? e.message : String(e));
+    }
   };
   useEffect(() => {
     reload();
@@ -50,6 +61,25 @@ export default function TodayPage() {
   const greeting = now.getHours() < 11 ? "Guten Morgen" : !evening ? "Guten Tag" : "Guten Abend";
   const dateStr = now.toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" });
 
+  if (apiError) {
+    return (
+      <div className="bg-bad/10 border border-bad/30 rounded-card p-5 mt-4">
+        <div className="flex items-center gap-2 text-bad font-semibold text-[14px]">
+          <Icon name="error" size={20} />
+          Verbindung zur Datenbank fehlgeschlagen
+        </div>
+        <p className="text-[13px] text-ink-2 mt-2 break-words">{apiError}</p>
+        <p className="text-[12px] text-ink-3 mt-3">
+          Meist fehlt oder stimmt die <code>DATABASE_URL</code> in den Vercel-Umgebungsvariablen nicht
+          (Supabase → Connect → Session pooler, Passwort einsetzen). Nach dem Ändern: Redeploy.
+          Details: <code>docs/DEPLOY.md</code>
+        </p>
+        <button onClick={reload} className="mt-3 text-[13px] text-accent font-medium">
+          Erneut versuchen
+        </button>
+      </div>
+    );
+  }
   if (!data) return <p className="text-ink-3 text-[13px]">Lade …</p>;
 
   const doneHabits = new Set(data.habitLogsToday.map((l) => l.habit_id));

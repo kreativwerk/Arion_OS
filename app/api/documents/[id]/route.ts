@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withApi } from "@/lib/api-error";
 import { getDb } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
 /** Dokument herunterladen / im Browser öffnen. */
-export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+export const GET = withApi(async (_req: NextRequest, ctx: { params: Promise<{ id: string }> }) => {
   const { id } = await ctx.params;
   const d = await getDb();
   const meta = await d.get<{ filename: string; mime: string }>(
@@ -26,4 +27,4 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
       "Cache-Control": "private, max-age=0",
     },
   });
-}
+});

@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
+import { withApi } from "@/lib/api-error";
 import { pushConfigured, sendPushToAll } from "@/lib/push";
 
 export const dynamic = "force-dynamic";
 
 /** Test-Benachrichtigung an alle registrierten Geräte. */
-export async function POST() {
+export const POST = withApi(async () => {
   if (!pushConfigured()) {
     return NextResponse.json(
       { error: "Push nicht konfiguriert – VAPID-Schlüssel in der Umgebung setzen (docs/DEPLOY.md)." },
@@ -17,4 +18,4 @@ export async function POST() {
     url: "/",
   });
   return NextResponse.json(result);
-}
+});
