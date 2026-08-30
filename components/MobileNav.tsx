@@ -28,8 +28,8 @@ export default function MobileNav() {
           active ? "text-accent" : "text-ink-3"
         }`}
       >
-        <Icon name={icon} size={22} />
-        <span className="text-[10px] font-medium">{label}</span>
+        <Icon name={icon} size={26} />
+        <span className="text-[11px] font-medium">{label}</span>
       </Link>
     );
   };
@@ -37,12 +37,12 @@ export default function MobileNav() {
   const botActive = pathname.startsWith("/assistent");
 
   return (
-    <nav className="lg:hidden fixed z-50 inset-x-4 bottom-[max(16px,env(safe-area-inset-bottom))] max-w-[420px] mx-auto">
-      <div className="relative h-[62px] rounded-full border border-line bg-[rgba(18,20,21,0.9)] backdrop-blur-xl shadow-[0_10px_40px_rgba(0,0,0,0.55)] flex items-stretch px-2">
+    <nav className="lg:hidden fixed z-50 inset-x-4 bottom-[max(24px,calc(env(safe-area-inset-bottom)+8px))] max-w-[420px] mx-auto">
+      <div className="relative h-[72px] rounded-full border border-line bg-[rgba(18,20,21,0.9)] backdrop-blur-xl shadow-[0_10px_40px_rgba(0,0,0,0.55)] flex items-stretch px-2">
         {LEFT.map((i) => item(i.href, i.label, i.icon))}
 
         {/* Platzhalter für den mittigen Bot-Button */}
-        <div className="w-[68px] shrink-0" />
+        <div className="w-[76px] shrink-0" />
 
         {RIGHT.map((i) => item(i.href, i.label, i.icon))}
 
@@ -50,7 +50,7 @@ export default function MobileNav() {
         <Link
           href="/assistent"
           aria-label="Arion Bot"
-          className={`absolute left-1/2 -translate-x-1/2 -top-6 w-[64px] h-[64px] rounded-full overflow-hidden border-2 transition-all shadow-[0_6px_24px_rgba(62,207,142,0.35)] ${
+          className={`absolute left-1/2 -translate-x-1/2 -top-7 w-[72px] h-[72px] rounded-full overflow-hidden border-2 transition-all shadow-[0_6px_24px_rgba(62,207,142,0.35)] ${
             botActive ? "border-accent scale-105" : "border-line hover:border-accent/60"
           }`}
         >

@@ -170,6 +170,21 @@ Authorization: Bearer arion_…
               </p>
             </div>
           </Card>
+
+          <Card>
+            <CardHeader title="Sitzung" subtitle="Login-Schutz über APP_PASSWORD (siehe docs/DEPLOY.md)" />
+            <div className="px-5 pb-5 pt-1">
+              <Button
+                variant="danger"
+                onClick={async () => {
+                  await fetch("/api/auth/logout", { method: "POST" });
+                  window.location.href = "/login";
+                }}
+              >
+                Abmelden
+              </Button>
+            </div>
+          </Card>
         </div>
       </div>
     </div>

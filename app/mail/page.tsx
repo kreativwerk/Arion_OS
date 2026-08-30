@@ -1,8 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { Card, CardHeader, PageHeader, Button, Input, Select, EmptyState, Row, Badge , ErrorNote } from "@/components/ui";
+import { Card, CardHeader, PageHeader, Button, Input, Select, EmptyState, Row, Badge, Icon, ErrorNote } from "@/components/ui";
 import { useTable } from "@/lib/client";
+
+type FetchResult = {
+  configured: boolean;
+  accounts: { label: string; neu: number }[];
+  neu: number;
+  wichtig: number;
+  notizen: number;
+  hinweise: string[];
+};
 
 type Mail = {
   id: number;
@@ -26,6 +35,27 @@ export default function MailPage() {
   const [ruleValue, setRuleValue] = useState("");
   const [accLabel, setAccLabel] = useState("");
   const [accAddr, setAccAddr] = useState("");
+  const [fetching, setFetching] = useState(false);
+  const [result, setResult] = useState<FetchResult | null>(null);
+  const [fetchError, setFetchError] = useState("");
+
+  const fetchNow = async () => {
+    if (fetching) return;
+    setFetching(true);
+    setFetchError("");
+    setResult(null);
+    try {
+      const res = await fetch("/api/mail/fetch", { method: "POST" });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error ?? `Server-Fehler ${res.status}`);
+      setResult(data as FetchResult);
+      mails.reload();
+    } catch (e) {
+      setFetchError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setFetching(false);
+    }
+  };
 
   const unread = mails.rows.filter((m) => !m.read);
   const read = mails.rows.filter((m) => m.read).slice(0, 10);
@@ -35,9 +65,39 @@ export default function MailPage() {
       <PageHeader
         title="Mail-Digest"
         subtitle="Zusammenfassungen wichtiger Mails aus allen Postfächern – gefiltert nach deinen Regeln"
+        action={
+          <Button onClick={fetchNow} disabled={fetching}>
+            <span className="inline-flex items-center gap-1.5">
+              <Icon name="sync" size={16} className={fetching ? "animate-spin" : ""} />
+              {fetching ? "Rufe ab …" : "Jetzt abrufen"}
+            </span>
+          </Button>
+        }
       />
 
-      <ErrorNote error={mails.error || rules.error || accounts.error} />
+      <ErrorNote error={mails.error || rules.error || accounts.error || fetchError} />
+
+      {result && (
+        <div className="bg-accent-soft border border-accent/25 rounded-[12px] px-4 py-3 mb-4 text-[13px]">
+          {result.configured ? (
+            <p>
+              <span className="font-semibold text-accent">Abruf fertig:</span> {result.neu} neue{" "}
+              {result.neu === 1 ? "Mail" : "Mails"}
+              {result.accounts.length > 1 &&
+                ` (${result.accounts.map((a) => `${a.label}: ${a.neu}`).join(", ")})`}{" "}
+              · {result.wichtig} wichtig im Digest · {result.notizen}{" "}
+              {result.notizen === 1 ? "neue Wissens-Notiz" : "neue Wissens-Notizen"}
+            </p>
+          ) : (
+            <p className="text-warn font-medium">Noch keine Postfächer konfiguriert.</p>
+          )}
+          {result.hinweise.map((h, i) => (
+            <p key={i} className="text-[12px] text-ink-2 mt-1.5">
+              {h}
+            </p>
+          ))}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5 items-start">
         <div className="space-y-5">
@@ -104,10 +164,18 @@ export default function MailPage() {
               >
                 Postfach hinzufügen
               </Button>
-              <p className="text-[11px] text-ink-3 pt-1">
-                IMAP-Zugangsdaten werden in <code>.env.local</code> hinterlegt – siehe{" "}
-                <code>docs/INTEGRATIONEN.md</code>.
-              </p>
+              <div className="text-[11px] text-ink-3 pt-1 space-y-1">
+                <p>
+                  Die IMAP-Zugangsdaten kommen aus Umgebungsvariablen (Vercel bzw.{" "}
+                  <code>.env.local</code>), pro Konto <code>MAIL_1_LABEL</code>, <code>MAIL_1_HOST</code>,{" "}
+                  <code>MAIL_1_USER</code>, <code>MAIL_1_PASS</code> (dann <code>MAIL_2_…</code>).
+                </p>
+                <p>
+                  IONOS: <code>imap.ionos.de</code> · GMX: <code>imap.gmx.net</code> (IMAP zuerst in den
+                  GMX-Einstellungen unter „POP3/IMAP Abruf“ aktivieren). Details:{" "}
+                  <code>docs/INTEGRATIONEN.md</code>
+                </p>
+              </div>
             </div>
           </Card>
 

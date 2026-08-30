@@ -89,7 +89,8 @@ export default function TaskQuickSheet({
   return (
     <div className="fixed inset-0 z-[60]">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
-      <div className="absolute bottom-0 inset-x-0 max-w-[640px] mx-auto bg-[#17191a] border-t border-x border-line rounded-t-[18px] p-4 pb-[max(16px,env(safe-area-inset-bottom))] shadow-[0_-8px_40px_rgba(0,0,0,0.5)]">
+      <div className="absolute bottom-0 inset-x-0 max-w-[640px] mx-auto min-h-[46dvh] flex flex-col bg-[#17191a] border-t border-x border-line rounded-t-[22px] p-4 pb-[max(16px,env(safe-area-inset-bottom))] shadow-[0_-8px_40px_rgba(0,0,0,0.5)]">
+        <div className="w-10 h-1 rounded-full bg-ink-3/40 mx-auto mb-3 shrink-0" />
         <input
           ref={inputRef}
           value={title}
@@ -149,6 +150,7 @@ export default function TaskQuickSheet({
 
         {error && <p className="text-[12px] text-bad mt-2 break-words">{error}</p>}
 
+        <div className="flex-1" />
         <div className="flex items-center justify-between mt-2 pt-1">
           <div className="flex items-center gap-1">
             <button onClick={() => setShowNotes(!showNotes)} className={iconBtn(showNotes)} title="Details">

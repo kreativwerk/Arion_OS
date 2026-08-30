@@ -18,16 +18,25 @@ mit einer klaren Fehlermeldung).
    | `VAPID_PUBLIC_KEY` | aus Schritt 2 (Push) |
    | `VAPID_PRIVATE_KEY` | aus Schritt 2 (Push) |
    | `VAPID_SUBJECT` | `mailto:info@arion-logistics.de` |
-   | `ANTHROPIC_API_KEY` | optional – Arion Bot antwortet dann frei formuliert |
+   | `ANTHROPIC_API_KEY` | optional – Arion Bot antwortet frei formuliert, Mail-Wissens-Extraktion funktioniert |
+   | `APP_PASSWORD` | **dringend empfohlen** – aktiviert das Login (siehe unten) |
+   | `AUTH_SECRET` | optional – eigenes Secret für die Cookie-Signatur |
+   | `CRON_SECRET` | lange Zufallszeichenkette – schützt den täglichen Mail-Cron |
+   | `MAIL_1_LABEL/HOST/USER/PASS` … | IMAP-Postfächer (IONOS, GMX …), siehe `docs/INTEGRATIONEN.md` |
 
 5. **Deploy** klicken. Jeder Push auf den Branch deployt danach automatisch.
 
-> Zugriffsschutz: Die App hat bewusst keinen eigenen Login (Single-User).
-> Auf Vercel unter **Settings → Deployment Protection** „Vercel Authentication"
-> aktivieren oder das Projekt hinter eine eigene Domain mit Schutz legen,
-> bis die Auth-Stufe aus `docs/SAAS.md` gebaut ist. Die Codriver-API
-> (`/api/external/tasks`) braucht bei aktivierter Deployment Protection eine
-> Ausnahme (Protection Bypass for Automation) oder die Auth-Stufe.
+## Login (eingebaut)
+
+Sobald `APP_PASSWORD` gesetzt ist, verlangt die App auf jeder Seite und für jede
+interne API eine Anmeldung (`/login`). Technik: HttpOnly-Session-Cookie, HMAC-signiert,
+Konstantzeit-Passwortvergleich, 60 Tage gültig – kein Passwort im Cookie oder in der
+Datenbank. Abmelden: Profil-Icon auf dem Dashboard oder Einstellungen → Sitzung.
+
+Ausgenommen bleiben Endpunkte mit eigener Authentifizierung:
+`/api/external/*` (Codriver-Bearer-Token) und `/api/cron/*` (CRON_SECRET) sowie die
+statischen PWA-Dateien. Vercel Deployment Protection kann damit **abgeschaltet** werden –
+sonst kommt weder Codriver noch der Cron durch.
 
 ## 2. Push-Benachrichtigungen (PWA)
 

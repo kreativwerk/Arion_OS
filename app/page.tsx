@@ -92,10 +92,40 @@ export default function TodayPage() {
     <div>
       {/* Kopf: Orientierung in einer Sekunde */}
       <div className="mb-6">
-        <h1 className="text-[26px] sm:text-[32px] font-bold tracking-tight">
-          {greeting}
-          {data.config?.user_name ? `, ${data.config.user_name}` : ""}.
-        </h1>
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="text-[26px] sm:text-[32px] font-bold tracking-tight">
+            {greeting}
+            {data.config?.user_name ? `, ${data.config.user_name}` : ""}.
+          </h1>
+          {/* Schnellzugriff oben rechts: Clipboard, Einstellungen, Profil */}
+          <div className="flex items-center gap-1 shrink-0 mt-1">
+            <Link
+              href="/clipboard"
+              aria-label="Clipboard"
+              className="w-10 h-10 rounded-full flex items-center justify-center text-ink-2 hover:text-accent hover:bg-inset transition-all"
+            >
+              <Icon name="attach_file" size={22} />
+            </Link>
+            <Link
+              href="/einstellungen"
+              aria-label="Einstellungen"
+              className="w-10 h-10 rounded-full flex items-center justify-center text-ink-2 hover:text-accent hover:bg-inset transition-all"
+            >
+              <Icon name="settings" size={22} />
+            </Link>
+            <button
+              onClick={async () => {
+                if (!confirm("Abmelden?")) return;
+                await fetch("/api/auth/logout", { method: "POST" });
+                window.location.href = "/login";
+              }}
+              aria-label="Profil / Abmelden"
+              className="w-10 h-10 rounded-full flex items-center justify-center text-ink-2 hover:text-accent hover:bg-inset transition-all"
+            >
+              <Icon name="account_circle" size={24} />
+            </button>
+          </div>
+        </div>
         <p className="text-[14px] text-ink-2 mt-1">
           {dateStr} · {summary}
         </p>

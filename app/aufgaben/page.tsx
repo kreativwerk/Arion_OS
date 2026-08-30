@@ -37,19 +37,17 @@ export default function TasksPage() {
 
   return (
     <div>
-      <PageHeader
-        title="Aufgaben"
-        subtitle="Kurzfristig mit Wiederholungen, langfristig im Blick"
-        action={
-          <Segmented
-            value={horizon}
-            onChange={setHorizon}
-            options={[
-              { value: "short", label: "Short Term" },
-              { value: "long", label: "Long Term" },
-            ]}
-          />
-        }
+      <PageHeader title="Aufgaben" subtitle="Kurzfristig mit Wiederholungen, langfristig im Blick" />
+
+      {/* Tab-Leiste über die ganze Breite */}
+      <Segmented
+        className="flex w-full mb-4"
+        value={horizon}
+        onChange={setHorizon}
+        options={[
+          { value: "short", label: "Short Term" },
+          { value: "long", label: "Long Term" },
+        ]}
       />
 
       <ErrorNote error={error} />
@@ -86,13 +84,7 @@ export default function TasksPage() {
         {open.map((t) => (
           <Row key={t.id} className="group">
             <CheckCircle onComplete={() => complete(t.id)} />
-            <div className="flex-1 min-w-0">
-              <div className="text-[13px] font-medium">{t.title}</div>
-              <div className="text-[11px] text-ink-3">
-                {t.due_date ? `fällig ${fmtDate(t.due_date)}` : "ohne Termin"}
-                {t.project ? ` · ${t.project}` : ""}
-              </div>
-            </div>
+            <div className="flex-1 min-w-0 text-[14px] font-medium truncate">{t.title}</div>
             {t.source && t.source !== "eigen" && (
               <Badge tone="accent">von {t.submitted_by || t.source}</Badge>
             )}
@@ -132,7 +124,7 @@ export default function TasksPage() {
       {/* Floating-Button: neue Aufgabe (Google-Tasks-Stil) */}
       <button
         onClick={() => setSheetOpen(true)}
-        className="fixed z-50 bottom-[84px] lg:bottom-8 right-5 lg:right-8 w-14 h-14 rounded-[18px] bg-accent text-on-accent shadow-[0_8px_30px_rgba(62,207,142,0.35)] flex items-center justify-center hover:opacity-90 transition-all"
+        className="fixed z-50 bottom-[118px] lg:bottom-8 right-5 lg:right-8 w-14 h-14 rounded-[18px] bg-accent text-on-accent shadow-[0_8px_30px_rgba(62,207,142,0.35)] flex items-center justify-center hover:opacity-90 transition-all"
         aria-label="Neue Aufgabe"
       >
         <Icon name="add" size={28} />

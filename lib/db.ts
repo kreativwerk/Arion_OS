@@ -237,6 +237,12 @@ function schemaStatements(dialect: "sqlite" | "postgres"): string[] {
       received_at TEXT DEFAULT ${NOW},
       read INTEGER DEFAULT 0
     )`,
+    // Dedupe für den IMAP-Abruf: welche Message-IDs wurden schon verarbeitet
+    `CREATE TABLE IF NOT EXISTS mail_seen (
+      account TEXT NOT NULL,
+      message_id TEXT NOT NULL,
+      PRIMARY KEY (account, message_id)
+    )`,
     `CREATE TABLE IF NOT EXISTS watchers (
       ${ID}, ${WS},
       name TEXT NOT NULL,

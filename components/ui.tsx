@@ -188,18 +188,21 @@ export function Segmented<T extends string>({
   options,
   value,
   onChange,
+  className = "",
 }: {
   options: { value: T; label: string }[];
   value: T;
   onChange: (v: T) => void;
+  /** z.B. "flex w-full" für eine Tab-Leiste über die ganze Breite */
+  className?: string;
 }) {
   return (
-    <div className="inline-flex bg-inset border border-line rounded-full p-0.5">
+    <div className={`inline-flex bg-inset border border-line rounded-full p-0.5 ${className}`}>
       {options.map((o) => (
         <button
           key={o.value}
           onClick={() => onChange(o.value)}
-          className={`px-3.5 h-7 rounded-full text-[13px] font-medium transition-all ${
+          className={`flex-1 px-3.5 h-8 rounded-full text-[13px] font-medium transition-all ${
             value === o.value ? "bg-card shadow-card text-ink" : "text-ink-2 hover:text-ink"
           }`}
         >

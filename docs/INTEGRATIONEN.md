@@ -20,28 +20,45 @@ Datenkontext zusammen (Aufgaben, Verträge, Wissen, Post, Mails, Termine, Slack,
 und schickt ihn als System-Prompt an die Claude API. Ohne Key antwortet Arion Bot
 deterministisch aus der Datenbank.
 
-## 2. Mail-Digest aus mehreren IMAP-Postfächern
+## 2. Mail-Abruf per IMAP (eingebaut) – Digest + Wissens-Extraktion
 
-Ziel: nicht *alle* Mails, sondern **nur Treffer** der Regeln aus dem Mail-Modul
-(VIP-Absender wie `arval.de`, Stichwörter wie „Rechnung", „Kündigung").
+Der Abruf ist fest eingebaut (`lib/mail-fetch.ts`). Er läuft täglich über Vercel Cron
+(`vercel.json` → `/api/cron/mail`) und jederzeit manuell über **„Jetzt abrufen“** im
+Mail-Modul. Pro Lauf passiert dreierlei:
 
-Empfohlene Umsetzung als Cron-Job (z.B. alle 15 Minuten):
+1. **Neue Mails holen** (letzte Tage, max. 25 pro Konto, Dedupe über `mail_seen`).
+   Die Mails bleiben im Postfach und werden nicht als gelesen markiert.
+2. **Digest:** Treffer der Wichtig-Regeln (VIP-Absender, Stichwörter) landen mit
+   Ein-Satz-Zusammenfassung im Mail-Modul.
+3. **Wissen:** Ist `ANTHROPIC_API_KEY` gesetzt, extrahiert Claude aus **allen** neuen
+   Mails dauerhaft Nützliches (Fristen, Preise, Ansprechpartner, Vorgänge) und legt es
+   als Notizen in der Wissensbasis ab (Tag `email-import`, Quelle im Text).
 
-1. Pro Postfach per IMAP (`imapflow`) ungelesene Mails seit dem letzten Lauf holen.
-   Zugangsdaten pro Konto in `.env.local`:
-   ```
-   MAIL_1_HOST=imap.strato.de
-   MAIL_1_USER=info@arion-logistics.de
-   MAIL_1_PASS=***
-   MAIL_2_HOST=imap.gmail.com
-   ...
-   ```
-2. Regeln aus `GET /api/data/mail_rules` laden, Absender/Betreff/Body matchen.
-3. Treffer mit der Claude API in 1–2 Sätzen zusammenfassen.
-4. `POST /api/data/mail_digest` mit `{account, from_addr, subject, summary, matched_rule, important: 1}`.
+Zugangsdaten pro Konto (bis zu 4) als Umgebungsvariablen – auf Vercel unter
+*Settings → Environment Variables*, lokal in `.env.local`:
 
-Bei Gmail/Microsoft 365 App-Passwörter bzw. OAuth verwenden. Die Mails selbst bleiben im
-Postfach – Arion OS speichert nur die Zusammenfassung.
+```
+MAIL_1_LABEL=IONOS
+MAIL_1_HOST=imap.ionos.de
+MAIL_1_USER=info@arion-logistics.de
+MAIL_1_PASS=<normales Postfach-Passwort>
+
+MAIL_2_LABEL=GMX
+MAIL_2_HOST=imap.gmx.net
+MAIL_2_USER=<deine GMX-Adresse>
+MAIL_2_PASS=<GMX-Passwort>
+```
+
+Anbieter-Hinweise:
+- **IONOS:** Host `imap.ionos.de`, Port 993 (Standard), Benutzer = vollständige
+  E-Mail-Adresse, normales Postfach-Passwort.
+- **GMX:** Host `imap.gmx.net`, Port 993. IMAP muss einmalig aktiviert werden:
+  GMX-Webmail → E-Mail → Einstellungen → POP3/IMAP Abruf → „IMAP aktivieren“.
+- Gmail/Microsoft 365: App-Passwörter bzw. OAuth verwenden.
+
+Außerdem `CRON_SECRET` setzen (beliebige lange Zufallszeichenkette) – Vercel schickt es
+automatisch als Bearer-Token an den Cron-Endpunkt; ohne bleibt `/api/cron/mail` gesperrt.
+Nach dem Setzen der Variablen: **Redeploy**.
 
 ## 3. Briefpost-Scans vom Mitarbeiter
 
