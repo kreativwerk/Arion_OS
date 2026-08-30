@@ -67,6 +67,13 @@ Außerdem `CRON_SECRET` setzen (beliebige lange Zufallszeichenkette) – Vercel 
 automatisch als Bearer-Token an den Cron-Endpunkt; ohne bleibt `/api/cron/mail` gesperrt.
 Nach dem Setzen der Variablen: **Redeploy**.
 
+**Regel-Vorschläge aus dem Postfach:** Der Button „Vorschläge“ in der Karte
+„Wichtig-Regeln“ analysiert den Gesendet-Ordner der verbundenen Konten (letzte
+120 Tage, nur Kopfdaten – keine Inhalte): Wem antwortest du oft → VIP-Absender-
+Vorschläge; häufige Wörter aus deinen Betreffzeilen → Stichwort-Vorschläge.
+Eigene Adressen, no-reply-Absender und bereits vorhandene Regeln werden
+ausgefiltert; ein Tipp auf einen Vorschlag übernimmt ihn als Regel.
+
 ## 3. Briefpost-Scans vom Mitarbeiter
 
 Heute: Der Mitarbeiter erfasst den Scan über „Scan erfassen" im Post-Modul (oder per

@@ -19,6 +19,14 @@ type FetchResult = {
   hinweise: string[];
 };
 
+type SuggestResult = {
+  configured: boolean;
+  analysierte_mails: number;
+  senders: { value: string; name: string; count: number; accounts: string[] }[];
+  keywords: { value: string; count: number }[];
+  hinweise: string[];
+};
+
 type Mail = {
   id: number;
   account: string;
@@ -115,6 +123,40 @@ export default function MailPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  // Postfach-Analyse: Regel-Vorschläge aus dem Gesendet-Ordner
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggest, setSuggest] = useState<SuggestResult | null>(null);
+  const [suggestError, setSuggestError] = useState("");
+
+  const runSuggest = async () => {
+    if (suggesting) return;
+    setSuggesting(true);
+    setSuggestError("");
+    try {
+      const res = await fetch("/api/mail/suggest", { method: "POST" });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error ?? `Server-Fehler ${res.status}`);
+      setSuggest(data as SuggestResult);
+    } catch (e) {
+      setSuggestError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSuggesting(false);
+    }
+  };
+
+  const adoptSuggestion = (kind: "absender" | "stichwort", value: string) => {
+    rules.create({ kind, value } as Partial<Rule>);
+    setSuggest((s) =>
+      s
+        ? {
+            ...s,
+            senders: s.senders.filter((x) => x.value !== value),
+            keywords: s.keywords.filter((x) => x.value !== value),
+          }
+        : s
+    );
   };
 
   const toggleAccount = async (a: Account) => {
@@ -356,7 +398,83 @@ export default function MailPage() {
           </Card>
 
           <Card>
-            <CardHeader title="Wichtig-Regeln" subtitle="VIP-Absender und Stichwörter" />
+            <CardHeader
+              title="Wichtig-Regeln"
+              subtitle="VIP-Absender und Stichwörter"
+              action={
+                <button
+                  onClick={runSuggest}
+                  disabled={suggesting}
+                  title="Postfach analysieren: Wem antwortest du oft?"
+                  className="inline-flex items-center gap-1.5 px-3 h-8 rounded-full bg-accent-soft text-accent text-[12px] font-medium disabled:opacity-50 transition-all shrink-0 whitespace-nowrap"
+                >
+                  <Icon name="auto_awesome" size={15} className={suggesting ? "animate-spin" : ""} />
+                  {suggesting ? "Analysiere …" : "Vorschläge"}
+                </button>
+              }
+            />
+
+            {(suggest || suggestError) && (
+              <div className="px-4 pb-2">
+                {suggestError && <p className="text-[12px] text-bad break-words mb-2">{suggestError}</p>}
+                {suggest && (
+                  <div className="bg-inset rounded-[12px] p-3 space-y-2.5">
+                    <p className="text-[11px] text-ink-3">
+                      {suggest.analysierte_mails > 0
+                        ? `${suggest.analysierte_mails} gesendete Mails analysiert – tippe einen Vorschlag an, um ihn als Regel zu übernehmen:`
+                        : "Keine Daten zum Analysieren."}
+                    </p>
+                    {suggest.senders.length > 0 && (
+                      <div>
+                        <p className="text-[11px] font-semibold text-ink-2 mb-1.5">Oft angeschrieben (VIP-Vorschläge)</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {suggest.senders.map((s) => (
+                            <button
+                              key={s.value}
+                              onClick={() => adoptSuggestion("absender", s.value)}
+                              title={s.name ? `${s.name} · ${s.count}× angeschrieben` : `${s.count}× angeschrieben`}
+                              className="inline-flex items-center gap-1 px-2.5 h-7 rounded-full border border-accent/40 bg-card text-[11px] text-accent font-medium hover:bg-accent-soft transition-all max-w-full"
+                            >
+                              <Icon name="add" size={13} />
+                              <span className="truncate">{s.value}</span>
+                              <span className="text-ink-3">{s.count}×</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {suggest.keywords.length > 0 && (
+                      <div>
+                        <p className="text-[11px] font-semibold text-ink-2 mb-1.5">Häufige Themen (Stichwort-Vorschläge)</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {suggest.keywords.map((k) => (
+                            <button
+                              key={k.value}
+                              onClick={() => adoptSuggestion("stichwort", k.value)}
+                              className="inline-flex items-center gap-1 px-2.5 h-7 rounded-full border border-warn/40 bg-card text-[11px] text-warn font-medium hover:bg-warn/10 transition-all"
+                            >
+                              <Icon name="add" size={13} />
+                              {k.value}
+                              <span className="text-ink-3">{k.count}×</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {suggest.configured && suggest.senders.length === 0 && suggest.keywords.length === 0 && (
+                      <p className="text-[12px] text-ink-2">
+                        Keine neuen Vorschläge – deine Regeln decken die häufigen Kontakte schon ab.
+                      </p>
+                    )}
+                    {suggest.hinweise.map((h, i) => (
+                      <p key={i} className="text-[11px] text-ink-3">
+                        {h}
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             <div className="px-5 pb-3 flex flex-wrap gap-1.5">
               {rules.rows.map((r) => (
                 <button
