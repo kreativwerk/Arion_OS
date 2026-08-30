@@ -23,7 +23,7 @@ const NAV: { href: string; label: string; icon: string }[] = [
 export default function Sidebar() {
   const pathname = usePathname();
   return (
-    <aside className="w-[220px] shrink-0 h-screen sticky top-0 hidden lg:flex flex-col border-r border-line bg-[rgba(255,255,255,0.03)] backdrop-blur-xl">
+    <aside className="w-[220px] shrink-0 h-full hidden lg:flex flex-col border-r border-line bg-[rgba(255,255,255,0.03)] backdrop-blur-xl">
       <div className="px-5 pt-6 pb-4 flex items-center gap-3">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/logo.svg" alt="Arion OS" className="w-9 h-9 rounded-[10px]" />
