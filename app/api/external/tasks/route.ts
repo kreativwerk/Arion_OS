@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { getDb } from "@/lib/db";
 import { verifyExternalToken } from "@/lib/external-auth";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
  * Vollständige Doku: docs/CODRIVER.md
  */
 export async function POST(req: NextRequest) {
-  const tokenInfo = verifyExternalToken(req.headers.get("authorization"));
+  const tokenInfo = await verifyExternalToken(req.headers.get("authorization"));
   if (!tokenInfo) {
     return NextResponse.json({ error: "Ungültiger oder fehlender API-Token" }, { status: 401 });
   }
@@ -43,15 +43,12 @@ export async function POST(req: NextRequest) {
   const notes = typeof body.notes === "string" ? body.notes.slice(0, 2000) : "";
   const project = typeof body.project === "string" ? body.project.slice(0, 200) : "";
 
-  const info = db()
-    .prepare(
-      `INSERT INTO tasks (title, notes, horizon, due_date, project, priority, source, submitted_by, accepted)
-       VALUES (?,?,?,?,?,?,?,?,0)`
-    )
-    .run(title, notes, "short", dueDate, project, priority, tokenInfo.label.toLowerCase(), submittedBy);
-
-  return NextResponse.json(
-    { ok: true, id: info.lastInsertRowid, status: "im Eingang – wartet auf Annahme" },
-    { status: 201 }
+  const d = await getDb();
+  const id = await d.insert(
+    `INSERT INTO tasks (title, notes, horizon, due_date, project, priority, source, submitted_by, accepted)
+     VALUES (?,?,?,?,?,?,?,?,0)`,
+    [title, notes, "short", dueDate, project, priority, tokenInfo.label.toLowerCase(), submittedBy]
   );
+
+  return NextResponse.json({ ok: true, id, status: "im Eingang – wartet auf Annahme" }, { status: 201 });
 }

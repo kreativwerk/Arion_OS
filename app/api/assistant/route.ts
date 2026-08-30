@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { getDb } from "@/lib/db";
 import { answer } from "@/lib/assistant/engine";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const rows = db().prepare("SELECT * FROM assistant_messages ORDER BY id ASC").all();
+  const d = await getDb();
+  const rows = await d.all("SELECT * FROM assistant_messages ORDER BY id ASC");
   return NextResponse.json(rows);
 }
 
@@ -17,6 +18,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE() {
-  db().prepare("DELETE FROM assistant_messages").run();
+  const d = await getDb();
+  await d.run("DELETE FROM assistant_messages");
   return NextResponse.json({ ok: true });
 }

@@ -11,10 +11,21 @@ npm install
 npm run dev
 ```
 
-Dann [http://localhost:3000](http://localhost:3000) öffnen. Beim ersten Start wird eine
-lokale SQLite-Datenbank unter `data/arion.db` angelegt und mit Beispieldaten befüllt
-(Aufgaben, Partner-Wissen zu Amazon/Arval/LeasePlan, Verträge, Post …). Alles kann in
-der App gelöscht und durch echte Daten ersetzt werden.
+Dann [http://localhost:3000](http://localhost:3000) öffnen.
+
+## Datenbank
+
+Eine Datenschicht, zwei Treiber (`lib/db.ts`):
+
+- **Produktion: Supabase/Postgres.** In `.env.local` die `DATABASE_URL` des
+  Supabase-Projekts **„Arion OS"** setzen (Dashboard → Connect → Session pooler).
+  Schema und Startdaten liegen dort bereits; Row Level Security sperrt die
+  öffentliche API komplett – nur die App selbst erreicht die Daten.
+- **Entwicklung/Offline: SQLite.** Ohne `DATABASE_URL` wird automatisch
+  `data/arion.db` verwendet und beim ersten Start mit Beispieldaten befüllt
+  (Aufgaben, Partner-Wissen zu Amazon/Arval/LeasePlan, Verträge, Post …).
+
+Beide Treiber teilen dieselben Queries – das Verhalten der App ist identisch.
 
 ## Module
 
@@ -61,4 +72,5 @@ Projekt-Skills für die Entwicklung mit Claude Code liegen unter `.claude/skills
 
 ## Stack
 
-Next.js (App Router) · React · TypeScript · Tailwind CSS · SQLite (better-sqlite3)
+Next.js (App Router) · React · TypeScript · Tailwind CSS · Postgres auf Supabase
+(Produktion) / SQLite (Entwicklung) · Material Symbols

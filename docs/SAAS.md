@@ -28,14 +28,17 @@ Pro Kunde eine Instanz (VPS oder Rechner beim Kunden, hinter VPN/Basic-Auth):
 
 Reihenfolge der Umbauten, bewusst klein gehalten:
 
-1. **Postgres statt SQLite** (z.B. Supabase): Schema aus `lib/db.ts` 1:1 übertragen;
-   alle Zugriffe laufen bereits durch `lib/db.ts` + `lib/tables.ts`.
-2. **Auth:** Login (z.B. Auth.js oder Supabase Auth). Session-User in den API-Routen.
-3. **Mandanten:** Spalte `workspace_id` auf allen Tabellen + `WHERE workspace_id = ?`
-   in der generischen API (eine Datei: `app/api/data/[table]/route.ts`) und den vier
-   Spezialrouten. Tokens (`api_tokens`) gehören dann ebenfalls zum Workspace.
-4. **Abrechnung:** Stripe (Subscription pro Workspace), Feature-Flags in `app_config`.
-5. **Betrieb:** Vercel/Fly + Supabase; Cron-Jobs (Mail-Digest, Watcher) als
+1. ✅ **Postgres auf Supabase** – erledigt. Projekt „Arion OS" (`hvgctketypxgangqaohs`,
+   `eu-central-1`), Schema + Startdaten migriert, RLS ohne Policies (öffentliche API
+   gesperrt, Zugriff nur über die direkte Verbindung der App via `DATABASE_URL`).
+   Die App fällt ohne `DATABASE_URL` automatisch auf SQLite zurück.
+2. ✅ **`workspace_id`** liegt bereits auf allen Tabellen (Default `'default'`).
+3. **Auth:** Login (Supabase Auth oder Auth.js). Session-User in den API-Routen.
+4. **Mandanten-Scoping:** `WHERE workspace_id = ?` in der generischen API (eine Datei:
+   `app/api/data/[table]/route.ts`) und den Spezialrouten. Tokens (`api_tokens`)
+   bekommen dann ebenfalls eine `workspace_id`.
+5. **Abrechnung:** Stripe (Subscription pro Workspace), Feature-Flags in `app_config`.
+6. **Betrieb:** Vercel/Fly + Supabase; Cron-Jobs (Mail-Digest, Watcher) als
    Scheduled Functions pro Workspace.
 
 ## Preis-/Paketlogik (Vorschlag)

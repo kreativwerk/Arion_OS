@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { getDb, nowExpr } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -9,14 +9,12 @@ type TaskRow = { id: number; recurrence: string | null; due_date: string | null;
  *  sondern auf den nächsten Termin weitergeschoben. */
 export async function POST(req: NextRequest) {
   const { id, undo } = (await req.json()) as { id: number; undo?: boolean };
-  const d = db();
-  const task = d.prepare("SELECT id, recurrence, due_date, done FROM tasks WHERE id = ?").get(id) as
-    | TaskRow
-    | undefined;
+  const d = await getDb();
+  const task = await d.get<TaskRow>("SELECT id, recurrence, due_date, done FROM tasks WHERE id = ?", [id]);
   if (!task) return NextResponse.json({ error: "Aufgabe nicht gefunden" }, { status: 404 });
 
   if (undo) {
-    d.prepare("UPDATE tasks SET done = 0, completed_at = NULL WHERE id = ?").run(id);
+    await d.run("UPDATE tasks SET done = 0, completed_at = NULL WHERE id = ?", [id]);
   } else if (task.recurrence) {
     const base = task.due_date ? new Date(task.due_date) : new Date();
     const next = new Date(base);
@@ -31,11 +29,11 @@ export async function POST(req: NextRequest) {
       t.setDate(t.getDate() + 1);
       nextIso = t.toISOString().slice(0, 10);
     }
-    d.prepare("UPDATE tasks SET due_date = ? WHERE id = ?").run(nextIso, id);
+    await d.run("UPDATE tasks SET due_date = ? WHERE id = ?", [nextIso, id]);
   } else {
-    d.prepare("UPDATE tasks SET done = 1, completed_at = datetime('now') WHERE id = ?").run(id);
+    await d.run(`UPDATE tasks SET done = 1, completed_at = ${nowExpr(d)} WHERE id = ?`, [id]);
   }
 
-  const row = d.prepare("SELECT * FROM tasks WHERE id = ?").get(id);
+  const row = await d.get("SELECT * FROM tasks WHERE id = ?", [id]);
   return NextResponse.json(row);
 }

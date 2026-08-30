@@ -48,9 +48,18 @@ Drei Prinzipien:
 
 ## Wichtige Entscheidungen
 
-- **SQLite statt Cloud-Datenbank (v1).** Eine Datei, kein Betrieb, volle Datenhoheit –
-  bei sensiblen Daten (Verträge, Post, Mails) bewusst gewählt. Migration auf Supabase/
-  Postgres ist vorbereitet: alle Zugriffe laufen über `lib/db.ts` und die generische API.
+- **Eine Datenschicht, zwei Treiber** (`lib/db.ts`): Ist `DATABASE_URL` gesetzt, spricht
+  die App **Postgres auf Supabase** (Projekt „Arion OS", Region `eu-central-1`, Ref
+  `hvgctketypxgangqaohs`) – die Produktionsdatenbank. Ohne `DATABASE_URL` fällt sie auf
+  **SQLite** (`data/arion.db`) zurück – für Entwicklung, Offline-Betrieb und Self-Hosted-
+  Kunden mit maximaler Datenhoheit. Beide Treiber teilen dieselben Queries
+  (`?`-Platzhalter, ISO-Text-Daten, 0/1-Booleans); das Schema entsteht in beiden Fällen
+  idempotent beim Start. Auf Supabase ist Row Level Security ohne Policies aktiv: Die
+  öffentliche PostgREST-API ist damit komplett gesperrt, nur die App (direkte
+  Postgres-Verbindung) erreicht die Daten.
+- **`workspace_id` auf allen Tabellen** (Default `'default'`): das Datenmodell ist für
+  Mandantenfähigkeit vorbereitet, ohne dass die Queries heute schon scopen müssen
+  (siehe `docs/SAAS.md`).
 - **Generische CRUD-API mit Whitelist** (`lib/tables.ts`): jedes Modul bekommt
   Standard-CRUD geschenkt; nur Spezialfälle (Wiederholung, Habit-Toggle, Dashboard,
   Jarvis) haben eigene Routen.
