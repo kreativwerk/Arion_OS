@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Card, CardHeader, Badge, EmptyState, Row, Icon } from "@/components/ui";
+import { Card, CardHeader, Badge, EmptyState, Row, Icon, CheckCircle } from "@/components/ui";
 import { fmtDate, todayIso } from "@/lib/client";
 import TaskQuickSheet from "@/components/TaskQuickSheet";
 
@@ -167,11 +167,7 @@ export default function TodayPage() {
             {data.tasksToday.length === 0 && <EmptyState text="Nichts fällig – freier Kopf." />}
             {data.tasksToday.map((t) => (
               <Row key={t.id}>
-                <button
-                  onClick={() => completeTask(t.id)}
-                  className="w-[19px] h-[19px] rounded-full border-[1.5px] border-ink-3 hover:border-accent hover:bg-accent-soft transition-all shrink-0"
-                  aria-label="Erledigt"
-                />
+                <CheckCircle onComplete={() => completeTask(t.id)} />
                 <div className="flex-1 min-w-0">
                   <div className="text-[13px] font-medium truncate">{t.title}</div>
                   <div className="text-[11px] text-ink-3">

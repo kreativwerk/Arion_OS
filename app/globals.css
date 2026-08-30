@@ -61,6 +61,16 @@ body {
   }
 }
 
+/* Erledigt-Animation für Check-Buttons */
+@keyframes check-pop {
+  0% { transform: scale(0.6); }
+  55% { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
+.animate-check-pop {
+  animation: check-pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
 /* Material Symbols: Grundeinstellung */
 .material-symbols-outlined {
   font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 20;

@@ -14,7 +14,7 @@ mit einer klaren Fehlermeldung).
 
    | Variable | Wert |
    | --- | --- |
-   | `DATABASE_URL` | Supabase-Projekt „Arion OS" → Connect → **Session pooler** URI, Passwort einsetzen |
+   | `DATABASE_URL` | Supabase-Projekt „Arion OS" → Connect → **Transaction pooler** URI, Passwort einsetzen |
    | `VAPID_PUBLIC_KEY` | aus Schritt 2 (Push) |
    | `VAPID_PRIVATE_KEY` | aus Schritt 2 (Push) |
    | `VAPID_SUBJECT` | `mailto:info@arion-logistics.de` |

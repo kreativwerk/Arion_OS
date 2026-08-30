@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode } from "react";
+import { ReactNode, useState } from "react";
 
 /* Minimales UI-Kit im Apple-Stil (dark): Karten, Buttons, Inputs, Badges, Segmented Control, Icons. */
 
@@ -27,6 +27,40 @@ export function MaybeIcon({ value, size = 18, className = "" }: { value: string;
     <Icon name={value} size={size} className={className} />
   ) : (
     <span className={className}>{value}</span>
+  );
+}
+
+/** Runder Erledigt-Button: groß, füllt sich beim Klick grün mit Pop-Animation,
+ *  ruft onComplete erst nach der Animation auf. */
+export function CheckCircle({
+  onComplete,
+  size = 26,
+  className = "",
+}: {
+  onComplete: () => void;
+  size?: number;
+  className?: string;
+}) {
+  const [done, setDone] = useState(false);
+  return (
+    <button
+      onClick={() => {
+        if (done) return;
+        setDone(true);
+        setTimeout(onComplete, 400);
+        // Zurücksetzen für Zeilen, die bestehen bleiben (wiederkehrende Aufgaben)
+        setTimeout(() => setDone(false), 1200);
+      }}
+      style={{ width: size, height: size }}
+      className={`rounded-full border-[1.5px] flex items-center justify-center shrink-0 transition-colors ${
+        done
+          ? "bg-accent border-accent text-on-accent animate-check-pop"
+          : "border-ink-3 text-transparent hover:border-accent hover:bg-accent-soft hover:text-accent/60"
+      } ${className}`}
+      aria-label="Erledigt"
+    >
+      <Icon name="check" size={Math.round(size * 0.68)} />
+    </button>
   );
 }
 

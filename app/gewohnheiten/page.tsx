@@ -111,13 +111,13 @@ export default function HabitsPage() {
                       <td key={d} className="text-center py-3">
                         <button
                           onClick={() => toggle(h.id, d)}
-                          className={`w-7 h-7 rounded-[9px] border transition-all text-[13px] ${
+                          className={`w-9 h-9 rounded-[11px] border transition-all inline-flex items-center justify-center ${
                             has(h.id, d)
-                              ? "bg-good border-good text-on-accent"
-                              : "bg-inset border-line hover:border-ink-3"
+                              ? "bg-good border-good text-on-accent animate-check-pop"
+                              : "bg-inset border-line hover:border-accent/50"
                           }`}
                         >
-                          {has(h.id, d) ? "✓" : ""}
+                          {has(h.id, d) && <Icon name="check" size={19} />}
                         </button>
                       </td>
                     ))}

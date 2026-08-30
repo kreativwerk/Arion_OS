@@ -85,7 +85,9 @@ function toDollar(query: string): string {
 
 async function initPostgres(url: string): Promise<DB> {
   const { default: postgres } = await import("postgres");
-  const sql = postgres(url, { prepare: false, max: 5 });
+  // Serverless-freundlich: 1 Verbindung pro Funktionsinstanz, Leerlauf schnell
+  // schließen. prepare:false ist Pflicht für den Supabase Transaction-Pooler.
+  const sql = postgres(url, { prepare: false, max: 1, idle_timeout: 20, connect_timeout: 15 });
   return {
     dialect: "postgres",
     async all<T>(query: string, params: unknown[] = []) {
@@ -319,8 +321,14 @@ async function ensureSchema(d: DB) {
     await add("workspace_id", "TEXT NOT NULL DEFAULT 'default'");
   }
 
-  const row = await d.get<{ n: number }>("SELECT COUNT(*) AS n FROM knowledge_notes");
-  if (Number(row?.n ?? 0) === 0) await seed(d);
+  // Beispieldaten nur EINMAL einspielen (Flag in app_config) – danach nie wieder,
+  // auch wenn der Nutzer alles löscht.
+  const seeded = await d.get<{ value: string }>("SELECT value FROM app_config WHERE key = 'seeded'");
+  if (!seeded) {
+    const row = await d.get<{ n: number }>("SELECT COUNT(*) AS n FROM knowledge_notes");
+    if (Number(row?.n ?? 0) === 0) await seed(d);
+    await d.run("INSERT INTO app_config (key, value) VALUES ('seeded','1') ON CONFLICT (key) DO NOTHING");
+  }
   await seedConfigDefaults(d);
 }
 

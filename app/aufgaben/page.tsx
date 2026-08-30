@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Card, PageHeader, Badge, Button, Segmented, EmptyState, Row, Icon } from "@/components/ui";
+import { Card, PageHeader, Badge, Button, Segmented, EmptyState, Row, Icon, CheckCircle } from "@/components/ui";
 import { useTable, fmtDate } from "@/lib/client";
 import TaskQuickSheet from "@/components/TaskQuickSheet";
 
@@ -83,11 +83,7 @@ export default function TasksPage() {
         {open.length === 0 && <EmptyState text="Keine offenen Aufgaben in dieser Ansicht." />}
         {open.map((t) => (
           <Row key={t.id} className="group">
-            <button
-              onClick={() => complete(t.id)}
-              className="w-[18px] h-[18px] rounded-full border-[1.5px] border-ink-3 hover:border-accent hover:bg-accent-soft transition-all shrink-0"
-              aria-label="Erledigt"
-            />
+            <CheckCircle onComplete={() => complete(t.id)} />
             <div className="flex-1 min-w-0">
               <div className="text-[13px] font-medium">{t.title}</div>
               <div className="text-[11px] text-ink-3">
@@ -120,10 +116,10 @@ export default function TasksPage() {
             <Row key={t.id}>
               <button
                 onClick={() => complete(t.id, true)}
-                className="w-[18px] h-[18px] rounded-full bg-good border-good text-on-accent text-[11px] leading-none shrink-0"
+                className="w-[26px] h-[26px] rounded-full bg-good border-good text-on-accent flex items-center justify-center shrink-0 hover:opacity-80 transition-all"
                 title="Rückgängig"
               >
-                ✓
+                <Icon name="check" size={17} />
               </button>
               <div className="flex-1 text-[13px] line-through text-ink-3">{t.title}</div>
             </Row>
