@@ -1,8 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardHeader, PageHeader, Button, Input, Select, EmptyState, Row, Badge, Icon, ErrorNote } from "@/components/ui";
 import { useTable } from "@/lib/client";
+
+const PROVIDERS = [
+  { key: "ionos", name: "IONOS", host: "imap.ionos.de" },
+  { key: "gmx", name: "GMX", host: "imap.gmx.net" },
+  { key: "custom", name: "Anderer Anbieter", host: "" },
+] as const;
 
 type FetchResult = {
   configured: boolean;
@@ -25,19 +31,107 @@ type Mail = {
   received_at: string;
 };
 type Rule = { id: number; kind: string; value: string };
-type Account = { id: number; label: string; address: string; active: number };
+type Account = {
+  id: number;
+  label: string;
+  address: string;
+  active: number;
+  host: string;
+  port: number;
+  has_password: boolean;
+};
 
 export default function MailPage() {
   const mails = useTable<Mail>("mail_digest");
   const rules = useTable<Rule>("mail_rules");
-  const accounts = useTable<Account>("mail_accounts");
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [accError, setAccError] = useState("");
   const [ruleKind, setRuleKind] = useState("absender");
   const [ruleValue, setRuleValue] = useState("");
-  const [accLabel, setAccLabel] = useState("");
-  const [accAddr, setAccAddr] = useState("");
   const [fetching, setFetching] = useState(false);
   const [result, setResult] = useState<FetchResult | null>(null);
   const [fetchError, setFetchError] = useState("");
+
+  // Formular "Postfach verbinden"
+  const [provider, setProvider] = useState<(typeof PROVIDERS)[number]["key"]>("ionos");
+  const [accLabel, setAccLabel] = useState("");
+  const [accUser, setAccUser] = useState("");
+  const [accPass, setAccPass] = useState("");
+  const [accHost, setAccHost] = useState("");
+  const [accPort, setAccPort] = useState("993");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [saveHint, setSaveHint] = useState("");
+  const [canForce, setCanForce] = useState(false);
+
+  const loadAccounts = async () => {
+    try {
+      const res = await fetch("/api/mail/accounts", { cache: "no-store" });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error ?? `Server-Fehler ${res.status}`);
+      setAccounts(data as Account[]);
+      setAccError("");
+    } catch (e) {
+      setAccError(e instanceof Error ? e.message : String(e));
+    }
+  };
+  useEffect(() => {
+    loadAccounts();
+  }, []);
+
+  const saveAccount = async (skipTest = false) => {
+    const host = provider === "custom" ? accHost.trim() : PROVIDERS.find((p) => p.key === provider)!.host;
+    const label = accLabel.trim() || PROVIDERS.find((p) => p.key === provider)!.name;
+    if (!accUser.trim() || !accPass || !host || saving) return;
+    setSaving(true);
+    setSaveError("");
+    setSaveHint("");
+    try {
+      const res = await fetch("/api/mail/accounts", {
+        method: "POST",
+        body: JSON.stringify({
+          label,
+          host,
+          port: Number(accPort) || 993,
+          username: accUser.trim(),
+          password: accPass,
+          skipTest,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setCanForce(true);
+        setSaveHint(data?.hint ?? "");
+        throw new Error(data?.error ?? `Server-Fehler ${res.status}`);
+      }
+      setAccounts(data.accounts as Account[]);
+      setAccLabel("");
+      setAccUser("");
+      setAccPass("");
+      setAccHost("");
+      setCanForce(false);
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleAccount = async (a: Account) => {
+    const res = await fetch("/api/mail/accounts", {
+      method: "PATCH",
+      body: JSON.stringify({ id: a.id, active: a.active ? 0 : 1 }),
+    });
+    const data = await res.json().catch(() => null);
+    if (res.ok) setAccounts(data.accounts as Account[]);
+  };
+
+  const removeAccount = async (a: Account) => {
+    if (!confirm(`Postfach „${a.label}“ entfernen?`)) return;
+    const res = await fetch(`/api/mail/accounts?id=${a.id}`, { method: "DELETE" });
+    const data = await res.json().catch(() => null);
+    if (res.ok) setAccounts(data.accounts as Account[]);
+  };
 
   const fetchNow = async () => {
     if (fetching) return;
@@ -66,16 +160,16 @@ export default function MailPage() {
         title="Mail-Digest"
         subtitle="Zusammenfassungen wichtiger Mails aus allen Postfächern – gefiltert nach deinen Regeln"
         action={
-          <Button onClick={fetchNow} disabled={fetching}>
+          <Button onClick={fetchNow} disabled={fetching} className="shrink-0 whitespace-nowrap">
             <span className="inline-flex items-center gap-1.5">
               <Icon name="sync" size={16} className={fetching ? "animate-spin" : ""} />
-              {fetching ? "Rufe ab …" : "Jetzt abrufen"}
+              {fetching ? "Rufe ab …" : "Abrufen"}
             </span>
           </Button>
         }
       />
 
-      <ErrorNote error={mails.error || rules.error || accounts.error || fetchError} />
+      <ErrorNote error={mails.error || rules.error || accError || fetchError} />
 
       {result && (
         <div className="bg-accent-soft border border-accent/25 rounded-[12px] px-4 py-3 mb-4 text-[13px]">
@@ -135,45 +229,127 @@ export default function MailPage() {
 
         <div className="space-y-5">
           <Card>
-            <CardHeader title="Postfächer" subtitle="Mehrere Konten möglich" />
-            {accounts.rows.map((a) => (
-              <Row key={a.id} className="group">
+            <CardHeader title="Postfächer" subtitle="Zugangsdaten werden verschlüsselt gespeichert" />
+            {accounts.map((a) => (
+              <Row key={a.id}>
+                <Icon
+                  name={a.has_password ? "mark_email_read" : "warning"}
+                  size={18}
+                  className={a.has_password ? "text-accent" : "text-warn"}
+                />
                 <div className="flex-1 min-w-0">
-                  <div className="text-[13px] font-medium">{a.label}</div>
-                  <div className="text-[11px] text-ink-3 truncate">{a.address}</div>
+                  <div className="text-[13px] font-medium flex items-center gap-2">
+                    {a.label}
+                    {!a.active ? <Badge>pausiert</Badge> : null}
+                  </div>
+                  <div className="text-[11px] text-ink-3 truncate">
+                    {a.address}
+                    {a.host ? ` · ${a.host}` : ""}
+                  </div>
+                  {!a.has_password && (
+                    <div className="text-[11px] text-warn">
+                      Ohne Zugangsdaten – bitte entfernen und unten neu verbinden.
+                    </div>
+                  )}
                 </div>
                 <button
-                  onClick={() => accounts.remove(a.id)}
-                  className="opacity-0 group-hover:opacity-100 text-ink-3 hover:text-bad text-[12px]"
+                  onClick={() => toggleAccount(a)}
+                  aria-label={a.active ? "Pausieren" : "Aktivieren"}
+                  title={a.active ? "Pausieren" : "Aktivieren"}
+                  className="text-ink-3 hover:text-accent transition-colors p-1"
                 >
-                  Entfernen
+                  <Icon name={a.active ? "pause_circle" : "play_circle"} size={19} />
+                </button>
+                <button
+                  onClick={() => removeAccount(a)}
+                  aria-label="Entfernen"
+                  title="Entfernen"
+                  className="text-ink-3 hover:text-bad transition-colors p-1"
+                >
+                  <Icon name="delete" size={18} />
                 </button>
               </Row>
             ))}
-            <div className="p-4 border-t border-line space-y-2">
-              <Input placeholder="Bezeichnung (z.B. Geschäftlich)" value={accLabel} onChange={(e) => setAccLabel(e.target.value)} />
-              <Input placeholder="E-Mail-Adresse" value={accAddr} onChange={(e) => setAccAddr(e.target.value)} />
+            {accounts.length === 0 && <EmptyState text="Noch kein Postfach verbunden." />}
+
+            <div className="p-4 border-t border-line space-y-2.5">
+              <div className="text-[12px] font-semibold text-ink-2">Postfach verbinden</div>
+              <div className="flex gap-1.5 flex-wrap">
+                {PROVIDERS.map((p) => (
+                  <button
+                    key={p.key}
+                    onClick={() => setProvider(p.key)}
+                    className={`px-3 h-8 rounded-full text-[12px] font-medium border transition-all ${
+                      provider === p.key
+                        ? "bg-accent-soft border-accent/40 text-accent"
+                        : "bg-inset border-line text-ink-2"
+                    }`}
+                  >
+                    {p.name}
+                  </button>
+                ))}
+              </div>
+              <Input
+                placeholder={`Bezeichnung (z.B. ${PROVIDERS.find((p) => p.key === provider)!.name || "Geschäftlich"})`}
+                value={accLabel}
+                onChange={(e) => setAccLabel(e.target.value)}
+              />
+              <Input
+                type="email"
+                placeholder="E-Mail-Adresse"
+                autoComplete="off"
+                value={accUser}
+                onChange={(e) => setAccUser(e.target.value)}
+              />
+              <Input
+                type="password"
+                placeholder="Postfach-Passwort"
+                autoComplete="new-password"
+                value={accPass}
+                onChange={(e) => setAccPass(e.target.value)}
+              />
+              {provider === "custom" && (
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="IMAP-Server (z.B. imap.strato.de)"
+                    value={accHost}
+                    onChange={(e) => setAccHost(e.target.value)}
+                  />
+                  <Input
+                    className="!w-20 text-center"
+                    placeholder="Port"
+                    inputMode="numeric"
+                    value={accPort}
+                    onChange={(e) => setAccPort(e.target.value)}
+                  />
+                </div>
+              )}
+              {saveError && (
+                <div className="text-[12px] text-bad break-words">
+                  {saveError}
+                  {saveHint && <p className="text-ink-2 mt-1">{saveHint}</p>}
+                </div>
+              )}
               <Button
-                className="w-full"
-                onClick={() => {
-                  if (!accLabel.trim() || !accAddr.trim()) return;
-                  accounts.create({ label: accLabel.trim(), address: accAddr.trim() } as Partial<Account>);
-                  setAccLabel("");
-                  setAccAddr("");
-                }}
+                className="w-full !h-10"
+                onClick={() => saveAccount(false)}
+                disabled={saving || !accUser.trim() || !accPass || (provider === "custom" && !accHost.trim())}
               >
-                Postfach hinzufügen
+                {saving ? "Prüfe Verbindung …" : "Verbinden & speichern"}
               </Button>
+              {canForce && !saving && (
+                <Button variant="ghost" className="w-full" onClick={() => saveAccount(true)}>
+                  Trotzdem speichern (ohne Test)
+                </Button>
+              )}
               <div className="text-[11px] text-ink-3 pt-1 space-y-1">
                 <p>
-                  Die IMAP-Zugangsdaten kommen aus Umgebungsvariablen (Vercel bzw.{" "}
-                  <code>.env.local</code>), pro Konto <code>MAIL_1_LABEL</code>, <code>MAIL_1_HOST</code>,{" "}
-                  <code>MAIL_1_USER</code>, <code>MAIL_1_PASS</code> (dann <code>MAIL_2_…</code>).
+                  Beim Speichern wird die Verbindung getestet. GMX: vorher in den GMX-Einstellungen
+                  unter „POP3/IMAP Abruf“ IMAP aktivieren. IONOS: normales Postfach-Passwort.
                 </p>
                 <p>
-                  IONOS: <code>imap.ionos.de</code> · GMX: <code>imap.gmx.net</code> (IMAP zuerst in den
-                  GMX-Einstellungen unter „POP3/IMAP Abruf“ aktivieren). Details:{" "}
-                  <code>docs/INTEGRATIONEN.md</code>
+                  Alternativ funktionieren weiterhin Umgebungsvariablen (<code>MAIL_1_…</code>),
+                  Details: <code>docs/INTEGRATIONEN.md</code>
                 </p>
               </div>
             </div>

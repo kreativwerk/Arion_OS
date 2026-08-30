@@ -11,7 +11,9 @@ export const TABLES: Record<string, { columns: string[]; orderBy?: string }> = {
   knowledge_notes: { columns: ["title", "body", "scope", "partner", "tags", "updated_at"], orderBy: "updated_at DESC" },
   contracts: { columns: ["name", "provider", "category", "policy_number", "annual_cost", "start_date", "end_date", "cancel_period_days", "notes"], orderBy: "end_date ASC" },
   letters: { columns: ["subject", "sender", "received_date", "scanned_by", "status", "summary", "file_ref"], orderBy: "received_date DESC" },
-  mail_accounts: { columns: ["label", "address", "active"] },
+  // mail_accounts läuft NICHT über die generische API: Zugangsdaten liegen
+  // verschlüsselt in der Tabelle und werden nur über /api/mail/accounts
+  // (ohne password_enc) ausgeliefert.
   mail_rules: { columns: ["kind", "value"] },
   mail_digest: { columns: ["account", "from_addr", "subject", "summary", "matched_rule", "important", "read"], orderBy: "received_at DESC" },
   watchers: { columns: ["name", "url", "hint", "interval_minutes", "last_checked", "active"] },

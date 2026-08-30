@@ -34,7 +34,14 @@ Mail-Modul. Pro Lauf passiert dreierlei:
    Mails dauerhaft Nützliches (Fristen, Preise, Ansprechpartner, Vorgänge) und legt es
    als Notizen in der Wissensbasis ab (Tag `email-import`, Quelle im Text).
 
-Zugangsdaten pro Konto (bis zu 4) als Umgebungsvariablen – auf Vercel unter
+**Postfächer verbindest du direkt in der App:** Mail-Modul → Karte „Postfächer“ →
+Anbieter wählen (IONOS/GMX/Andere), E-Mail-Adresse + Passwort eingeben,
+**„Verbinden & speichern“**. Die Verbindung wird sofort getestet; die Zugangsdaten
+liegen AES-256-verschlüsselt in der Datenbank (Schlüssel aus `AUTH_SECRET` bzw.
+`APP_PASSWORD` – deshalb gehört eines von beiden gesetzt; ändert man es später,
+müssen die Postfach-Passwörter einmal neu eingegeben werden).
+
+Alternativ (oder zusätzlich) gehen Umgebungsvariablen – auf Vercel unter
 *Settings → Environment Variables*, lokal in `.env.local`:
 
 ```

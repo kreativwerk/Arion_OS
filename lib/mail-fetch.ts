@@ -1,16 +1,20 @@
 import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
 import { getDb, type DB } from "@/lib/db";
+import { decryptSecret } from "@/lib/secret-store";
 
 /**
  * IMAP-Mailabruf (IONOS, GMX, beliebige weitere Postfächer).
  *
- * Konten kommen aus Umgebungsvariablen (MAIL_1_… bis MAIL_4_…):
- *   MAIL_1_LABEL  Anzeigename, z.B. "IONOS Geschäftlich"
- *   MAIL_1_HOST   z.B. imap.ionos.de  |  imap.gmx.net
- *   MAIL_1_USER   vollständige E-Mail-Adresse
- *   MAIL_1_PASS   Postfach-Passwort
- *   MAIL_1_PORT   optional, Standard 993 (TLS)
+ * Konten kommen aus zwei Quellen (beide gleichzeitig möglich):
+ * 1. In der App angelegt (Mail-Modul → Postfächer) – Zugangsdaten liegen
+ *    verschlüsselt in der Tabelle mail_accounts.
+ * 2. Umgebungsvariablen MAIL_1_… bis MAIL_4_…:
+ *    MAIL_1_LABEL  Anzeigename, z.B. "IONOS Geschäftlich"
+ *    MAIL_1_HOST   z.B. imap.ionos.de  |  imap.gmx.net
+ *    MAIL_1_USER   vollständige E-Mail-Adresse
+ *    MAIL_1_PASS   Postfach-Passwort
+ *    MAIL_1_PORT   optional, Standard 993 (TLS)
  *
  * Jeder Lauf:
  * 1. holt neue Mails der letzten Tage (Dedupe über mail_seen),
@@ -44,6 +48,30 @@ export function accountsFromEnv(): MailAccountEnv[] {
   return out;
 }
 
+/** In der App angelegte Postfächer (aktiv + vollständige Zugangsdaten). */
+async function accountsFromDb(d: DB, hints: string[]): Promise<MailAccountEnv[]> {
+  const rows = await d.all<{ label: string; host: string; port: number; username: string; password_enc: string }>(
+    "SELECT label, host, port, username, password_enc FROM mail_accounts WHERE active = 1 AND host <> '' AND username <> '' AND password_enc <> ''"
+  );
+  const out: MailAccountEnv[] = [];
+  for (const r of rows) {
+    try {
+      out.push({
+        label: r.label,
+        host: r.host,
+        user: r.username,
+        pass: decryptSecret(r.password_enc),
+        port: Number(r.port) || 993,
+      });
+    } catch {
+      hints.push(
+        `${r.label}: gespeichertes Passwort ist nicht mehr entschlüsselbar (wurde APP_PASSWORD/AUTH_SECRET geändert?). Bitte das Passwort im Mail-Modul neu eingeben.`
+      );
+    }
+  }
+  return out;
+}
+
 type NewMail = {
   account: string;
   messageId: string;
@@ -72,6 +100,7 @@ async function fetchAccount(acc: MailAccountEnv, d: DB, hints: string[]): Promis
     secure: true,
     auth: { user: acc.user, pass: acc.pass },
     logger: false,
+    connectionTimeout: 15_000,
     socketTimeout: 30_000,
     greetingTimeout: 15_000,
   });
@@ -210,7 +239,11 @@ export type MailFetchResult = {
 
 export async function runMailFetch(): Promise<MailFetchResult> {
   const hints: string[] = [];
-  const accounts = accountsFromEnv();
+  const d = await getDb();
+
+  // App-Konten zuerst, Env-Konten dazu (doppelte Labels werden nicht dedupliziert –
+  // dafür sorgt ohnehin mail_seen pro Konto+Message-ID).
+  const accounts = [...(await accountsFromDb(d, hints)), ...accountsFromEnv()];
   if (accounts.length === 0) {
     return {
       configured: false,
@@ -219,12 +252,12 @@ export async function runMailFetch(): Promise<MailFetchResult> {
       wichtig: 0,
       notizen: 0,
       hinweise: [
-        "Keine Postfächer konfiguriert. Lege MAIL_1_HOST, MAIL_1_USER und MAIL_1_PASS (und optional MAIL_1_LABEL) als Umgebungsvariablen an – IONOS: imap.ionos.de, GMX: imap.gmx.net (IMAP vorher in den GMX-Einstellungen aktivieren).",
+        "Keine Postfächer mit Zugangsdaten. Lege sie direkt hier im Mail-Modul unter „Postfächer“ an (IONOS: imap.ionos.de, GMX: imap.gmx.net – IMAP vorher in den GMX-Einstellungen aktivieren). Alternativ gehen weiterhin Umgebungsvariablen MAIL_1_HOST/USER/PASS.",
+        ...hints,
       ],
     };
   }
 
-  const d = await getDb();
   const rules = await d.all<Rule>("SELECT kind, value FROM mail_rules");
 
   const perAccount: { label: string; neu: number }[] = [];

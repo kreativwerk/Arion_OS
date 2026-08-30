@@ -219,7 +219,11 @@ function schemaStatements(dialect: "sqlite" | "postgres"): string[] {
       ${ID}, ${WS},
       label TEXT NOT NULL,
       address TEXT NOT NULL,
-      active INTEGER DEFAULT 1
+      active INTEGER DEFAULT 1,
+      host TEXT DEFAULT '',
+      port INTEGER DEFAULT 993,
+      username TEXT DEFAULT '',
+      password_enc TEXT DEFAULT ''
     )`,
     `CREATE TABLE IF NOT EXISTS mail_rules (
       ${ID}, ${WS},
@@ -330,14 +334,28 @@ async function ensureSchema(d: DB) {
   }
   if (d.dialect === "sqlite") {
     // Spalten-Migrationen für ältere lokale Datenbanken
-    const cols = (await d.all<{ name: string }>("PRAGMA table_info(tasks)")).map((c) => c.name);
-    const add = async (col: string, def: string) => {
-      if (!cols.includes(col)) await d.run(`ALTER TABLE tasks ADD COLUMN ${col} ${def}`);
+    const addColumn = async (table: string, col: string, def: string) => {
+      const cols = (await d.all<{ name: string }>(`PRAGMA table_info(${table})`)).map((c) => c.name);
+      if (!cols.includes(col)) await d.run(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`);
     };
-    await add("source", "TEXT DEFAULT 'eigen'");
-    await add("submitted_by", "TEXT DEFAULT ''");
-    await add("accepted", "INTEGER DEFAULT 1");
-    await add("workspace_id", "TEXT NOT NULL DEFAULT 'default'");
+    await addColumn("tasks", "source", "TEXT DEFAULT 'eigen'");
+    await addColumn("tasks", "submitted_by", "TEXT DEFAULT ''");
+    await addColumn("tasks", "accepted", "INTEGER DEFAULT 1");
+    await addColumn("tasks", "workspace_id", "TEXT NOT NULL DEFAULT 'default'");
+    await addColumn("mail_accounts", "host", "TEXT DEFAULT ''");
+    await addColumn("mail_accounts", "port", "INTEGER DEFAULT 993");
+    await addColumn("mail_accounts", "username", "TEXT DEFAULT ''");
+    await addColumn("mail_accounts", "password_enc", "TEXT DEFAULT ''");
+  } else {
+    // Postgres kennt IF NOT EXISTS direkt
+    for (const [col, def] of [
+      ["host", "TEXT DEFAULT ''"],
+      ["port", "INTEGER DEFAULT 993"],
+      ["username", "TEXT DEFAULT ''"],
+      ["password_enc", "TEXT DEFAULT ''"],
+    ]) {
+      await d.run(`ALTER TABLE mail_accounts ADD COLUMN IF NOT EXISTS ${col} ${def}`);
+    }
   }
 
   // Beispieldaten nur EINMAL einspielen. Das Flag wird VOR dem Seeden atomar
