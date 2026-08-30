@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { withApi } from "@/lib/api-error";
-import { getDb, getConfig } from "@/lib/db";
+import { getDb, getConfig, todayIso } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
 /** Aggregierte Daten für die "Heute"-Ansicht. */
 export const GET = withApi(async () => {
   const d = await getDb();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIso();
 
   const contractsDueQuery =
     d.dialect === "sqlite"

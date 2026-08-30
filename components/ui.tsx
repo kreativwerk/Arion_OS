@@ -210,6 +210,17 @@ export function Segmented<T extends string>({
   );
 }
 
+/** Fehlerhinweis für Seiten – zeigt Lade-/Speicherfehler der Daten-API an. */
+export function ErrorNote({ error }: { error?: string }) {
+  if (!error) return null;
+  return (
+    <div className="flex items-start gap-2 bg-bad/10 border border-bad/30 rounded-[10px] px-3.5 py-2.5 mb-4 text-[13px] text-bad">
+      <Icon name="error" size={17} className="mt-0.5" />
+      <span className="break-words min-w-0">{error}</span>
+    </div>
+  );
+}
+
 export function EmptyState({ text }: { text: string }) {
   return <p className="text-[13px] text-ink-3 px-5 py-6 text-center">{text}</p>;
 }

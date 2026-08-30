@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Card, CardHeader, Badge, EmptyState, Row, Icon, CheckCircle } from "@/components/ui";
+import { Card, CardHeader, Badge, EmptyState, Row, Icon, CheckCircle, MaybeIcon } from "@/components/ui";
 import { fmtDate, todayIso } from "@/lib/client";
 import TaskQuickSheet from "@/components/TaskQuickSheet";
 
@@ -202,7 +202,7 @@ export default function TodayPage() {
                       : "bg-inset border-line text-ink-2 hover:border-ink-3"
                   }`}
                 >
-                  {/^[a-z0-9_]+$/.test(h.emoji) ? <Icon name={h.emoji} size={17} /> : <span>{h.emoji}</span>}
+                  <MaybeIcon value={h.emoji} size={17} />
                   {h.name}
                   {done && <Icon name="check" size={15} />}
                 </button>

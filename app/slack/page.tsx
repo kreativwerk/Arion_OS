@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Card, CardHeader, PageHeader, Button, Input, EmptyState, Row, Badge } from "@/components/ui";
+import { Card, CardHeader, PageHeader, Button, Input, EmptyState, Row, Badge , ErrorNote } from "@/components/ui";
 import { useTable } from "@/lib/client";
 
 type Rule = { id: number; person: string; note: string };
@@ -30,6 +30,8 @@ export default function SlackPage() {
         title="Slack"
         subtitle="Benachrichtigungen – nur von Personen, die dir wichtig sind"
       />
+
+      <ErrorNote error={rules.error || notifs.error} />
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5 items-start">
         <div className="space-y-5">

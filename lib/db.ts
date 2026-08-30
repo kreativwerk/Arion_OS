@@ -46,8 +46,21 @@ export function getDb(): Promise<DB> {
         return d;
       }
     );
+    // Ein fehlgeschlagener Verbindungsaufbau darf die Instanz nicht dauerhaft
+    // vergiften – beim nächsten Request wird neu verbunden.
+    _db.catch(() => {
+      _db = null;
+    });
   }
   return _db;
+}
+
+/** Heutiges Datum (ISO) in der App-Zeitzone – nicht UTC, sonst kippen
+ *  Fälligkeiten und Habit-Tage zwischen Mitternacht und 1/2 Uhr. */
+export function todayIso(): string {
+  return new Date().toLocaleDateString("sv-SE", {
+    timeZone: process.env.APP_TIMEZONE || "Europe/Berlin",
+  });
 }
 
 /* ── SQLite ─────────────────────────────────────────────── */
@@ -321,13 +334,14 @@ async function ensureSchema(d: DB) {
     await add("workspace_id", "TEXT NOT NULL DEFAULT 'default'");
   }
 
-  // Beispieldaten nur EINMAL einspielen (Flag in app_config) – danach nie wieder,
-  // auch wenn der Nutzer alles löscht.
-  const seeded = await d.get<{ value: string }>("SELECT value FROM app_config WHERE key = 'seeded'");
-  if (!seeded) {
+  // Beispieldaten nur EINMAL einspielen. Das Flag wird VOR dem Seeden atomar
+  // beansprucht (RETURNING) – parallele Cold-Starts können so nicht doppelt säen.
+  const claimed = await d.all<{ key: string }>(
+    "INSERT INTO app_config (key, value) VALUES ('seeded','1') ON CONFLICT (key) DO NOTHING RETURNING key"
+  );
+  if (claimed.length > 0) {
     const row = await d.get<{ n: number }>("SELECT COUNT(*) AS n FROM knowledge_notes");
     if (Number(row?.n ?? 0) === 0) await seed(d);
-    await d.run("INSERT INTO app_config (key, value) VALUES ('seeded','1') ON CONFLICT (key) DO NOTHING");
   }
   await seedConfigDefaults(d);
 }

@@ -1,4 +1,4 @@
-import { getDb, getConfig, type DB } from "@/lib/db";
+import { getDb, getConfig, todayIso, type DB } from "@/lib/db";
 
 /**
  * Jarvis-Engine.
@@ -24,7 +24,7 @@ export async function buildContext(question: string): Promise<string> {
   const d: DB = await getDb();
   const q = question.toLowerCase();
   const parts: string[] = [];
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIso();
 
   const wants = (words: string[]) => words.some((w) => q.includes(w));
   const all = !wants([

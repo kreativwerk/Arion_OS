@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Card, PageHeader, Button, Input, EmptyState, Row, Badge } from "@/components/ui";
+import { Card, PageHeader, Button, Input, EmptyState, Row, Badge , ErrorNote } from "@/components/ui";
 import { useTable, fmtDate, todayIso } from "@/lib/client";
 
 type Ev = {
@@ -16,7 +16,7 @@ type Ev = {
 };
 
 export default function CalendarPage() {
-  const { rows, create, remove } = useTable<Ev>("calendar_events");
+  const { rows, create, remove, error } = useTable<Ev>("calendar_events");
   const [title, setTitle] = useState("");
   const [date, setDate] = useState(todayIso());
   const [start, setStart] = useState("");
@@ -45,6 +45,8 @@ export default function CalendarPage() {
         title="Kalender"
         subtitle="Eigene Einträge – externe Kalender (Google/Outlook via ICS) kommen als nächster Ausbauschritt"
       />
+
+      <ErrorNote error={error} />
 
       <Card className="mb-5">
         <div className="p-4 grid grid-cols-1 md:grid-cols-[1fr_140px_100px_100px_160px_auto] gap-2.5 items-center">

@@ -1,13 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Card, PageHeader, Button, Input, TextArea, EmptyState, Icon } from "@/components/ui";
+import { Card, PageHeader, Button, Input, TextArea, EmptyState, Icon , ErrorNote } from "@/components/ui";
 import { useTable } from "@/lib/client";
 
 type Clip = { id: number; content: string; label: string; pinned: number; created_at: string };
 
 export default function ClipboardPage() {
-  const { rows, create, update, remove } = useTable<Clip>("clipboard_items");
+  const { rows, create, update, remove, error } = useTable<Clip>("clipboard_items");
   const [content, setContent] = useState("");
   const [label, setLabel] = useState("");
   const [copiedId, setCopiedId] = useState<number | null>(null);
@@ -24,6 +24,8 @@ export default function ClipboardPage() {
         title="Clipboard"
         subtitle="Textbausteine, Nummern und Links – ein Klick kopiert"
       />
+
+      <ErrorNote error={error} />
 
       <Card className="mb-5">
         <div className="p-4 space-y-2.5">

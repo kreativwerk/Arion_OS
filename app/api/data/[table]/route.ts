@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withApi, apiError } from "@/lib/api-error";
 import { getDb } from "@/lib/db";
 import { TABLES } from "@/lib/tables";
 
@@ -7,72 +8,57 @@ export const dynamic = "force-dynamic";
 type Ctx = { params: Promise<{ table: string }> };
 
 function guard(table: string) {
-  const meta = TABLES[table];
-  if (!meta) throw new Error(`Unbekannte Tabelle: ${table}`);
-  return meta;
+  return TABLES[table] ?? null;
 }
 
-export async function GET(_req: NextRequest, ctx: Ctx) {
+export const GET = withApi(async (_req: NextRequest, ctx: Ctx) => {
   const { table } = await ctx.params;
-  try {
-    const meta = guard(table);
-    const d = await getDb();
-    const order = meta.orderBy ?? "id DESC";
-    const rows = await d.all(`SELECT * FROM ${table} ORDER BY ${order}`);
-    return NextResponse.json(rows);
-  } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 400 });
-  }
-}
+  const meta = guard(table);
+  if (!meta) return apiError(`Unbekannte Tabelle: ${table}`, 400);
+  const d = await getDb();
+  const order = meta.orderBy ?? "id DESC";
+  const rows = await d.all(`SELECT * FROM ${table} ORDER BY ${order}`);
+  return NextResponse.json(rows);
+});
 
-export async function POST(req: NextRequest, ctx: Ctx) {
+export const POST = withApi(async (req: NextRequest, ctx: Ctx) => {
   const { table } = await ctx.params;
-  try {
-    const meta = guard(table);
-    const d = await getDb();
-    const body = (await req.json()) as Record<string, unknown>;
-    const cols = meta.columns.filter((c) => body[c] !== undefined);
-    if (cols.length === 0) throw new Error("Keine gültigen Felder");
-    const placeholders = cols.map(() => "?").join(",");
-    const id = await d.insert(
-      `INSERT INTO ${table} (${cols.join(",")}) VALUES (${placeholders})`,
-      cols.map((c) => body[c])
-    );
-    const row = await d.get(`SELECT * FROM ${table} WHERE id = ?`, [id]);
-    return NextResponse.json(row, { status: 201 });
-  } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 400 });
-  }
-}
+  const meta = guard(table);
+  if (!meta) return apiError(`Unbekannte Tabelle: ${table}`, 400);
+  const body = (await req.json()) as Record<string, unknown>;
+  const cols = meta.columns.filter((c) => body[c] !== undefined);
+  if (cols.length === 0) return apiError("Keine gültigen Felder", 400);
+  const d = await getDb();
+  const placeholders = cols.map(() => "?").join(",");
+  const id = await d.insert(
+    `INSERT INTO ${table} (${cols.join(",")}) VALUES (${placeholders})`,
+    cols.map((c) => body[c])
+  );
+  const row = await d.get(`SELECT * FROM ${table} WHERE id = ?`, [id]);
+  return NextResponse.json(row, { status: 201 });
+});
 
-export async function PATCH(req: NextRequest, ctx: Ctx) {
+export const PATCH = withApi(async (req: NextRequest, ctx: Ctx) => {
   const { table } = await ctx.params;
-  try {
-    const meta = guard(table);
-    const d = await getDb();
-    const body = (await req.json()) as Record<string, unknown> & { id?: number };
-    if (!body.id) throw new Error("id fehlt");
-    const cols = meta.columns.filter((c) => body[c] !== undefined);
-    if (cols.length === 0) throw new Error("Keine gültigen Felder");
-    const sets = cols.map((c) => `${c} = ?`).join(", ");
-    await d.run(`UPDATE ${table} SET ${sets} WHERE id = ?`, [...cols.map((c) => body[c]), body.id]);
-    const row = await d.get(`SELECT * FROM ${table} WHERE id = ?`, [body.id]);
-    return NextResponse.json(row);
-  } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 400 });
-  }
-}
+  const meta = guard(table);
+  if (!meta) return apiError(`Unbekannte Tabelle: ${table}`, 400);
+  const body = (await req.json()) as Record<string, unknown> & { id?: number };
+  if (!body.id) return apiError("id fehlt", 400);
+  const cols = meta.columns.filter((c) => body[c] !== undefined);
+  if (cols.length === 0) return apiError("Keine gültigen Felder", 400);
+  const d = await getDb();
+  const sets = cols.map((c) => `${c} = ?`).join(", ");
+  await d.run(`UPDATE ${table} SET ${sets} WHERE id = ?`, [...cols.map((c) => body[c]), body.id]);
+  const row = await d.get(`SELECT * FROM ${table} WHERE id = ?`, [body.id]);
+  return NextResponse.json(row);
+});
 
-export async function DELETE(req: NextRequest, ctx: Ctx) {
+export const DELETE = withApi(async (req: NextRequest, ctx: Ctx) => {
   const { table } = await ctx.params;
-  try {
-    guard(table);
-    const d = await getDb();
-    const id = new URL(req.url).searchParams.get("id");
-    if (!id) throw new Error("id fehlt");
-    await d.run(`DELETE FROM ${table} WHERE id = ?`, [id]);
-    return NextResponse.json({ ok: true });
-  } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 400 });
-  }
-}
+  if (!guard(table)) return apiError(`Unbekannte Tabelle: ${table}`, 400);
+  const id = new URL(req.url).searchParams.get("id");
+  if (!id) return apiError("id fehlt", 400);
+  const d = await getDb();
+  await d.run(`DELETE FROM ${table} WHERE id = ?`, [id]);
+  return NextResponse.json({ ok: true });
+});

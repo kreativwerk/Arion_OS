@@ -35,10 +35,18 @@ export default function AssistantPage() {
     setInput("");
     setBusy(true);
     setMessages((m) => [...m, { role: "user", content: message }]);
-    const res = await fetch("/api/assistant", { method: "POST", body: JSON.stringify({ message }) });
-    const data = await res.json();
-    setMessages((m) => [...m, { role: "assistant", content: data.reply ?? data.error ?? "Fehler." }]);
-    setBusy(false);
+    try {
+      const res = await fetch("/api/assistant", { method: "POST", body: JSON.stringify({ message }) });
+      const data = await res.json().catch(() => null);
+      setMessages((m) => [...m, { role: "assistant", content: data?.reply ?? data?.error ?? `Fehler (${res.status}).` }]);
+    } catch (e) {
+      setMessages((m) => [
+        ...m,
+        { role: "assistant", content: `Keine Verbindung: ${e instanceof Error ? e.message : String(e)}` },
+      ]);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const clear = async () => {

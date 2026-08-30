@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withApi } from "@/lib/api-error";
-import { getDb, nowExpr } from "@/lib/db";
+import { getDb, nowExpr, todayIso } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -17,17 +17,24 @@ export const POST = withApi(async (req: NextRequest) => {
   if (undo) {
     await d.run("UPDATE tasks SET done = 0, completed_at = NULL WHERE id = ?", [id]);
   } else if (task.recurrence) {
-    const base = task.due_date ? new Date(task.due_date) : new Date();
+    const today = todayIso();
+    const base = new Date((task.due_date ?? today) + "T12:00:00Z");
     const next = new Date(base);
-    if (task.recurrence === "daily") next.setDate(next.getDate() + 1);
-    else if (task.recurrence === "weekly") next.setDate(next.getDate() + 7);
-    else if (task.recurrence === "monthly") next.setMonth(next.getMonth() + 1);
+    if (task.recurrence === "daily") next.setUTCDate(next.getUTCDate() + 1);
+    else if (task.recurrence === "weekly") next.setUTCDate(next.getUTCDate() + 7);
+    else if (task.recurrence === "monthly") {
+      // Monatsende sauber behandeln: 31.01. + 1 Monat = 28./29.02., nicht 03.03.
+      const day = next.getUTCDate();
+      next.setUTCDate(1);
+      next.setUTCMonth(next.getUTCMonth() + 1);
+      const daysInMonth = new Date(Date.UTC(next.getUTCFullYear(), next.getUTCMonth() + 1, 0)).getUTCDate();
+      next.setUTCDate(Math.min(day, daysInMonth));
+    }
     // Falls der nächste Termin immer noch in der Vergangenheit liegt, auf morgen setzen
-    const today = new Date().toISOString().slice(0, 10);
     let nextIso = next.toISOString().slice(0, 10);
     if (nextIso <= today) {
-      const t = new Date();
-      t.setDate(t.getDate() + 1);
+      const t = new Date(today + "T12:00:00Z");
+      t.setUTCDate(t.getUTCDate() + 1);
       nextIso = t.toISOString().slice(0, 10);
     }
     await d.run("UPDATE tasks SET due_date = ? WHERE id = ?", [nextIso, id]);

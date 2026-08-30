@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Card, PageHeader, Button, Input, Select, EmptyState, Badge } from "@/components/ui";
+import { Card, PageHeader, Button, Input, Select, EmptyState, Badge , ErrorNote } from "@/components/ui";
 import { useTable, fmtDate } from "@/lib/client";
 
 type Contract = {
@@ -25,7 +25,7 @@ function daysUntilCancelDeadline(c: Contract): number | null {
 }
 
 export default function ContractsPage() {
-  const { rows, create, remove } = useTable<Contract>("contracts");
+  const { rows, create, remove, error } = useTable<Contract>("contracts");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
     name: "",
@@ -47,6 +47,8 @@ export default function ContractsPage() {
         subtitle={`${rows.length} Verträge · ${totalCost.toLocaleString("de-DE")} € pro Jahr`}
         action={<Button onClick={() => setShowForm(!showForm)}>{showForm ? "Schließen" : "Neuer Vertrag"}</Button>}
       />
+
+      <ErrorNote error={error} />
 
       {showForm && (
         <Card className="mb-5">

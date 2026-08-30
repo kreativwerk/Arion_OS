@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Card, CardHeader, PageHeader, Button, Input, Select, EmptyState, Row, Badge } from "@/components/ui";
+import { Card, CardHeader, PageHeader, Button, Input, Select, EmptyState, Row, Badge , ErrorNote } from "@/components/ui";
 import { useTable } from "@/lib/client";
 
 type Mail = {
@@ -36,6 +36,8 @@ export default function MailPage() {
         title="Mail-Digest"
         subtitle="Zusammenfassungen wichtiger Mails aus allen Postfächern – gefiltert nach deinen Regeln"
       />
+
+      <ErrorNote error={mails.error || rules.error || accounts.error} />
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5 items-start">
         <div className="space-y-5">

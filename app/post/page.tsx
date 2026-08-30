@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Card, PageHeader, Button, Input, TextArea, EmptyState, Badge } from "@/components/ui";
+import { Card, PageHeader, Button, Input, TextArea, EmptyState, Badge , ErrorNote } from "@/components/ui";
 import { useTable, fmtDate, todayIso } from "@/lib/client";
 
 type Letter = {
@@ -23,7 +23,7 @@ const STATUS_TONE: Record<string, "accent" | "neutral" | "warn" | "good"> = {
 };
 
 export default function PostPage() {
-  const { rows, create, update, remove } = useTable<Letter>("letters");
+  const { rows, create, update, remove, error } = useTable<Letter>("letters");
   const [subject, setSubject] = useState("");
   const [sender, setSender] = useState("");
   const [summary, setSummary] = useState("");
@@ -40,6 +40,8 @@ export default function PostPage() {
         subtitle="Von deinem Mitarbeiter gescannt, hier digital zugestellt"
         action={<Button onClick={() => setShowForm(!showForm)}>{showForm ? "Schließen" : "Scan erfassen"}</Button>}
       />
+
+      <ErrorNote error={error} />
 
       {showForm && (
         <Card className="mb-5">

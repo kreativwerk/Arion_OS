@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Card, PageHeader, Button, Input, TextArea, Select, Segmented, EmptyState, Badge } from "@/components/ui";
+import { Card, PageHeader, Button, Input, TextArea, Select, Segmented, EmptyState, Badge , ErrorNote } from "@/components/ui";
 import { useTable } from "@/lib/client";
 import DocumentsSection from "@/components/DocumentsSection";
 
@@ -16,7 +16,7 @@ type Note = {
 };
 
 export default function KnowledgePage() {
-  const { rows, create, remove } = useTable<Note>("knowledge_notes");
+  const { rows, create, remove, error } = useTable<Note>("knowledge_notes");
   const [scope, setScope] = useState<"alle" | "persoenlich" | "unternehmen" | "partner">("alle");
   const [query, setQuery] = useState("");
   const [showForm, setShowForm] = useState(false);
@@ -44,6 +44,8 @@ export default function KnowledgePage() {
         subtitle="Dein Wissen, das deiner Firma und ihrer Partner – durchsuchbar, auch für Jarvis"
         action={<Button onClick={() => setShowForm(!showForm)}>{showForm ? "Schließen" : "Neuer Eintrag"}</Button>}
       />
+
+      <ErrorNote error={error} />
 
       <div className="flex items-center gap-3 mb-5 flex-wrap">
         <Segmented

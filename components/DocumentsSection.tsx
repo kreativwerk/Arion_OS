@@ -142,7 +142,7 @@ export default function DocumentsSection({ scope, query }: { scope: string; quer
               {busy ? "Lädt hoch …" : "Ablegen"}
             </Button>
             {error && <span className="text-[12px] text-bad">{error}</span>}
-            <span className="text-[11px] text-ink-3 ml-auto">max. 8 MB pro Datei</span>
+            <span className="text-[11px] text-ink-3 ml-auto">max. 4 MB pro Datei</span>
           </div>
         </div>
       )}

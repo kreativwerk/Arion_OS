@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Card, PageHeader, Badge, Button, Segmented, EmptyState, Row, Icon, CheckCircle } from "@/components/ui";
+import { Card, PageHeader, Badge, Button, Segmented, EmptyState, Row, Icon, CheckCircle , ErrorNote } from "@/components/ui";
 import { useTable, fmtDate } from "@/lib/client";
 import TaskQuickSheet from "@/components/TaskQuickSheet";
 
@@ -21,7 +21,7 @@ type Task = {
 };
 
 export default function TasksPage() {
-  const { rows, reload, update, remove } = useTable<Task>("tasks");
+  const { rows, reload, update, remove, error } = useTable<Task>("tasks");
   const [horizon, setHorizon] = useState<"short" | "long">("short");
   const [sheetOpen, setSheetOpen] = useState(false);
 
@@ -51,6 +51,8 @@ export default function TasksPage() {
           />
         }
       />
+
+      <ErrorNote error={error} />
 
       {inbox.length > 0 && (
         <Card className="mb-5 border-accent/30">

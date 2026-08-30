@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Card, PageHeader, Button, Input, EmptyState, Icon, MaybeIcon } from "@/components/ui";
+import { Card, PageHeader, Button, Input, EmptyState, Icon, MaybeIcon , ErrorNote } from "@/components/ui";
 import { useTable, todayIso } from "@/lib/client";
 
 type Habit = { id: number; name: string; emoji: string; target_per_week: number };
@@ -16,7 +16,7 @@ function lastDays(n: number): string[] {
 }
 
 export default function HabitsPage() {
-  const { rows: habits, create, remove } = useTable<Habit>("habits");
+  const { rows: habits, create, remove, error } = useTable<Habit>("habits");
   const [logs, setLogs] = useState<Log[]>([]);
   const [name, setName] = useState("");
   const [emoji, setEmoji] = useState("check_circle");
@@ -53,6 +53,8 @@ export default function HabitsPage() {
   return (
     <div>
       <PageHeader title="Gewohnheiten" subtitle="Die letzten 7 Tage im Überblick" />
+
+      <ErrorNote error={error} />
 
       <Card className="mb-5">
         <div className="p-4 flex gap-2.5 items-center">

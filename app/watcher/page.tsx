@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Card, CardHeader, PageHeader, Button, Input, EmptyState, Row, Badge } from "@/components/ui";
+import { Card, CardHeader, PageHeader, Button, Input, EmptyState, Row, Badge , ErrorNote } from "@/components/ui";
 import { useTable } from "@/lib/client";
 
 type Watcher = {
@@ -31,6 +31,8 @@ export default function WatcherPage() {
         title="Portale & Webseiten"
         subtitle="Watcher prüfen regelmäßig, ob es neue Aufgaben oder relevante Infos gibt"
       />
+
+      <ErrorNote error={watchers.error || events.error} />
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-5 items-start">
         <Card>

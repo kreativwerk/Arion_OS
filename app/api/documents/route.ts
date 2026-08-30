@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
  *  Dateien liegen als Blob im Datenkern – funktioniert mit Supabase und SQLite
  *  identisch und wandert beim Backup automatisch mit. */
 
-const MAX_SIZE = 8 * 1024 * 1024; // 8 MB (Vercel-Request-Limit liegt bei ~4,5 MB)
+const MAX_SIZE = 4 * 1024 * 1024; // 4 MB – bleibt unter Vercels ~4,5-MB-Request-Limit
 
 export const GET = withApi(async () => {
   const d = await getDb();
