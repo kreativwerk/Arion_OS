@@ -1,26 +1,27 @@
 @import "tailwindcss";
 @import "material-symbols/outlined.css";
 
-/* Arion OS – dunkles Design (Apple-Vorbild, dark-only) */
+/* Arion OS – dunkles Design mit Supabase-Grün und Transparenz-Flächen */
 @theme {
-  --color-ground: #000000;      /* Seitenhintergrund */
-  --color-card: #1c1c1e;        /* Karten */
-  --color-inset: #2c2c2e;       /* Eingabefelder, Code, vertiefte Flächen */
-  --color-ink: #f5f5f7;
-  --color-ink-2: #a1a1a6;
-  --color-ink-3: #6e6e73;
-  --color-line: rgba(255, 255, 255, 0.1);
-  --color-accent: #0a84ff;
-  --color-accent-soft: rgba(10, 132, 255, 0.16);
-  --color-good: #30d158;
-  --color-warn: #ff9f0a;
-  --color-bad: #ff453a;
+  --color-ground: #0c0d0e;                     /* Seitenhintergrund */
+  --color-card: rgba(255, 255, 255, 0.045);    /* Karten: transluzentes Weiß */
+  --color-inset: rgba(255, 255, 255, 0.07);    /* Eingabefelder, Code, vertiefte Flächen */
+  --color-ink: #ededed;
+  --color-ink-2: #a0a0a0;
+  --color-ink-3: #666a6e;
+  --color-line: rgba(255, 255, 255, 0.09);
+  --color-accent: #3ecf8e;                     /* Supabase-Grün */
+  --color-accent-soft: rgba(62, 207, 142, 0.12);
+  --color-on-accent: #05130c;                  /* Text auf grünen Flächen */
+  --color-good: #3ecf8e;
+  --color-warn: #f5a623;
+  --color-bad: #f2545b;
 
-  --radius-card: 18px;
+  --radius-card: 14px;
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto,
     "Helvetica Neue", Arial, sans-serif;
 
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.25);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.25);
 }
 
 html {
@@ -30,16 +31,19 @@ html {
 }
 
 body {
-  background: var(--color-ground);
+  background:
+    radial-gradient(900px 420px at 70% -10%, rgba(62, 207, 142, 0.07), transparent 65%),
+    var(--color-ground);
   color: var(--color-ink);
   font-family: var(--font-sans);
   font-size: 14px;
   letter-spacing: -0.01em;
+  min-height: 100dvh;
 }
 
 ::selection {
   background: var(--color-accent);
-  color: #fff;
+  color: var(--color-on-accent);
 }
 
 /* dezente Scrollbars */

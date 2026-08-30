@@ -86,7 +86,7 @@ export function Button({
   className?: string;
 }) {
   const styles = {
-    primary: "bg-accent text-white hover:opacity-90",
+    primary: "bg-accent text-on-accent font-semibold hover:opacity-90",
     ghost: "bg-transparent text-accent hover:bg-accent-soft",
     danger: "bg-transparent text-bad hover:bg-bad/10",
   }[variant];

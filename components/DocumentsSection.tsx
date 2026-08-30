@@ -117,7 +117,7 @@ export default function DocumentsSection({ scope, query }: { scope: string; quer
           <input
             ref={fileRef}
             type="file"
-            className="block w-full text-[13px] text-ink-2 file:mr-3 file:px-3.5 file:h-8 file:rounded-full file:border-0 file:bg-accent file:text-white file:text-[13px] file:font-medium file:cursor-pointer bg-inset border border-line rounded-[10px] p-2"
+            className="block w-full text-[13px] text-ink-2 file:mr-3 file:px-3.5 file:h-8 file:rounded-full file:border-0 file:bg-accent file:text-on-accent file:text-[13px] file:font-medium file:cursor-pointer bg-inset border border-line rounded-[10px] p-2"
           />
           <div className="grid grid-cols-1 md:grid-cols-[1fr_180px_160px_160px] gap-2.5">
             <Input placeholder="Titel (sonst Dateiname)" value={title} onChange={(e) => setTitle(e.target.value)} />

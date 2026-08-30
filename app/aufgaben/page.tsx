@@ -164,7 +164,7 @@ export default function TasksPage() {
             <Row key={t.id}>
               <button
                 onClick={() => complete(t.id, true)}
-                className="w-[18px] h-[18px] rounded-full bg-good border-good text-white text-[11px] leading-none shrink-0"
+                className="w-[18px] h-[18px] rounded-full bg-good border-good text-on-accent text-[11px] leading-none shrink-0"
                 title="Rückgängig"
               >
                 ✓

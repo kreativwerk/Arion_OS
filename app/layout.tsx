@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import Sidebar from "@/components/Sidebar";
+import MobileNav from "@/components/MobileNav";
 import PwaSetup from "@/components/PwaSetup";
 
 export const metadata: Metadata = {
@@ -29,9 +30,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <div className="flex min-h-screen">
           <Sidebar />
           <main className="flex-1 min-w-0">
-            <div className="max-w-[1080px] mx-auto px-8 py-8">{children}</div>
+            <div className="max-w-[1080px] mx-auto px-4 sm:px-6 lg:px-8 py-5 lg:py-8 pb-24 lg:pb-8">
+              {children}
+            </div>
           </main>
         </div>
+        <MobileNav />
       </body>
     </html>
   );

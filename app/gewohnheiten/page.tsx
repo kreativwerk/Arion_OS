@@ -113,7 +113,7 @@ export default function HabitsPage() {
                           onClick={() => toggle(h.id, d)}
                           className={`w-7 h-7 rounded-[9px] border transition-all text-[13px] ${
                             has(h.id, d)
-                              ? "bg-good border-good text-white"
+                              ? "bg-good border-good text-on-accent"
                               : "bg-inset border-line hover:border-ink-3"
                           }`}
                         >

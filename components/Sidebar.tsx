@@ -23,7 +23,7 @@ const NAV: { href: string; label: string; icon: string }[] = [
 export default function Sidebar() {
   const pathname = usePathname();
   return (
-    <aside className="w-[220px] shrink-0 h-screen sticky top-0 flex flex-col border-r border-line bg-card/60 backdrop-blur-xl">
+    <aside className="w-[220px] shrink-0 h-screen sticky top-0 hidden lg:flex flex-col border-r border-line bg-[rgba(255,255,255,0.03)] backdrop-blur-xl">
       <div className="px-5 pt-6 pb-4">
         <div className="text-[17px] font-bold tracking-tight">Arion&nbsp;OS</div>
         <div className="text-[11px] text-ink-3 mt-0.5">Dein persönliches Betriebssystem</div>

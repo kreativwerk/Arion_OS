@@ -47,7 +47,7 @@ export default function AssistantPage() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-64px)]">
+    <div className="flex flex-col h-[calc(100dvh-150px)] lg:h-[calc(100vh-64px)]">
       <div className="flex items-end justify-between mb-4">
         <div>
           <h1 className="text-[28px] font-bold tracking-tight inline-flex items-center gap-2.5">
@@ -87,7 +87,7 @@ export default function AssistantPage() {
             <div
               className={`max-w-[75%] px-4 py-2.5 text-[13px] leading-relaxed whitespace-pre-wrap ${
                 m.role === "user"
-                  ? "bg-accent text-white rounded-[18px] rounded-br-[6px]"
+                  ? "bg-accent text-on-accent rounded-[18px] rounded-br-[6px]"
                   : "bg-card border border-line rounded-[18px] rounded-bl-[6px] shadow-card"
               }`}
             >
@@ -117,7 +117,7 @@ export default function AssistantPage() {
           <button
             onClick={() => send()}
             disabled={busy || !input.trim()}
-            className="h-11 px-5 rounded-full bg-accent text-white text-[14px] font-medium disabled:opacity-40 transition-all"
+            className="h-11 px-5 rounded-full bg-accent text-on-accent text-[14px] font-medium disabled:opacity-40 transition-all"
           >
             Senden
           </button>
