@@ -24,9 +24,13 @@ export default function Sidebar() {
   const pathname = usePathname();
   return (
     <aside className="w-[220px] shrink-0 h-screen sticky top-0 hidden lg:flex flex-col border-r border-line bg-[rgba(255,255,255,0.03)] backdrop-blur-xl">
-      <div className="px-5 pt-6 pb-4">
-        <div className="text-[17px] font-bold tracking-tight">Arion&nbsp;OS</div>
-        <div className="text-[11px] text-ink-3 mt-0.5">Dein persönliches Betriebssystem</div>
+      <div className="px-5 pt-6 pb-4 flex items-center gap-3">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logo.svg" alt="Arion OS" className="w-9 h-9 rounded-[10px]" />
+        <div>
+          <div className="text-[17px] font-bold tracking-tight">Arion&nbsp;OS</div>
+          <div className="text-[11px] text-ink-3 mt-0.5">Dein Betriebssystem</div>
+        </div>
       </div>
       <nav className="flex-1 px-2.5 space-y-0.5 overflow-y-auto pb-4">
         {NAV.map((item) => {
