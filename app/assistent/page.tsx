@@ -106,8 +106,14 @@ export default function AssistantPage() {
         ))}
         {busy && (
           <div className="flex justify-start">
-            <div className="bg-card border border-line rounded-[18px] rounded-bl-[6px] px-4 py-2.5 text-[13px] text-ink-3 shadow-card">
-              Denkt nach …
+            <div className="bg-card border border-line rounded-[18px] rounded-bl-[6px] px-4 py-2.5 shadow-card flex items-center gap-2.5">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/logo.svg" alt="" className="w-6 h-6 rounded-full animate-bot-pulse" />
+              <span className="flex items-center gap-1">
+                <span className="thinking-dot" />
+                <span className="thinking-dot" style={{ animationDelay: "0.15s" }} />
+                <span className="thinking-dot" style={{ animationDelay: "0.3s" }} />
+              </span>
             </div>
           </div>
         )}

@@ -71,6 +71,26 @@ body {
   animation: check-pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
+/* Arion Bot denkt nach: pulsierendes Logo + tippende Punkte */
+@keyframes bot-pulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(62, 207, 142, 0.45); }
+  50% { transform: scale(1.08); box-shadow: 0 0 0 7px rgba(62, 207, 142, 0); }
+}
+.animate-bot-pulse {
+  animation: bot-pulse 1.4s ease-in-out infinite;
+}
+@keyframes dot-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.45; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+.thinking-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--color-accent);
+  animation: dot-bounce 1.2s ease-in-out infinite;
+}
+
 /* Material Symbols: Grundeinstellung */
 .material-symbols-outlined {
   font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 20;
