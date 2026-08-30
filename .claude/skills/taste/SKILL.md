@@ -46,7 +46,12 @@ Feste Reihenfolge, nicht umbauen:
    grünen Soft-Container, große Zahl in `ink` (Zahl NIE in Akzentfarbe), Label `ink-2`;
    bei 0 gedämpft (opacity, `ink-3`). Kacheln sind Links in die Module.
 3. **Fokus:** Aufgabenkarte mit Scroll (`max-h` + `overflow-y-auto`) und rundem
-   grünem Plus-Button → Quick-Add-Input (Enter legt für heute an).
+   grünem Plus-Button.
+   **Aufgaben werden IMMER über `components/TaskQuickSheet.tsx` angelegt**
+   (Bottom Sheet im Google-Tasks-Stil: schlichtes Eingabefeld, Icon-Zeile für
+   Details/Datum/Wiederholung/Priorität, „Speichern"). Kein Formular-Grid bauen;
+   auf Listen-Seiten öffnet ein Floating-Button (unten rechts, über der Tab-Bar)
+   dasselbe Sheet.
 4. **Rhythmus:** Gewohnheiten-Chips, nächste Termine.
 5. **Risiken:** Vertragsfristen.
 

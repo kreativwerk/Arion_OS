@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Card, PageHeader, Badge, Button, Input, Select, Segmented, EmptyState, Row } from "@/components/ui";
+import { Card, PageHeader, Badge, Button, Segmented, EmptyState, Row, Icon } from "@/components/ui";
 import { useTable, fmtDate } from "@/lib/client";
+import TaskQuickSheet from "@/components/TaskQuickSheet";
 
 type Task = {
   id: number;
@@ -20,33 +21,13 @@ type Task = {
 };
 
 export default function TasksPage() {
-  const { rows, reload, create, update, remove } = useTable<Task>("tasks");
+  const { rows, reload, update, remove } = useTable<Task>("tasks");
   const [horizon, setHorizon] = useState<"short" | "long">("short");
-  const [title, setTitle] = useState("");
-  const [due, setDue] = useState("");
-  const [recurrence, setRecurrence] = useState("");
-  const [project, setProject] = useState("");
-  const [priority, setPriority] = useState("2");
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   const complete = async (id: number, undo = false) => {
     await fetch("/api/tasks/complete", { method: "POST", body: JSON.stringify({ id, undo }) });
     reload();
-  };
-
-  const add = async () => {
-    if (!title.trim()) return;
-    await create({
-      title: title.trim(),
-      horizon,
-      due_date: due || null,
-      recurrence: recurrence || null,
-      project,
-      priority: Number(priority),
-    } as Partial<Task>);
-    setTitle("");
-    setDue("");
-    setRecurrence("");
-    setProject("");
   };
 
   const inbox = rows.filter((t) => !t.accepted && !t.done);
@@ -97,31 +78,6 @@ export default function TasksPage() {
           ))}
         </Card>
       )}
-
-      <Card className="mb-5">
-        <div className="p-4 grid grid-cols-1 md:grid-cols-[1fr_150px_150px_150px_90px_auto] gap-2.5 items-center">
-          <Input
-            placeholder={horizon === "short" ? "Neue Aufgabe …" : "Neues langfristiges Ziel …"}
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && add()}
-          />
-          <Input type="date" value={due} onChange={(e) => setDue(e.target.value)} />
-          <Select value={recurrence} onChange={(e) => setRecurrence(e.target.value)}>
-            <option value="">einmalig</option>
-            <option value="daily">täglich</option>
-            <option value="weekly">wöchentlich</option>
-            <option value="monthly">monatlich</option>
-          </Select>
-          <Input placeholder="Projekt" value={project} onChange={(e) => setProject(e.target.value)} />
-          <Select value={priority} onChange={(e) => setPriority(e.target.value)}>
-            <option value="1">Hoch</option>
-            <option value="2">Normal</option>
-            <option value="3">Niedrig</option>
-          </Select>
-          <Button onClick={add}>Hinzufügen</Button>
-        </div>
-      </Card>
 
       <Card>
         {open.length === 0 && <EmptyState text="Keine offenen Aufgaben in dieser Ansicht." />}
@@ -174,6 +130,22 @@ export default function TasksPage() {
           ))}
         </Card>
       )}
+
+      {/* Floating-Button: neue Aufgabe (Google-Tasks-Stil) */}
+      <button
+        onClick={() => setSheetOpen(true)}
+        className="fixed z-50 bottom-[84px] lg:bottom-8 right-5 lg:right-8 w-14 h-14 rounded-[18px] bg-accent text-on-accent shadow-[0_8px_30px_rgba(62,207,142,0.35)] flex items-center justify-center hover:opacity-90 transition-all"
+        aria-label="Neue Aufgabe"
+      >
+        <Icon name="add" size={28} />
+      </button>
+
+      <TaskQuickSheet
+        open={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        onCreated={reload}
+        defaultHorizon={horizon}
+      />
     </div>
   );
 }

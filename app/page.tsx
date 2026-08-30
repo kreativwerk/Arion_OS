@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Card, CardHeader, Badge, EmptyState, Row, Icon } from "@/components/ui";
 import { fmtDate, todayIso } from "@/lib/client";
+import TaskQuickSheet from "@/components/TaskQuickSheet";
 
 type Dash = {
   config: Record<string, string>;
@@ -25,9 +26,7 @@ const TILES = [
 
 export default function TodayPage() {
   const [data, setData] = useState<Dash | null>(null);
-  const [quickAdd, setQuickAdd] = useState(false);
-  const [quickTitle, setQuickTitle] = useState("");
-  const quickRef = useRef<HTMLInputElement>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   const reload = async () => {
     const res = await fetch("/api/dashboard", { cache: "no-store" });
@@ -37,26 +36,12 @@ export default function TodayPage() {
     reload();
   }, []);
 
-  useEffect(() => {
-    if (quickAdd) quickRef.current?.focus();
-  }, [quickAdd]);
-
   const completeTask = async (id: number) => {
     await fetch("/api/tasks/complete", { method: "POST", body: JSON.stringify({ id }) });
     reload();
   };
   const toggleHabit = async (habit_id: number) => {
     await fetch("/api/habits/toggle", { method: "POST", body: JSON.stringify({ habit_id, date: todayIso() }) });
-    reload();
-  };
-  const addQuickTask = async () => {
-    const title = quickTitle.trim();
-    if (!title) return;
-    setQuickTitle("");
-    await fetch("/api/data/tasks", {
-      method: "POST",
-      body: JSON.stringify({ title, horizon: "short", due_date: todayIso(), priority: 2 }),
-    });
     reload();
   };
 
@@ -139,27 +124,15 @@ export default function TodayPage() {
                   Alle →
                 </Link>
                 <button
-                  onClick={() => setQuickAdd(!quickAdd)}
+                  onClick={() => setSheetOpen(true)}
                   className="w-8 h-8 rounded-full bg-accent text-on-accent flex items-center justify-center hover:opacity-90 transition-all"
                   aria-label="Aufgabe hinzufügen"
                 >
-                  <Icon name={quickAdd ? "close" : "add"} size={20} />
+                  <Icon name="add" size={20} />
                 </button>
               </div>
             }
           />
-          {quickAdd && (
-            <div className="px-5 pb-3">
-              <input
-                ref={quickRef}
-                value={quickTitle}
-                onChange={(e) => setQuickTitle(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && addQuickTask()}
-                placeholder="Neue Aufgabe für heute … (Enter)"
-                className="w-full h-10 px-3.5 rounded-[10px] bg-inset border border-accent/40 text-[13px] outline-none focus:ring-2 focus:ring-accent/20 transition-all"
-              />
-            </div>
-          )}
           <div className="flex-1 overflow-y-auto max-h-[340px]">
             {data.tasksToday.length === 0 && <EmptyState text="Nichts fällig – freier Kopf." />}
             {data.tasksToday.map((t) => (
@@ -257,6 +230,8 @@ export default function TodayPage() {
           ))}
         </Card>
       )}
+
+      <TaskQuickSheet open={sheetOpen} onClose={() => setSheetOpen(false)} onCreated={reload} />
     </div>
   );
 }
