@@ -2,7 +2,7 @@
 
 **Dein persönliches Betriebssystem für den Alltag** – To-dos, Gewohnheiten, Mail-Digest,
 Kalender, Wissen, Verträge, digitale Briefpost, Portal-Watcher, Slack-Filter und ein
-eigener KI-Assistent („Jarvis") – in einer minimalistischen App im Apple-Stil.
+eigener KI-Assistent („Arion Bot") – in einer minimalistischen App im Apple-Stil.
 
 ## Schnellstart
 
@@ -42,8 +42,8 @@ Beide Treiber teilen dieselben Queries – das Verhalten der App ist identisch.
 | **Clipboard** | Textbausteine, IBANs, Kundennummern, Links – ein Klick kopiert |
 | **Portale** | Watcher für Vendor Central, Arval-Portal etc. – neue Aufgaben/Infos laufen als Meldungen ein |
 | **Slack** | Nur Nachrichten von definierten wichtigen Personen |
-| **Jarvis** | Chat-Assistent, der alle Daten der App **und dein Profil** kennt; mit `ANTHROPIC_API_KEY` antwortet er frei formuliert über die Claude API |
-| **Einstellungen** | Profil („Über mich" für Jarvis), White-Label (App-Name), API-Tokens für externe Apps |
+| **Arion Bot** | Chat-Assistent, der alle Daten der App **und dein Profil** kennt; mit `ANTHROPIC_API_KEY` antwortet er frei formuliert über die Claude API |
+| **Einstellungen** | Profil („Über mich" für Arion Bot), White-Label (App-Name), API-Tokens für externe Apps |
 
 ## Mitarbeiter-Aufgaben über Codriver
 

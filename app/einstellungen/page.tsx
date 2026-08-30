@@ -62,11 +62,11 @@ export default function SettingsPage() {
         <Card>
           <CardHeader
             title="Profil & Personalisierung"
-            subtitle="Jarvis nutzt diese Angaben als festes Wissen über dich"
+            subtitle="Arion Bot nutzt diese Angaben als festes Wissen über dich"
           />
           <div className="p-5 pt-2 space-y-3">
             <div>
-              <label className="text-[12px] text-ink-2 block mb-1">Dein Name (für Begrüßung & Jarvis)</label>
+              <label className="text-[12px] text-ink-2 block mb-1">Dein Name (für Begrüßung & Arion Bot)</label>
               <Input placeholder="z.B. Alexander" {...field("user_name")} />
             </div>
             <div>
@@ -78,10 +78,10 @@ export default function SettingsPage() {
               <Input {...field("partners")} />
             </div>
             <div>
-              <label className="text-[12px] text-ink-2 block mb-1">Über mich – alles, was Jarvis wissen soll</label>
+              <label className="text-[12px] text-ink-2 block mb-1">Über mich – alles, was Arion Bot wissen soll</label>
               <TextArea rows={6} {...field("about_me")} />
               <p className="text-[11px] text-ink-3 mt-1">
-                Rolle, Arbeitsweise, Vorlieben, Zuständigkeiten … Dieses Feld wird Jarvis bei jeder
+                Rolle, Arbeitsweise, Vorlieben, Zuständigkeiten … Dieses Feld wird Arion Bot bei jeder
                 Frage mitgegeben.
               </p>
             </div>

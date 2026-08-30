@@ -8,7 +8,7 @@ Konfiguration über `.env.local` (Vorlage: `.env.example`).
 
 ---
 
-## 1. Jarvis mit Claude API (empfohlener erster Schritt)
+## 1. Arion Bot mit Claude API (empfohlener erster Schritt)
 
 ```
 ANTHROPIC_API_KEY=sk-ant-...
@@ -17,7 +17,7 @@ ANTHROPIC_MODEL=claude-sonnet-5   # optional
 
 Mehr ist nicht nötig. `lib/assistant/engine.ts` stellt pro Frage den relevanten
 Datenkontext zusammen (Aufgaben, Verträge, Wissen, Post, Mails, Termine, Slack, Portale)
-und schickt ihn als System-Prompt an die Claude API. Ohne Key antwortet Jarvis
+und schickt ihn als System-Prompt an die Claude API. Ohne Key antwortet Arion Bot
 deterministisch aus der Datenbank.
 
 ## 2. Mail-Digest aus mehreren IMAP-Postfächern

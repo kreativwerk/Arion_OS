@@ -4,13 +4,13 @@
 
 Arion OS ist ein **persönliches Betriebssystem**: eine einzige, ruhige Oberfläche, in der
 alle Informationsströme des Alltags zusammenlaufen – Aufgaben, Gewohnheiten, Mails,
-Briefpost, Termine, Verträge, Portal-Meldungen, Slack – und ein Assistent (Jarvis), der
+Briefpost, Termine, Verträge, Portal-Meldungen, Slack – und ein Assistent (Arion Bot), der
 über all das Auskunft geben kann.
 
 Drei Prinzipien:
 
 1. **Ein Datenkern, viele Ansichten.** Alle Module schreiben in dieselbe lokale
-   SQLite-Datenbank. Das Dashboard („Heute") und Jarvis sind nur Ansichten auf denselben Kern.
+   SQLite-Datenbank. Das Dashboard („Heute") und Arion Bot sind nur Ansichten auf denselben Kern.
 2. **Integrationen sind Zulieferer, keine Abhängigkeit.** Jede Integration (IMAP, Slack,
    Watcher, Scans) schreibt über dieselbe API in den Datenkern. Fällt eine Integration aus,
    funktioniert die App weiter – Einträge können immer auch manuell erfasst werden.
@@ -32,7 +32,7 @@ Drei Prinzipien:
 │  /api/dashboard      Aggregation für "Heute"             │
 │  /api/tasks/complete Wiederholungslogik                  │
 │  /api/habits/toggle  Habit-Logs                          │
-│  /api/assistant      Jarvis (lokal + optional Claude)    │
+│  /api/assistant      Arion Bot (lokal + optional Claude)    │
 ├──────────────────────────────────────────────────────────┤
 │  Datenkern (SQLite, data/arion.db)                       │
 │  tasks · habits · habit_logs · calendar_events ·         │
@@ -62,11 +62,11 @@ Drei Prinzipien:
   (siehe `docs/SAAS.md`).
 - **Generische CRUD-API mit Whitelist** (`lib/tables.ts`): jedes Modul bekommt
   Standard-CRUD geschenkt; nur Spezialfälle (Wiederholung, Habit-Toggle, Dashboard,
-  Jarvis) haben eigene Routen.
+  Arion Bot) haben eigene Routen.
 - **Wiederkehrende Aufgaben werden nicht erledigt, sondern weitergeschoben:** Beim
   Abhaken springt `due_date` auf den nächsten Termin. So bleibt die Liste ehrlich und
   es entsteht keine Duplikat-Flut.
-- **Jarvis in zwei Stufen:** Ohne API-Key beantwortet er Fragen deterministisch aus der
+- **Arion Bot in zwei Stufen:** Ohne API-Key beantwortet er Fragen deterministisch aus der
   Datenbank (Intent-Erkennung + Volltextsuche). Mit `ANTHROPIC_API_KEY` wird derselbe
   Datenkontext an die Claude API gegeben und die Antwort frei formuliert. Der Kontext wird
   pro Frage gezielt zusammengestellt (`lib/assistant/engine.ts` → `buildContext`).
@@ -80,15 +80,15 @@ Drei Prinzipien:
    Postfächern.
 2. Er prüft sie gegen die Regeln in `mail_rules` (VIP-Absender, Stichwörter).
 3. Treffer werden zusammengefasst und via `POST /api/data/mail_digest` gespeichert.
-4. Dashboard, Mail-Modul und Jarvis zeigen dieselbe Zeile – ohne weitere Kopplung.
+4. Dashboard, Mail-Modul und Arion Bot zeigen dieselbe Zeile – ohne weitere Kopplung.
 
 Derselbe Weg gilt für Slack-Nachrichten, Watcher-Meldungen und Brief-Scans: **alles ist
 nur ein `POST` auf den Datenkern.**
 
 ## Roadmap (empfohlene Reihenfolge)
 
-1. **Jetzt nutzbar:** alle Module manuell + Seed-Daten, Jarvis lokal.
-2. **Jarvis mit Claude API** – ein Env-Key, sofort spürbarer Mehrwert.
+1. **Jetzt nutzbar:** alle Module manuell + Seed-Daten, Arion Bot lokal.
+2. **Arion Bot mit Claude API** – ein Env-Key, sofort spürbarer Mehrwert.
 3. **IMAP-Mail-Digest** als Cron-Job (Zusammenfassung per Claude).
 4. **Brief-Scan-Upload** für den Mitarbeiter (Upload-Link + PDF-Ablage + Auto-Zusammenfassung).
 5. **ICS-Kalender-Sync** (Google/Outlook read-only, eigene Einträge bleiben lokal).

@@ -18,7 +18,7 @@ mit einer klaren Fehlermeldung).
    | `VAPID_PUBLIC_KEY` | aus Schritt 2 (Push) |
    | `VAPID_PRIVATE_KEY` | aus Schritt 2 (Push) |
    | `VAPID_SUBJECT` | `mailto:info@arion-logistics.de` |
-   | `ANTHROPIC_API_KEY` | optional – Jarvis antwortet dann frei formuliert |
+   | `ANTHROPIC_API_KEY` | optional – Arion Bot antwortet dann frei formuliert |
 
 5. **Deploy** klicken. Jeder Push auf den Branch deployt danach automatisch.
 

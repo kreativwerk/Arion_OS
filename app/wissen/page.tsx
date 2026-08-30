@@ -41,7 +41,7 @@ export default function KnowledgePage() {
     <div>
       <PageHeader
         title="Wissen"
-        subtitle="Dein Wissen, das deiner Firma und ihrer Partner – durchsuchbar, auch für Jarvis"
+        subtitle="Dein Wissen, das deiner Firma und ihrer Partner – durchsuchbar, auch für Arion Bot"
         action={<Button onClick={() => setShowForm(!showForm)}>{showForm ? "Schließen" : "Neuer Eintrag"}</Button>}
       />
 

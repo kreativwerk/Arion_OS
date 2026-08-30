@@ -16,7 +16,7 @@ const NAV: { href: string; label: string; icon: string }[] = [
   { href: "/clipboard", label: "Clipboard", icon: "content_paste" },
   { href: "/watcher", label: "Portale", icon: "travel_explore" },
   { href: "/slack", label: "Slack", icon: "forum" },
-  { href: "/assistent", label: "Jarvis", icon: "auto_awesome" },
+  { href: "/assistent", label: "Arion Bot", icon: "auto_awesome" },
   { href: "/einstellungen", label: "Einstellungen", icon: "settings" },
 ];
 

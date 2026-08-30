@@ -55,12 +55,13 @@ export default function AssistantPage() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-150px)] lg:h-[calc(100vh-64px)]">
+    <div className="flex flex-col h-[calc(100dvh-185px)] lg:h-[calc(100vh-64px)]">
       <div className="flex items-end justify-between mb-4">
         <div>
-          <h1 className="text-[28px] font-bold tracking-tight inline-flex items-center gap-2.5">
-            <Icon name="auto_awesome" size={26} className="text-accent" />
-            Jarvis
+          <h1 className="text-[28px] font-bold tracking-tight inline-flex items-center gap-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.svg" alt="" className="w-9 h-9 rounded-full" />
+            Arion Bot
           </h1>
           <p className="text-[14px] text-ink-2 mt-1">
             Kennt deine Aufgaben, Verträge, Post, Mails, Termine und dein Wissen.
@@ -119,7 +120,7 @@ export default function AssistantPage() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && send()}
-            placeholder="Frag Jarvis …"
+            placeholder="Frag den Arion Bot …"
             className="flex-1 h-11 px-4 rounded-full bg-card border border-line text-[14px] outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all shadow-card"
           />
           <button

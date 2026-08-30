@@ -47,7 +47,7 @@ Reihenfolge der Umbauten, bewusst klein gehalten:
 | --- | --- |
 | **Basis** | Aufgaben, Habits, Kalender, Clipboard, Wissen, Verträge |
 | **Business** | + Briefpost-Digitalisierung, Mail-Digest, Mitarbeiter-API (Codriver-Muster) |
-| **Assistent** | + Jarvis mit Claude API, Portal-Watcher, Slack-Filter |
+| **Assistent** | + Arion Bot mit Claude API, Portal-Watcher, Slack-Filter |
 
 ## Rote Linien (nicht verbauen!)
 

@@ -31,7 +31,7 @@ Icon-Farbe `ink-2`/`ink-3`; Akzent nur bei aktiver/wichtiger Bedeutung.
 ## Mobile-first (Pflicht)
 
 - Sidebar nur `lg:` aufwärts; darunter **Bottom-Tab-Bar** (`components/MobileNav.tsx`:
-  Heute, Aufgaben, Jarvis, Wissen, Mehr) mit `pb-[env(safe-area-inset-bottom)]`.
+  Heute, Aufgaben, Arion Bot (Logo-Button, mittig, ragt über die schwebende Leiste hinaus), Wissen, Mehr) mit `pb-[env(safe-area-inset-bottom)]`.
   Restliche Module über `/mehr`.
 - Layout-Container: `px-4 sm:px-6 lg:px-8`, unten `pb-24 lg:pb-8` (Platz für die Bar).
 - Jede neue Seite auf 390 px Breite prüfen: Grids `grid-cols-1`/`grid-cols-2` zuerst,

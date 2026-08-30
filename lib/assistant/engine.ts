@@ -1,14 +1,14 @@
 import { getDb, getConfig, todayIso, type DB } from "@/lib/db";
 
 /**
- * Jarvis-Engine.
+ * Arion Bot-Engine.
  *
  * Stufe 1 (immer verfügbar): beantwortet Fragen lokal aus der Datenbank
  * (Aufgaben, Verträge, Wissen, Post, Mail, Termine …) über einfache
  * Intent-Erkennung und Volltextsuche.
  *
  * Stufe 2 (optional): Ist ANTHROPIC_API_KEY gesetzt, wird die Frage mit dem
- * relevanten Kontext an die Claude API geschickt – dann antwortet Jarvis
+ * relevanten Kontext an die Claude API geschickt – dann antwortet Arion Bot
  * frei formuliert und kann komplexe Fragen beantworten.
  */
 
@@ -114,7 +114,7 @@ async function localAnswer(question: string): Promise<string> {
   return (
     "Hier ist, was ich in deinen Daten dazu finde:\n\n" +
     ctx +
-    "\n\n_Hinweis: Für frei formulierte Antworten hinterlege einen `ANTHROPIC_API_KEY` in `.env.local` – dann antwortet Jarvis wie ein echter Assistent._"
+    "\n\n_Hinweis: Für frei formulierte Antworten hinterlege einen `ANTHROPIC_API_KEY` in `.env.local` – dann antwortet Arion Bot wie ein echter Assistent._"
   );
 }
 
@@ -134,7 +134,7 @@ async function claudeAnswer(question: string, history: { role: string; content: 
     .filter(Boolean)
     .join("\n");
 
-  const system = `Du bist Jarvis, der persönliche Assistent des Nutzers in seiner App "${cfg.app_name || "Arion OS"}".
+  const system = `Du bist Arion Bot, der persönliche Assistent des Nutzers in seiner App "${cfg.app_name || "Arion OS"}".
 Du kennst seine Aufgaben, Gewohnheiten, Verträge, Briefpost, wichtigen E-Mails, Termine, sein Wissen und das seiner Firma und ihrer Partner.
 
 PROFIL DES NUTZERS:

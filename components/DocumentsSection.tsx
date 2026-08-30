@@ -104,7 +104,7 @@ export default function DocumentsSection({ scope, query }: { scope: string; quer
     <Card className="mb-5">
       <CardHeader
         title="Dokumente"
-        subtitle="Wartungsverträge, Policen, Handbücher – abgelegt und durchsuchbar, auch für Jarvis"
+        subtitle="Wartungsverträge, Policen, Handbücher – abgelegt und durchsuchbar, auch für Arion Bot"
         action={
           <Button variant="ghost" onClick={() => setShowForm(!showForm)}>
             {showForm ? "Schließen" : "Hochladen"}
