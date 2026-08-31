@@ -94,6 +94,29 @@ body {
   animation: dot-bounce 1.2s ease-in-out infinite;
 }
 
+/* Wasser-Tracker: aufsteigender Tropfen + hüpfende Zahl beim Tippen */
+@keyframes water-drop-fly {
+  0% { transform: translate(-50%, 4px) scale(0.4); opacity: 0.95; }
+  60% { opacity: 0.85; }
+  100% { transform: translate(-50%, -30px) scale(1.2); opacity: 0; }
+}
+.water-drop-fly {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  color: var(--color-accent);
+  pointer-events: none;
+  animation: water-drop-fly 0.65s ease-out forwards;
+}
+@keyframes water-bump {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.16); }
+  100% { transform: scale(1); }
+}
+.water-bump {
+  animation: water-bump 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
 /* Material Symbols: Grundeinstellung */
 .material-symbols-outlined {
   font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 20;

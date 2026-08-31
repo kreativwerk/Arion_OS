@@ -169,6 +169,11 @@ function schemaStatements(dialect: "sqlite" | "postgres"): string[] {
       target_per_week INTEGER DEFAULT 7,
       created_at TEXT DEFAULT ${NOW}
     )`,
+    // Wasser-Tracker auf dem Dashboard: ein Zähler pro Tag, reset per Datum
+    `CREATE TABLE IF NOT EXISTS water_log (
+      date TEXT PRIMARY KEY,
+      ml INTEGER NOT NULL DEFAULT 0
+    )`,
     `CREATE TABLE IF NOT EXISTS habit_logs (
       habit_id INTEGER NOT NULL,
       date TEXT NOT NULL,
