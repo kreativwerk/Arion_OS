@@ -91,7 +91,8 @@ export default function TodayPage() {
   }
   if (!data) return <p className="text-ink-3 text-[13px]">Lade …</p>;
 
-  const doneHabits = new Set(data.habitLogsToday.map((l) => l.habit_id));
+  // Number(): bigint-IDs kamen aus Postgres früher als String an
+  const doneHabits = new Set(data.habitLogsToday.map((l) => Number(l.habit_id)));
 
   return (
     <div>
@@ -212,7 +213,7 @@ export default function TodayPage() {
           />
           <div className="px-5 pb-4 pt-1 flex flex-wrap gap-2">
             {data.habits.map((h) => {
-              const done = doneHabits.has(h.id);
+              const done = doneHabits.has(Number(h.id));
               return (
                 <button
                   key={h.id}

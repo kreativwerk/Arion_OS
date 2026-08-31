@@ -100,7 +100,17 @@ async function initPostgres(url: string): Promise<DB> {
   const { default: postgres } = await import("postgres");
   // Serverless-freundlich: 1 Verbindung pro Funktionsinstanz, Leerlauf schnell
   // schließen. prepare:false ist Pflicht für den Supabase Transaction-Pooler.
-  const sql = postgres(url, { prepare: false, max: 1, idle_timeout: 20, connect_timeout: 15 });
+  // int8 (bigint, u.a. alle IDs) als Number parsen statt als String – sonst
+  // scheitern ===-Vergleiche im Client (z.B. habits.id "6" vs habit_logs.habit_id 6).
+  const sql = postgres(url, {
+    prepare: false,
+    max: 1,
+    idle_timeout: 20,
+    connect_timeout: 15,
+    types: {
+      int8: { to: 20, from: [20], serialize: (v: unknown) => String(v), parse: (v: string) => Number(v) },
+    },
+  });
   return {
     dialect: "postgres",
     async all<T>(query: string, params: unknown[] = []) {
