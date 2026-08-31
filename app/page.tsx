@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Card, CardHeader, Badge, EmptyState, Row, Icon, CheckCircle, MaybeIcon } from "@/components/ui";
 import { fmtDate, todayIso } from "@/lib/client";
 import TaskQuickSheet from "@/components/TaskQuickSheet";
-import WaterTracker from "@/components/WaterTracker";
+import NutritionTracker from "@/components/NutritionTracker";
 
 type Dash = {
   config: Record<string, string>;
@@ -170,8 +170,8 @@ export default function TodayPage() {
         })}
       </div>
 
-      {/* Wasser-Tracker: pro Tipp +250 ml Richtung Tagesziel */}
-      <WaterTracker />
+      {/* Ernährung: Wasser +250 ml, Protein +35 g, Vitamin – synct mit Gewohnheiten */}
+      <NutritionTracker />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Fokus: Aufgaben heute mit Quick-Add */}

@@ -169,10 +169,18 @@ function schemaStatements(dialect: "sqlite" | "postgres"): string[] {
       target_per_week INTEGER DEFAULT 7,
       created_at TEXT DEFAULT ${NOW}
     )`,
-    // Wasser-Tracker auf dem Dashboard: ein Zähler pro Tag, reset per Datum
+    // Wasser-Tracker (Altbestand, wird nach nutrition_log migriert)
     `CREATE TABLE IF NOT EXISTS water_log (
       date TEXT PRIMARY KEY,
       ml INTEGER NOT NULL DEFAULT 0
+    )`,
+    // Ernährungs-Tracker auf dem Dashboard: ein Zähler pro Tag und Art
+    // (water = ml, protein = g, vitamin = 0/1), Reset über das Datum
+    `CREATE TABLE IF NOT EXISTS nutrition_log (
+      date TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      amount INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (date, kind)
     )`,
     `CREATE TABLE IF NOT EXISTS habit_logs (
       habit_id INTEGER NOT NULL,
@@ -372,6 +380,12 @@ async function ensureSchema(d: DB) {
       await d.run(`ALTER TABLE mail_accounts ADD COLUMN IF NOT EXISTS ${col} ${def}`);
     }
   }
+
+  // Altbestand des Wasser-Trackers in die generische Ernährungs-Tabelle übernehmen
+  // ("WHERE true" ist für SQLite nötig, damit ON CONFLICT nach SELECT parst)
+  await d.run(
+    "INSERT INTO nutrition_log (date, kind, amount) SELECT date, 'water', ml FROM water_log WHERE true ON CONFLICT DO NOTHING"
+  );
 
   // Beispieldaten nur EINMAL einspielen. Das Flag wird VOR dem Seeden atomar
   // beansprucht (RETURNING) – parallele Cold-Starts können so nicht doppelt säen.
