@@ -83,9 +83,9 @@ export default function NutritionTracker() {
             style={{ left: `calc(${pct}% - 1px)` }}
           />
         )}
-        <div className="relative h-full pl-2.5 pr-1.5 flex items-center gap-2">
-          <div className="relative w-8 h-8 rounded-full bg-accent-soft text-accent flex items-center justify-center shrink-0">
-            <Icon name={done ? "check" : icon} size={17} />
+        <div className="relative h-full pl-2 pr-1 flex items-center gap-1.5">
+          <div className="relative w-7 h-7 rounded-full bg-accent-soft text-accent flex items-center justify-center shrink-0">
+            <Icon name={done ? "check" : icon} size={16} />
             {taps[kind] > 0 && (
               <span key={taps[kind]} className="water-drop-fly" aria-hidden>
                 <Icon name={icon} size={14} />
@@ -93,10 +93,13 @@ export default function NutritionTracker() {
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <div key={`v${taps[kind]}`} className={`text-[14px] font-bold leading-tight tabular-nums water-bump ${done ? "text-accent" : ""}`}>
+            <div
+              key={`v${taps[kind]}`}
+              className={`text-[13px] font-bold leading-tight tabular-nums whitespace-nowrap water-bump ${done ? "text-accent" : ""}`}
+            >
               {value}
             </div>
-            <div className="text-[10px] text-ink-3 leading-tight truncate">
+            <div className="hidden min-[350px]:block text-[10px] text-ink-3 leading-tight truncate">
               {m.amount > 0 ? `von ${goalLabel}` : `${label} · ${goalLabel}`}
             </div>
           </div>
@@ -116,7 +119,7 @@ export default function NutritionTracker() {
                   change(kind, -m.step);
                 }
               }}
-              className="w-6 h-6 rounded-full flex items-center justify-center text-ink-3 hover:text-bad hover:bg-inset transition-all shrink-0"
+              className="hidden min-[370px]:flex w-6 h-6 rounded-full items-center justify-center text-ink-3 hover:text-bad hover:bg-inset transition-all shrink-0"
             >
               <Icon name="remove" size={15} />
             </span>
