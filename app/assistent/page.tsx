@@ -96,7 +96,7 @@ export default function AssistantPage() {
         {messages.map((m, i) => (
           <div key={m.id ?? i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
             <div
-              className={`max-w-[75%] px-4 py-2.5 text-[13px] leading-relaxed whitespace-pre-wrap ${
+              className={`max-w-[75%] px-4 py-2.5 text-[13px] leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere] ${
                 m.role === "user"
                   ? "bg-accent text-on-accent rounded-[18px] rounded-br-[6px]"
                   : "bg-card border border-line rounded-[18px] rounded-bl-[6px] shadow-card"

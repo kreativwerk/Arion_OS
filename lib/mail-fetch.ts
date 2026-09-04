@@ -274,7 +274,8 @@ export async function runMailFetch(): Promise<MailFetchResult> {
   for (let i = 0; i < allNew.length; i++) {
     const m = allNew[i];
     const rule = matchRule(m, rules);
-    const summary = summaries[i] || m.text.slice(0, 180);
+    // Fallback ohne KI: Text-Auszug ohne URLs (lange Links sprengen sonst das Layout)
+    const summary = summaries[i] || m.text.replace(/https?:\/\/\S+/g, "[Link]").slice(0, 180);
     if (rule) {
       wichtig++;
       await d.run(

@@ -243,9 +243,11 @@ export default function MailPage() {
             {unread.map((m) => (
               <Row key={m.id}>
                 <div className="flex-1 min-w-0">
-                  <div className="text-[13px] font-semibold">{m.subject}</div>
-                  <div className="text-[12px] text-ink-2 mt-0.5">{m.summary}</div>
-                  <div className="text-[11px] text-ink-3 mt-1">
+                  <div className="text-[13px] font-semibold break-words">{m.subject}</div>
+                  <div className="text-[12px] text-ink-2 mt-0.5 [overflow-wrap:anywhere] line-clamp-4">
+                    {m.summary}
+                  </div>
+                  <div className="text-[11px] text-ink-3 mt-1 [overflow-wrap:anywhere]">
                     {m.from_addr} · {m.account} · <span className="text-accent">{m.matched_rule}</span>
                   </div>
                 </div>
