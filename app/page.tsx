@@ -94,6 +94,9 @@ export default function TodayPage() {
 
   // Number(): bigint-IDs kamen aus Postgres früher als String an
   const doneHabits = new Set(data.habitLogsToday.map((l) => Number(l.habit_id)));
+  // Geteilte Taskleiste: tägliche Routine-Checks rechts, alles andere links
+  const dailyTasks = data.tasksToday.filter((t) => t.recurrence === "daily");
+  const otherTasks = data.tasksToday.filter((t) => t.recurrence !== "daily");
 
   return (
     <div>
@@ -194,17 +197,37 @@ export default function TodayPage() {
               </div>
             }
           />
-          <div className="flex-1 overflow-y-auto max-h-[460px] min-h-[220px]">
-            {data.tasksToday.length === 0 && <EmptyState text="Nichts fällig – freier Kopf." />}
-            {data.tasksToday.map((t) => (
-              <Row key={t.id} className="py-3.5">
-                <CheckCircle onComplete={() => completeTask(t.id)} />
-                <div className="flex-1 min-w-0 text-[14px] font-medium truncate">{t.title}</div>
-                {t.source !== "eigen" && t.submitted_by && <Badge tone="accent">{t.submitted_by}</Badge>}
-                {t.recurrence && <Icon name="autorenew" size={15} className="text-ink-3" />}
-                {t.priority === 1 && <Badge tone="bad">hoch</Badge>}
-              </Row>
-            ))}
+          {/* Geteilte Taskleiste: links (70 %) alles außer täglich, rechts (30 %) die täglichen Checks */}
+          <div className="flex-1 flex max-h-[460px] min-h-[220px]">
+            <div className="flex-[7] min-w-0 overflow-y-auto">
+              {otherTasks.length === 0 && <EmptyState text="Nichts fällig – freier Kopf." />}
+              {otherTasks.map((t) => (
+                <Row key={t.id} className="py-3.5">
+                  <CheckCircle onComplete={() => completeTask(t.id)} />
+                  <div className="flex-1 min-w-0 text-[14px] font-medium truncate">{t.title}</div>
+                  {t.source !== "eigen" && t.submitted_by && <Badge tone="accent">{t.submitted_by}</Badge>}
+                  {t.recurrence && <Icon name="autorenew" size={15} className="text-ink-3" />}
+                  {t.priority === 1 && <Badge tone="bad">hoch</Badge>}
+                </Row>
+              ))}
+            </div>
+            <div className="flex-[3] min-w-0 overflow-y-auto border-l border-line bg-inset/40">
+              <div className="px-2.5 pt-2.5 pb-1 text-[10px] font-semibold uppercase tracking-wide text-ink-3 flex items-center gap-1">
+                <Icon name="autorenew" size={12} />
+                Täglich
+              </div>
+              {dailyTasks.length === 0 && (
+                <p className="text-[11px] text-ink-3 px-2.5 py-2">Alles erledigt.</p>
+              )}
+              {dailyTasks.map((t) => (
+                <div key={t.id} className="flex items-start gap-1.5 px-2.5 py-2 border-t border-line/60 first:border-t-0">
+                  <CheckCircle size={20} onComplete={() => completeTask(t.id)} className="mt-0.5" />
+                  <div className="flex-1 min-w-0 text-[11px] font-medium leading-snug line-clamp-2">
+                    {t.title}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </Card>
 
