@@ -74,9 +74,20 @@ export async function buildContext(question: string): Promise<string> {
   }
   if (all || wants(["post", "brief", "scan"])) {
     const rows = await d.all<Row>(
-      "SELECT subject, sender, received_date, status, summary FROM letters ORDER BY received_date DESC LIMIT 8"
+      "SELECT subject, sender, received_date, status, summary, action, due_date, reference FROM letters ORDER BY received_date DESC LIMIT 8"
     );
-    parts.push("BRIEFPOST:\n" + rows.map((r) => `- ${fmtDate(r.received_date)} von ${r.sender}: ${r.subject} [${r.status}] – ${r.summary}`).join("\n"));
+    parts.push(
+      "BRIEFPOST:\n" +
+        rows
+          .map(
+            (r) =>
+              `- ${fmtDate(r.received_date)} von ${r.sender}: ${r.subject} [${r.status === "archiv" ? "erledigt" : r.status}] – ${r.summary}` +
+              (r.action ? ` | Zu tun: ${r.action}` : "") +
+              (r.due_date ? ` | Frist: ${fmtDate(r.due_date)}` : "") +
+              (r.reference ? ` | Az.: ${r.reference}` : "")
+          )
+          .join("\n")
+    );
   }
   if (all || wants(["mail", "e-mail", "email", "postfach"])) {
     const rows = await d.all<Row>(

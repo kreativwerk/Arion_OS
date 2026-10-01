@@ -236,8 +236,26 @@ function schemaStatements(dialect: "sqlite" | "postgres"): string[] {
       status TEXT DEFAULT 'neu',
       summary TEXT DEFAULT '',
       file_ref TEXT DEFAULT '',
+      category TEXT DEFAULT '',
+      action TEXT DEFAULT '',
+      due_date TEXT DEFAULT '',
+      reference TEXT DEFAULT '',
+      notes TEXT DEFAULT '',
+      mime TEXT DEFAULT '',
+      extracted TEXT DEFAULT '',
       created_at TEXT DEFAULT ${NOW}
     )`,
+    // Original-Scans der Briefpost (PDF/Foto) – getrennt von den Metadaten,
+    // damit Listenabfragen keine Blobs mitschleppen.
+    dialect === "sqlite"
+      ? `CREATE TABLE IF NOT EXISTS letter_blobs (
+          letter_id INTEGER PRIMARY KEY,
+          data BLOB NOT NULL
+        )`
+      : `CREATE TABLE IF NOT EXISTS letter_blobs (
+          letter_id bigint PRIMARY KEY,
+          data bytea NOT NULL
+        )`,
     `CREATE TABLE IF NOT EXISTS mail_accounts (
       ${ID}, ${WS},
       label TEXT NOT NULL,
@@ -351,6 +369,9 @@ function schemaStatements(dialect: "sqlite" | "postgres"): string[] {
   ];
 }
 
+/** Spalten, die die Briefpost nachträglich bekommen hat (Upload + KI-Analyse). */
+const LETTER_COLUMNS = ["category", "action", "due_date", "reference", "notes", "mime", "extracted"];
+
 async function ensureSchema(d: DB) {
   for (const stmt of schemaStatements(d.dialect)) {
     await d.run(stmt);
@@ -369,6 +390,7 @@ async function ensureSchema(d: DB) {
     await addColumn("mail_accounts", "port", "INTEGER DEFAULT 993");
     await addColumn("mail_accounts", "username", "TEXT DEFAULT ''");
     await addColumn("mail_accounts", "password_enc", "TEXT DEFAULT ''");
+    for (const col of LETTER_COLUMNS) await addColumn("letters", col, "TEXT DEFAULT ''");
   } else {
     // Postgres kennt IF NOT EXISTS direkt
     for (const [col, def] of [
@@ -379,6 +401,12 @@ async function ensureSchema(d: DB) {
     ]) {
       await d.run(`ALTER TABLE mail_accounts ADD COLUMN IF NOT EXISTS ${col} ${def}`);
     }
+    for (const col of LETTER_COLUMNS) {
+      await d.run(`ALTER TABLE letters ADD COLUMN IF NOT EXISTS ${col} TEXT DEFAULT ''`);
+    }
+    // Scans sind sensibel: öffentliche Supabase-API sperren (die App selbst
+    // verbindet als Tabellen-Owner und ist davon nicht betroffen).
+    await d.run("ALTER TABLE letter_blobs ENABLE ROW LEVEL SECURITY");
   }
 
   // Altbestand des Wasser-Trackers in die generische Ernährungs-Tabelle übernehmen
