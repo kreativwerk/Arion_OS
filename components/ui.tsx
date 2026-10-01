@@ -202,7 +202,7 @@ export function Segmented<T extends string>({
         <button
           key={o.value}
           onClick={() => onChange(o.value)}
-          className={`flex-1 px-3.5 h-8 rounded-full text-[13px] font-medium transition-all ${
+          className={`flex-1 px-3.5 h-8 rounded-full text-[13px] font-medium whitespace-nowrap transition-all ${
             value === o.value ? "bg-card shadow-card text-ink" : "text-ink-2 hover:text-ink"
           }`}
         >

@@ -76,15 +76,26 @@ ausgefiltert; ein Tipp auf einen Vorschlag übernimmt ihn als Regel.
 
 ## 3. Briefpost-Scans vom Mitarbeiter
 
-Heute: Der Mitarbeiter erfasst den Scan über „Scan erfassen" im Post-Modul (oder per
-`POST /api/data/letters`).
+Heute: Im Post-Modul werden beliebig viele Scans (PDF, JPG, PNG, GIF, WebP – je max.
+4 MB) auf einmal hochgeladen (Drag & Drop oder Dateiauswahl). Die Oberfläche schickt sie
+nacheinander an `POST /api/letters` (ein Scan pro Request – Vercel-Body-Limit). Der Scan
+liegt als Blob in `letter_blobs`; mit `ANTHROPIC_API_KEY` liest Claude den Brief und
+füllt Absender, Betreff, Anliegen, „Was ist zu tun?“, Kategorie, Frist und
+Aktenzeichen. Der Volltext wird in `letters.extracted` (JSON) gespeichert.
+
+- `GET /api/letters/:id` – Original-Scan öffnen
+- `POST /api/letters/:id` – KI-Analyse erneut ausführen
+- `DELETE /api/letters/:id` – Brief samt Scan löschen
+- Modell: `ANTHROPIC_MODEL` (Standard `claude-opus-5-5`)
+
+Die Liste ist nach Absender gruppiert; jeder Brief lässt sich bearbeiten und als erledigt
+markieren (Status `archiv`).
 
 Ausbaustufe:
 
-- Eigener passwortgeschützter Upload-Link (eine kleine Route `/scan-upload`), der PDF +
-  Foto entgegennimmt und unter `data/letters/` ablegt (`file_ref`).
-- Automatische Zusammenfassung: PDF-Text extrahieren, per Claude API zusammenfassen und
-  Betreff/Absender/Kategorie vorschlagen.
+- Antworten/Formulare automatisch mit Firmendaten ausfüllen – Grundlage ist der
+  gespeicherte Volltext plus ein Firmenprofil (Anschrift, Steuernummer, USt-IdNr., IBAN …).
+- Eigener passwortgeschützter Upload-Link für den Mitarbeiter.
 - Alternativ: dediziertes Scan-Postfach (z.B. `post@arion-logistics.de`) – der
   Mitarbeiter mailt den Scan, der Mail-Digest-Job legt daraus den Brief an.
 

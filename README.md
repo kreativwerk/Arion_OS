@@ -36,7 +36,7 @@ Beide Treiber teilen dieselben Queries – das Verhalten der App ist identisch.
 | **Gewohnheiten** | Habit-Tracker mit 7-Tage-Raster, Wochenziel und Streaks |
 | **Kalender** | Eigene Einträge; ICS-Anbindung (Google/Outlook) als Ausbaustufe |
 | **Mail-Digest** | Zusammenfassungen wichtiger Mails aus mehreren Postfächern, gefiltert nach VIP-Absendern und Stichwörtern |
-| **Briefpost** | Vom Mitarbeiter gescannte Post wird digital zugestellt, mit Status-Workflow (neu → gelesen → Aktion → Archiv) |
+| **Briefpost** | Beliebig viele Scans auf einmal hochladen; Claude erkennt Absender, Anliegen, To-do, Frist und Aktenzeichen. Liste nach Absender gruppiert, bearbeitbar, als erledigt markierbar |
 | **Wissen** | Persönliches Wissen, Firmenwissen und Partnerwissen (Amazon, Arval, LeasePlan …), durchsuchbar |
 | **Verträge** | Versicherungen, Leasing & Co. mit Kündigungsfrist-Countdown und Jahreskosten |
 | **Clipboard** | Textbausteine, IBANs, Kundennummern, Links – ein Klick kopiert |

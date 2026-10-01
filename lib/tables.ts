@@ -10,7 +10,10 @@ export const TABLES: Record<string, { columns: string[]; orderBy?: string }> = {
   calendar_events: { columns: ["title", "date", "start_time", "end_time", "location", "notes", "source"], orderBy: "date ASC, start_time ASC" },
   knowledge_notes: { columns: ["title", "body", "scope", "partner", "tags", "updated_at"], orderBy: "updated_at DESC" },
   contracts: { columns: ["name", "provider", "category", "policy_number", "annual_cost", "start_date", "end_date", "cancel_period_days", "notes"], orderBy: "end_date ASC" },
-  letters: { columns: ["subject", "sender", "received_date", "scanned_by", "status", "summary", "file_ref"], orderBy: "received_date DESC" },
+  letters: {
+    columns: ["subject", "sender", "received_date", "scanned_by", "status", "summary", "file_ref", "category", "action", "due_date", "reference", "notes"],
+    orderBy: "received_date DESC, id DESC",
+  },
   // mail_accounts läuft NICHT über die generische API: Zugangsdaten liegen
   // verschlüsselt in der Tabelle und werden nur über /api/mail/accounts
   // (ohne password_enc) ausgeliefert.
