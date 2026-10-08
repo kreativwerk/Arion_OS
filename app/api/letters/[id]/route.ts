@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withApi } from "@/lib/api-error";
 import { getDb } from "@/lib/db";
-import { analyzeStoredLetter } from "@/lib/letter-store";
+import { analyzeStoredLetter, appendLetterChunk } from "@/lib/letter-store";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -25,6 +25,22 @@ export const GET = withApi(async (_req: NextRequest, ctx: Ctx) => {
       "Cache-Control": "private, max-age=0",
     },
   });
+});
+
+/** Nächstes Stück eines großen Scans anhängen (siehe POST /api/letters);
+ *  mit `final=1` läuft danach die KI-Analyse. */
+export const PUT = withApi(async (req: NextRequest, ctx: Ctx) => {
+  const { id } = await ctx.params;
+  const form = await req.formData();
+  const chunk = form.get("file");
+  if (!(chunk instanceof Blob) || chunk.size === 0) return NextResponse.json({ error: "Stück fehlt" }, { status: 400 });
+  const error = await appendLetterChunk(Number(id), Number(form.get("offset")), Buffer.from(await chunk.arrayBuffer()));
+  if (error) return NextResponse.json({ error }, { status: 409 });
+
+  const analysisError = form.get("final") === "1" ? await analyzeStoredLetter(Number(id)) : null;
+  const d = await getDb();
+  const row = await d.get("SELECT * FROM letters WHERE id = ?", [id]);
+  return NextResponse.json({ letter: row, analysisError });
 });
 
 /** KI-Analyse erneut ausführen (z.B. nachdem ein API-Key hinterlegt wurde). */
