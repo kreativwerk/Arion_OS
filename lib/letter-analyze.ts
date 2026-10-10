@@ -68,30 +68,93 @@ export function letterAnalysisEnabled(): boolean {
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
+const SPLIT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["letters"],
+  properties: {
+    letters: {
+      type: "array",
+      description: "Ein Eintrag pro Brief, in Seitenreihenfolge",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["first_page", "sender"],
+        properties: {
+          first_page: { type: "integer", description: "Erste Seite des Briefs (1-basiert)" },
+          sender: { type: "string", description: "Absender, kurz" },
+        },
+      },
+    },
+  },
+};
+
+function fileBlock(data: Buffer, mime: LetterMime): Anthropic.Beta.BetaContentBlockParam {
+  const b64 = data.toString("base64");
+  return mime === "application/pdf"
+    ? { type: "document", source: { type: "base64", media_type: mime, data: b64 } }
+    : { type: "image", source: { type: "base64", media_type: mime, data: b64 } };
+}
+
+function modelParams() {
+  const model = process.env.ANTHROPIC_MODEL || DEFAULT_MODEL;
+  return {
+    model,
+    // Lehnt das Modell ab, springt serverseitig ein passendes Ersatzmodell ein.
+    ...(model === DEFAULT_MODEL ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const } : {}),
+  };
+}
+
+/**
+ * Stapelscan in einzelne Briefe zerlegen: Liefert die Seitenbereiche
+ * (1-basiert, inklusive) – lückenlos von Seite 1 bis `pageCount`. Ohne
+ * API-Key oder bei nur einer Seite ist alles ein Brief.
+ */
+export async function splitLetterPages(data: Buffer, pageCount: number): Promise<[number, number][]> {
+  if (pageCount <= 1 || !letterAnalysisEnabled()) return [[1, pageCount]];
+
+  const response = await new Anthropic().beta.messages.create({
+    ...modelParams(),
+    max_tokens: 4000,
+    output_config: { effort: "low", format: { type: "json_schema", schema: SPLIT_SCHEMA } },
+    system:
+      "Du bekommst einen Stapel eingescannter Geschäftspost als eine PDF. Bestimme, wo jeder einzelne Brief beginnt. " +
+      "Ein neuer Brief beginnt typischerweise mit Briefkopf, Anschriftenfeld und Datum. Folgeseiten, Rückseiten, " +
+      "Anlagen, Formulare und beigelegte Urkunden gehören zum Brief davor.",
+    messages: [
+      {
+        role: "user",
+        content: [fileBlock(data, "application/pdf"), { type: "text", text: `Die PDF hat ${pageCount} Seiten. Welche Briefe enthält sie?` }],
+      },
+    ],
+  });
+  if (response.stop_reason === "refusal") throw new Error("Aufteilung vom Modell abgelehnt");
+  const text = response.content.map((b) => (b.type === "text" ? b.text : "")).join("");
+  const parsed = JSON.parse(text) as { letters: { first_page: number }[] };
+
+  // Nur die Anfangsseiten zählen – daraus lückenlose Bereiche bauen, damit
+  // keine Seite verloren geht, selbst wenn das Modell sich verzählt.
+  const starts = [...new Set(parsed.letters.map((l) => Math.trunc(l.first_page)))]
+    .filter((p) => p >= 1 && p <= pageCount)
+    .sort((a, b) => a - b);
+  if (starts[0] !== 1) starts.unshift(1);
+  return starts.map((start, i) => [start, (starts[i + 1] ?? pageCount + 1) - 1]);
+}
+
 export async function analyzeLetter(data: Buffer, mime: LetterMime): Promise<LetterAnalysis | null> {
   if (!letterAnalysisEnabled()) return null;
 
   const cfg = await getConfig();
   const recipient = [cfg.user_name, cfg.company].filter(Boolean).join(", ");
-  const b64 = data.toString("base64");
-  const file: Anthropic.Beta.BetaContentBlockParam =
-    mime === "application/pdf"
-      ? { type: "document", source: { type: "base64", media_type: mime, data: b64 } }
-      : { type: "image", source: { type: "base64", media_type: mime, data: b64 } };
-
-  const model = process.env.ANTHROPIC_MODEL || DEFAULT_MODEL;
-  const client = new Anthropic();
-  const response = await client.beta.messages.create({
-    model,
+  const response = await new Anthropic().beta.messages.create({
+    ...modelParams(),
     max_tokens: 16000,
     output_config: { effort: "low", format: { type: "json_schema", schema: SCHEMA } },
-    // Lehnt das Modell ab, springt serverseitig ein passendes Ersatzmodell ein.
-    ...(model === DEFAULT_MODEL ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const } : {}),
     system:
       "Du sortierst eingescannte Geschäftspost. Lies den Brief vollständig und fülle die Felder auf Deutsch aus. " +
       "Erfinde nichts: Was nicht im Brief steht, bleibt leer." +
       (recipient ? ` Empfänger der Post ist ${recipient} – das ist NICHT der Absender.` : ""),
-    messages: [{ role: "user", content: [file, { type: "text", text: "Analysiere diesen Brief." }] }],
+    messages: [{ role: "user", content: [fileBlock(data, mime), { type: "text", text: "Analysiere diesen Brief." }] }],
   });
 
   if (response.stop_reason === "refusal") throw new Error("Analyse vom Modell abgelehnt");

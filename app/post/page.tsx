@@ -33,7 +33,7 @@ type Letter = {
   mime: string;
 };
 
-type UploadItem = { name: string; state: "wartet" | "lädt" | "fertig" | "fehler"; message?: string };
+type UploadItem = { name: string; state: "wartet" | "lädt" | "fertig" | "fehler"; message?: string; count?: number };
 type View = "offen" | "erledigt" | "alle";
 
 /** "archiv" ist der Erledigt-Status (bestehende Daten + Dashboard zählen so). */
@@ -98,9 +98,12 @@ async function responseError(res: Response): Promise<string> {
   return `Fehler ${res.status}`;
 }
 
+type UploadResult = { analysisError: string | null; count: number };
+
 /** Einen Scan hochladen – große Dateien in Stücken. Liefert einen Hinweis zur
- *  KI-Analyse (oder null); wirft, wenn der Brief nicht gespeichert wurde. */
-async function uploadLetter(original: File, scannedBy: string): Promise<string | null> {
+ *  KI-Analyse (oder null) und wie viele Briefe der Scan enthielt; wirft, wenn
+ *  nichts gespeichert wurde. */
+async function uploadLetter(original: File, scannedBy: string): Promise<UploadResult> {
   const file = original.type.startsWith("image/") || /\.hei[cf]$/i.test(original.name) ? await prepareImage(original) : original;
   if (!SERVER_TYPES.includes(file.type)) throw new Error("Nur PDF, JPG, PNG, GIF oder WebP");
   if (file.size === 0) throw new Error("Datei ist leer");
@@ -118,7 +121,7 @@ async function uploadLetter(original: File, scannedBy: string): Promise<string |
     form.append("scanned_by", scannedBy);
     const res = await fetch(url, { method, body: form });
     if (!res.ok) throw new Error(await responseError(res));
-    return (await res.json()) as { letter: { id: number }; analysisError: string | null };
+    return (await res.json()) as { letter: { id: number }; analysisError: string | null; count?: number };
   };
 
   const first = await send("/api/letters", "POST", 0);
@@ -133,7 +136,7 @@ async function uploadLetter(original: File, scannedBy: string): Promise<string |
     await fetch(`/api/letters/${id}`, { method: "DELETE" }).catch(() => {});
     throw e;
   }
-  return result.analysisError;
+  return { analysisError: result.analysisError, count: result.count ?? 1 };
 }
 
 export default function PostPage() {
@@ -170,8 +173,8 @@ export default function PostPage() {
     for (let i = 0; i < files.length; i++) {
       set(i, { state: "lädt" });
       try {
-        const analysisError = await uploadLetter(files[i], scannedBy);
-        set(i, { state: "fertig", message: analysisError ?? undefined });
+        const { analysisError, count } = await uploadLetter(files[i], scannedBy);
+        set(i, { state: "fertig", message: analysisError ?? undefined, count });
       } catch (e) {
         set(i, { state: "fehler", message: e instanceof Error ? e.message : String(e) });
       }
@@ -296,6 +299,7 @@ export default function PostPage() {
                   }
                 />
                 <span className="truncate text-ink-2">{u.name}</span>
+                {(u.count ?? 1) > 1 && <span className="shrink-0 text-accent">→ {u.count} Briefe</span>}
                 {u.message && <span className="text-ink-3 truncate">– {u.message}</span>}
               </div>
             ))}

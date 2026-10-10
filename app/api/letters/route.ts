@@ -50,7 +50,7 @@ export const POST = withApi(async (req: NextRequest) => {
   );
   await d.run("INSERT INTO letter_blobs (letter_id, data) VALUES (?,?)", [id, Buffer.from(await file.arrayBuffer())]);
 
-  const analysisError = final ? await analyzeStoredLetter(id) : null;
+  const result = final ? await analyzeStoredLetter(id) : { error: null, ids: [id] };
   const row = await d.get("SELECT * FROM letters WHERE id = ?", [id]);
-  return NextResponse.json({ letter: row, analysisError }, { status: 201 });
+  return NextResponse.json({ letter: row, analysisError: result.error, count: result.ids.length }, { status: 201 });
 });
