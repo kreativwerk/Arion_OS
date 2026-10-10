@@ -33,7 +33,7 @@ type Letter = {
   mime: string;
 };
 
-type UploadItem = { name: string; state: "wartet" | "lädt" | "fertig" | "fehler"; message?: string };
+type UploadItem = { name: string; state: "wartet" | "lädt" | "fertig" | "fehler"; message?: string; count?: number };
 type View = "offen" | "erledigt" | "alle";
 
 /** "archiv" ist der Erledigt-Status (bestehende Daten + Dashboard zählen so). */
@@ -58,6 +58,87 @@ function dueTone(due: string): "bad" | "warn" | "neutral" {
   return due <= inAWeek ? "warn" : "neutral";
 }
 
+/* ── Upload ─────────────────────────────────────────────── */
+
+const MAX_SIZE = 20 * 1024 * 1024; // wie LETTER_MAX_SIZE (Server)
+const CHUNK_SIZE = 3 * 1024 * 1024; // unter Vercels ~4,5-MB-Request-Limit
+const MAX_EDGE = 2400; // px – reicht zum Lesen, hält Fotos klein
+const SERVER_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/gif", "image/webp"];
+
+/** Handyfotos (oft 3–8 MB, iPhone auch HEIC) als JPEG verkleinern. Kleine,
+ *  passende Bilder bleiben unverändert. */
+async function prepareImage(file: File): Promise<File> {
+  const supported = SERVER_TYPES.includes(file.type);
+  if (supported && file.size <= 1.5 * 1024 * 1024) return file;
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    if (supported) return file;
+    throw new Error("Bildformat kann der Browser nicht lesen – bitte als JPG oder PDF speichern");
+  }
+  const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, "image/jpeg", 0.85));
+  if (!blob) return file;
+  return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" });
+}
+
+/** Fehlermeldung aus einer Antwort – auch wenn Vercel statt JSON eine
+ *  Textseite liefert (413 zu groß, 504 Zeitüberschreitung). */
+async function responseError(res: Response): Promise<string> {
+  const data = await res.json().catch(() => ({}));
+  if (data.error) return data.error;
+  if (res.status === 413) return "Datei zu groß für den Server";
+  if (res.status === 504) return "Zeitüberschreitung beim Server – bitte erneut versuchen";
+  return `Fehler ${res.status}`;
+}
+
+type UploadResult = { analysisError: string | null; count: number };
+
+/** Einen Scan hochladen – große Dateien in Stücken. Liefert einen Hinweis zur
+ *  KI-Analyse (oder null) und wie viele Briefe der Scan enthielt; wirft, wenn
+ *  nichts gespeichert wurde. */
+async function uploadLetter(original: File, scannedBy: string): Promise<UploadResult> {
+  const file = original.type.startsWith("image/") || /\.hei[cf]$/i.test(original.name) ? await prepareImage(original) : original;
+  if (!SERVER_TYPES.includes(file.type)) throw new Error("Nur PDF, JPG, PNG, GIF oder WebP");
+  if (file.size === 0) throw new Error("Datei ist leer");
+  if (file.size > MAX_SIZE) throw new Error(`Datei zu groß (max. ${MAX_SIZE / 1024 / 1024} MB)`);
+
+  const send = async (url: string, method: string, offset: number) => {
+    const end = Math.min(offset + CHUNK_SIZE, file.size);
+    const form = new FormData();
+    form.append("file", file.slice(offset, end), file.name);
+    form.append("name", file.name);
+    form.append("type", file.type);
+    form.append("size", String(file.size));
+    form.append("offset", String(offset));
+    form.append("final", end >= file.size ? "1" : "0");
+    form.append("scanned_by", scannedBy);
+    const res = await fetch(url, { method, body: form });
+    if (!res.ok) throw new Error(await responseError(res));
+    return (await res.json()) as { letter: { id: number }; analysisError: string | null; count?: number };
+  };
+
+  const first = await send("/api/letters", "POST", 0);
+  const id = first.letter.id;
+  let result = first;
+  try {
+    for (let offset = CHUNK_SIZE; offset < file.size; offset += CHUNK_SIZE) {
+      result = await send(`/api/letters/${id}`, "PUT", offset);
+    }
+  } catch (e) {
+    // Halb hochgeladenen Brief nicht in der Liste liegen lassen
+    await fetch(`/api/letters/${id}`, { method: "DELETE" }).catch(() => {});
+    throw e;
+  }
+  return { analysisError: result.analysisError, count: result.count ?? 1 };
+}
+
 export default function PostPage() {
   const { rows, update, reload, error } = useTable<Letter>("letters");
   const [view, setView] = useState<View>("offen");
@@ -79,7 +160,7 @@ export default function PostPage() {
       .catch(() => {});
   }, []);
 
-  /** Stapel nacheinander hochladen – ein Scan pro Request (Body-Limit, KI-Zeitbudget). */
+  /** Stapel nacheinander hochladen – ein Scan nach dem anderen (KI-Zeitbudget). */
   const uploadAll = async (files: File[]) => {
     if (files.length === 0 || busy) return;
     setBusy(true);
@@ -91,14 +172,9 @@ export default function PostPage() {
 
     for (let i = 0; i < files.length; i++) {
       set(i, { state: "lädt" });
-      const form = new FormData();
-      form.append("file", files[i]);
-      form.append("scanned_by", scannedBy);
       try {
-        const res = await fetch("/api/letters", { method: "POST", body: form });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) set(i, { state: "fehler", message: data.error ?? `Fehler ${res.status}` });
-        else set(i, { state: "fertig", message: data.analysisError ?? undefined });
+        const { analysisError, count } = await uploadLetter(files[i], scannedBy);
+        set(i, { state: "fertig", message: analysisError ?? undefined, count });
       } catch (e) {
         set(i, { state: "fehler", message: e instanceof Error ? e.message : String(e) });
       }
@@ -184,12 +260,12 @@ export default function PostPage() {
             <Icon name="upload_file" size={24} />
           </div>
           <div className="text-[14px] font-semibold">Briefe hier ablegen</div>
-          <div className="text-[12px] text-ink-3">PDF oder Fotos, beliebig viele auf einmal · max. 4 MB pro Datei</div>
+          <div className="text-[12px] text-ink-3">PDF oder Fotos, beliebig viele auf einmal · max. 20 MB pro Datei</div>
           <input
             ref={fileRef}
             type="file"
             multiple
-            accept="application/pdf,image/jpeg,image/png,image/gif,image/webp"
+            accept="application/pdf,image/*,.heic,.heif"
             className="hidden"
             onChange={(e) => uploadAll([...(e.target.files ?? [])])}
           />
@@ -223,6 +299,7 @@ export default function PostPage() {
                   }
                 />
                 <span className="truncate text-ink-2">{u.name}</span>
+                {(u.count ?? 1) > 1 && <span className="shrink-0 text-accent">→ {u.count} Briefe</span>}
                 {u.message && <span className="text-ink-3 truncate">– {u.message}</span>}
               </div>
             ))}

@@ -76,15 +76,21 @@ ausgefiltert; ein Tipp auf einen Vorschlag übernimmt ihn als Regel.
 
 ## 3. Briefpost-Scans vom Mitarbeiter
 
-Heute: Im Post-Modul werden beliebig viele Scans (PDF, JPG, PNG, GIF, WebP – je max.
-4 MB) auf einmal hochgeladen (Drag & Drop oder Dateiauswahl). Die Oberfläche schickt sie
-nacheinander an `POST /api/letters` (ein Scan pro Request – Vercel-Body-Limit). Der Scan
-liegt als Blob in `letter_blobs`; mit `ANTHROPIC_API_KEY` liest Claude den Brief und
+Heute: Im Post-Modul werden beliebig viele Scans (PDF, JPG, PNG, GIF, WebP, HEIC – je max.
+20 MB) auf einmal hochgeladen (Drag & Drop oder Dateiauswahl). Fotos verkleinert der
+Browser vorab auf max. 2400 px (JPEG). Vercel nimmt pro Request nur ~4,5 MB an – größere
+Dateien gehen deshalb in 3-MB-Stücken hoch: `POST /api/letters` legt den Brief mit dem
+ersten Stück an, `PUT /api/letters/:id` hängt die weiteren an (`offset`, `final=1` beim
+letzten). Der Scan liegt als Blob in `letter_blobs`.
+
+Mit `ANTHROPIC_API_KEY` zerlegt Claude einen Stapelscan (mehrere Briefe in einer PDF,
+z.B. die komplette Tagespost) zuerst in einzelne Briefe – jeder wird ein eigener Eintrag
+mit eigenem PDF („Scan (S. 3–4).pdf“). Danach liest Claude jeden Brief einzeln und
 füllt Absender, Betreff, Anliegen, „Was ist zu tun?“, Kategorie, Frist und
 Aktenzeichen. Der Volltext wird in `letters.extracted` (JSON) gespeichert.
 
 - `GET /api/letters/:id` – Original-Scan öffnen
-- `POST /api/letters/:id` – KI-Analyse erneut ausführen
+- `POST /api/letters/:id` – KI-Analyse erneut ausführen (zerlegt ggf. auch erneut)
 - `DELETE /api/letters/:id` – Brief samt Scan löschen
 - Modell: `ANTHROPIC_MODEL` (Standard `claude-opus-5-5`)
 
