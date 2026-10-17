@@ -43,6 +43,8 @@ const LOOKBACK_DAYS = 4;
 const BODY_EXCERPT = 1400; // Zeichen pro Mail für die Wissens-Extraktion
 const MAX_ENV_ACCOUNTS = 8;
 const DEFAULT_BUDGET_MS = 40_000;
+/** Ein Konto wird nur noch begonnen, wenn mindestens so viel Budget übrig ist. */
+const ACCOUNT_MIN_MS = 20_000;
 
 export type MailAccountEnv = { label: string; host: string; user: string; pass: string; port: number };
 
@@ -66,7 +68,7 @@ export function accountsFromEnv(): MailAccountEnv[] {
 }
 
 /** In der App angelegte Postfächer (aktiv + vollständige Zugangsdaten). */
-async function accountsFromDb(d: DB, hints: string[]): Promise<MailAccountEnv[]> {
+export async function accountsFromDb(d: DB, hints: string[]): Promise<MailAccountEnv[]> {
   const rows = await d.all<{ label: string; host: string; port: number; username: string; password_enc: string }>(
     "SELECT label, host, port, username, password_enc FROM mail_accounts WHERE active = 1 AND host <> '' AND username <> '' AND password_enc <> ''"
   );
@@ -97,6 +99,9 @@ type NewMail = {
   date: string;
   text: string;
   belege: number;
+  /** false, wenn Anhänge nicht vollständig gespeichert wurden (Zeitbudget/Fehler)
+   *  → Mail wird NICHT als gesehen markiert und beim nächsten Lauf erneut verarbeitet. */
+  complete: boolean;
 };
 
 type Rule = { kind: string; value: string };
@@ -149,6 +154,52 @@ async function streamToBuffer(stream: NodeJS.ReadableStream, max: number): Promi
 }
 
 type FetchCtx = { d: DB; hints: string[]; deadline: number; eingang: { neu: number } };
+
+export type IngestMeta = { label: string; user: string; messageId: string; from: string; subject: string; to: string; date: string };
+
+/** Lädt alle Beleg-Anhänge einer Mail und legt sie im Eingang ab (SHA-256-Dedupe →
+ *  wiederholbar). `complete` ist nur true, wenn jeder Kandidat verarbeitet wurde. */
+export async function ingestAttachments(
+  client: ImapFlow,
+  uid: number,
+  structure: MessageStructureObject | undefined,
+  meta: IngestMeta,
+  d: DB,
+  hints: string[],
+  deadline: number
+): Promise<{ neu: number; complete: boolean }> {
+  let neu = 0;
+  let complete = true;
+  const quelle = isScanSource(`${meta.label} ${meta.user}`, meta.to, meta.subject) ? "scan" : "mail";
+  for (const c of belegCandidates(structure)) {
+    if (Date.now() > deadline) {
+      complete = false; // Rest beim nächsten Lauf
+      break;
+    }
+    try {
+      const dl = await client.download(String(uid), c.part, { uid: true, maxBytes: BELEG_MAX_BYTES + 1 });
+      const data = await streamToBuffer(dl.content, BELEG_MAX_BYTES);
+      if (!data) continue; // größer als erlaubt – bewusst übersprungen
+      if (c.mime.startsWith("image/") && data.length < IMAGE_MIN_BYTES) continue;
+      const id = await storeEingang(d, {
+        quelle,
+        account: meta.label,
+        messageId: meta.messageId,
+        from: meta.from,
+        subject: meta.subject,
+        receivedAt: meta.date,
+        filename: dl.meta.filename || c.filename,
+        mime: c.mime,
+        data,
+      });
+      if (id) neu++;
+    } catch (e) {
+      complete = false;
+      hints.push(`${meta.label}: Anhang „${c.filename}“ nicht gespeichert – ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+  return { neu, complete };
+}
 
 async function fetchAccount(acc: MailAccountEnv, ctx: FetchCtx): Promise<NewMail[]> {
   const { d, hints, deadline } = ctx;
@@ -205,36 +256,19 @@ async function fetchAccount(acc: MailAccountEnv, ctx: FetchCtx): Promise<NewMail
         }
         const date = new Date(msg.internalDate ?? Date.now()).toISOString();
 
-        // Belege: PDF-/Bild-Anhänge in den Buchhaltungs-Eingang
-        let belege = 0;
+        // Belege: PDF-/Bild-Anhänge in den Buchhaltungs-Eingang (angefangene Mail darf 5 s überziehen)
         const to = msg.envelope?.to?.map((a) => a.address || "").join(", ") || "";
-        const quelle = isScanSource(`${acc.label} ${acc.user}`, to, subject) ? "scan" : "mail";
-        for (const c of belegCandidates(msg.bodyStructure)) {
-          if (Date.now() > deadline + 5_000) break; // angefangene Mail noch fertig machen
-          try {
-            const dl = await client.download(String(uid), c.part, { uid: true, maxBytes: BELEG_MAX_BYTES + 1 });
-            const data = await streamToBuffer(dl.content, BELEG_MAX_BYTES);
-            if (!data) continue;
-            if (c.mime.startsWith("image/") && data.length < IMAGE_MIN_BYTES) continue;
-            const id = await storeEingang(d, {
-              quelle,
-              account: acc.label,
-              messageId,
-              from,
-              subject,
-              receivedAt: date,
-              filename: dl.meta.filename || c.filename,
-              mime: c.mime,
-              data,
-            });
-            if (id) {
-              belege++;
-              ctx.eingang.neu++;
-            }
-          } catch (e) {
-            hints.push(`${acc.label}: Anhang „${c.filename}“ nicht gespeichert – ${e instanceof Error ? e.message : String(e)}`);
-          }
-        }
+        const ing = await ingestAttachments(
+          client,
+          uid,
+          msg.bodyStructure,
+          { label: acc.label, user: acc.user, messageId, from, subject, to, date },
+          d,
+          hints,
+          deadline + 5_000
+        );
+        ctx.eingang.neu += ing.neu;
+        const belege = ing.neu;
 
         mails.push({
           account: acc.label,
@@ -244,6 +278,7 @@ async function fetchAccount(acc: MailAccountEnv, ctx: FetchCtx): Promise<NewMail
           date,
           text: text.slice(0, BODY_EXCERPT * 3),
           belege,
+          complete: ing.complete,
         });
       }
     } finally {
@@ -371,16 +406,34 @@ export async function runMailFetch(opts: MailFetchOptions = {}): Promise<MailFet
   const perAccount: { label: string; neu: number }[] = [];
   const allNew: NewMail[] = [];
   const ctx: FetchCtx = { d, hints, deadline, eingang: { neu: 0 } };
-  for (const acc of accounts) {
-    if (Date.now() > deadline) {
-      hints.push(`${acc.label}: übersprungen (Zeitbudget erreicht) – beim nächsten Abruf dabei.`);
+  // Reihenfolge rotiert pro Lauf, damit bei knappem Budget kein Konto dauerhaft hinten runterfällt
+  const rot = await d.all<{ value: string }>(
+    "INSERT INTO app_config (key, value) VALUES ('mail_rotation','1') ON CONFLICT (key) DO UPDATE SET value = CAST(CAST(app_config.value AS INTEGER) + 1 AS TEXT) RETURNING value"
+  );
+  const offset = (Number(rot[0]?.value) || 0) % accounts.length;
+  const ordered = [...accounts.slice(offset), ...accounts.slice(0, offset)];
+  let started = 0;
+  for (const acc of ordered) {
+    if (started > 0 && deadline - Date.now() < ACCOUNT_MIN_MS) {
+      hints.push(`${acc.label}: übersprungen (Zeitbudget knapp) – beim nächsten Abruf dabei.`);
       perAccount.push({ label: acc.label, neu: 0 });
       continue;
     }
+    started++;
     const mails = await fetchAccount(acc, ctx);
     perAccount.push({ label: acc.label, neu: mails.length });
     allNew.push(...mails);
   }
+
+  // Unvollständige Mails (Anhänge abgebrochen) komplett auf den nächsten Lauf verschieben –
+  // sonst gingen Belege verloren bzw. der Digest-Eintrag entstünde doppelt.
+  const incomplete = allNew.filter((m) => !m.complete).length;
+  if (incomplete > 0) {
+    hints.push(`${incomplete} ${incomplete === 1 ? "Mail wird" : "Mails werden"} beim nächsten Abruf erneut verarbeitet (Anhänge unvollständig).`);
+  }
+  const done = allNew.filter((m) => m.complete);
+  allNew.length = 0;
+  allNew.push(...done);
 
   const { summaries, notes } = await extractWithClaude(allNew, hints, deadline + 12_000 - Date.now());
 
