@@ -16,7 +16,19 @@ type Dash = {
   habitLogsToday: { habit_id: number }[];
   events: { id: number; title: string; date: string; start_time: string; end_time: string; location: string }[];
   contractsDue: { id: number; name: string; provider: string; days_to_cancel: number }[];
+  buchhaltung?: {
+    monat: string;
+    fehlt_anzahl: number;
+    fehlt_summe: number;
+    belegt_prozent: number | null;
+    eingang_neu: number;
+    naechste_frist: { titel: string; faellig: string; betrag: number | null } | null;
+  };
 };
+
+const eur = (n: number) => n.toLocaleString("de-DE", { style: "currency", currency: "EUR" });
+const monthLabel = (m: string) =>
+  new Date(`${m}-01T12:00:00`).toLocaleDateString("de-DE", { month: "long", year: "numeric" });
 
 const TILES = [
   { key: "slack", label: "Slack", icon: "notifications", href: "/slack" },
@@ -304,6 +316,49 @@ export default function TodayPage() {
             </Row>
           ))}
         </Card>
+      )}
+
+      {/* Risiken: Buchhaltung – fehlende Belege, neue Eingänge, nächste Frist */}
+      {data.buchhaltung && (
+        <Link href="/buchhaltung" className="block mt-4">
+          <Card className="hover:border-accent/40 transition-all">
+            <CardHeader
+              title="Buchhaltung"
+              subtitle={monthLabel(data.buchhaltung.monat)}
+              action={<span className="text-[12px] text-accent">Öffnen →</span>}
+            />
+            <div className="grid grid-cols-3 gap-2 px-5 pb-4">
+              {[
+                {
+                  icon: "receipt_long",
+                  value: String(data.buchhaltung.fehlt_anzahl),
+                  label: data.buchhaltung.fehlt_anzahl > 0 ? `fehlen · ${eur(data.buchhaltung.fehlt_summe)}` : "Belege fehlen",
+                  active: data.buchhaltung.fehlt_anzahl > 0,
+                },
+                {
+                  icon: "inbox",
+                  value: String(data.buchhaltung.eingang_neu),
+                  label: "neue Eingänge",
+                  active: data.buchhaltung.eingang_neu > 0,
+                },
+                {
+                  icon: "event",
+                  value: data.buchhaltung.naechste_frist ? fmtDate(data.buchhaltung.naechste_frist.faellig).slice(0, 6) : "–",
+                  label: data.buchhaltung.naechste_frist?.titel ?? "keine Frist",
+                  active: Boolean(data.buchhaltung.naechste_frist),
+                },
+              ].map((k) => (
+                <div key={k.icon} className={`bg-inset rounded-[12px] px-3 py-2.5 min-w-0 ${k.active ? "" : "opacity-60"}`}>
+                  <div className="flex items-center gap-1.5">
+                    <Icon name={k.icon} size={16} className={k.active ? "text-accent" : "text-ink-3"} />
+                    <span className={`text-[17px] font-bold leading-none ${k.active ? "" : "text-ink-3"}`}>{k.value}</span>
+                  </div>
+                  <div className="text-[11px] text-ink-3 mt-1 truncate">{k.label}</div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </Link>
       )}
 
       <TaskQuickSheet open={sheetOpen} onClose={() => setSheetOpen(false)} onCreated={reload} />

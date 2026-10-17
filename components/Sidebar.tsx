@@ -12,6 +12,7 @@ const NAV: { href: string; label: string; icon: string }[] = [
   { href: "/mail", label: "Mail-Digest", icon: "mail" },
   { href: "/post", label: "Briefpost", icon: "markunread_mailbox" },
   { href: "/wissen", label: "Wissen", icon: "school" },
+  { href: "/buchhaltung", label: "Buchhaltung", icon: "account_balance" },
   { href: "/vertraege", label: "Verträge", icon: "contract" },
   { href: "/clipboard", label: "Clipboard", icon: "content_paste" },
   { href: "/watcher", label: "Portale", icon: "travel_explore" },
