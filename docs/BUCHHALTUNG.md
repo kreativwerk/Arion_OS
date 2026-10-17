@@ -30,7 +30,8 @@ spricht nur SQL.
 | `lib/buch-eingang.ts` | Erkennung von Belegen, Scan-Erkennung, Speichern mit SHA-256-Dedupe |
 | `lib/buch-ablage.ts` / `lib/buch-pdf.ts` | Ablage-Aufträge ausführen: Seiten schneiden, Fotos → A4-PDF, Upload |
 | `lib/google-drive.ts` / `lib/google-jwt.ts` | Service-Account-Login (JWT RS256, ohne SDK), Ordnerpfade, Upload |
-| `lib/buch-run.ts` | Ein Lauf = Mail-Abruf (≈ 32 s Budget) + Ablage (bis ≈ 52 s) |
+| `lib/buch-run.ts` | Ein Lauf = Mail-Abruf (≈ 30 s Budget) + Ablage (bis ≈ 55 s), mit Lauf-Sperre (`lib/run-lock.ts`) |
+| `lib/buch-nachholen.ts` | Einmaliges Nachholen der Anhänge der letzten N Tage (Button auf /buchhaltung) |
 | `app/api/cron/buchhaltung` | Cron-Endpunkt (CRON_SECRET), GET oder POST |
 | `app/api/buchhaltung/*` | Übersicht, Datei-Vorschau, Status „ignorieren“, „Jetzt abrufen“, Ablage erneut versuchen |
 | `app/buchhaltung/page.tsx` | Seite; Dashboard-Karte auf „Heute“ |
@@ -150,16 +151,28 @@ Auf Pro sind beliebige Intervalle möglich, z. B. in `vercel.json`:
 
 ## Grenzen eines Laufs
 
-- Pro Konto max. 25 neue Mails, Konten nacheinander, Mail-Abruf ≈ 32 s, Gesamtlauf
-  ≈ 52 s (`maxDuration = 60`). Was nicht mehr passt, folgt beim nächsten Lauf (Mails
-  werden erst als gesehen markiert, wenn sie verarbeitet sind).
+- Pro Konto max. 25 neue Mails, Konten nacheinander (Reihenfolge rotiert pro Lauf; ein
+  Konto startet nur bei ≥ 20 s Restbudget), Mail-Abruf ≈ 30 s, Gesamtlauf ≈ 55 s
+  (`maxDuration = 60`). Was nicht mehr passt, folgt beim nächsten Lauf: Eine Mail gilt erst
+  als gesehen, wenn **alle** ihre Anhänge gespeichert sind – sonst wird sie komplett
+  (inkl. Digest) beim nächsten Lauf erneut verarbeitet; SHA-256 verhindert Doppelte.
+- Parallele Läufe (Cron + Button) sperren sich gegenseitig (`app_config.lock:buchhaltung`,
+  verwaist nach 3 Min.); der zweite antwortet `{"skipped": "läuft bereits"}`.
 - Anhänge: PDF, JPG, PNG, HEIC, WebP bis je 20 MB. Eingebettete Bilder < 30 KB
   (Logos/Signaturen) und Bilder < 8 KB werden übersprungen, weitergeleitete Mails
   (`message/rfc822`) nicht aufgebohrt.
-- Nur **neue** Mails (letzte 4 Tage, noch nicht in `mail_seen`) werden betrachtet –
-  Anhänge von Mails, die vor Einführung des Moduls schon abgerufen wurden, kommen nicht
-  automatisch nach.
-- Ablage: max. 15 Aufträge pro Lauf. HEIC/WebP kann die App nicht in PDF wandeln (siehe unten).
+- Der reguläre Abruf betrachtet nur **neue** Mails (letzte 4 Tage, nicht in `mail_seen`).
+  Für ältere Mails: Button „Anhänge der letzten 30 Tage nachholen“ bzw.
+  `POST /api/buchhaltung/nachholen?tage=N` (N ≤ 60, `&neustart=1` beginnt von vorn).
+  Läuft in Etappen (Fortschritt in `app_config.buch_nachholen`), nur Eingang – kein
+  Digest, keine Wissens-Notizen.
+- Ablage: max. 15 Aufträge pro Lauf; ein Auftrag startet nur bei ≥ 25 s Restzeit, alle
+  Drive-Aufrufe sind an die Restzeit gebunden. Uploads tragen `appProperties.ablageId`;
+  vor jedem Upload wird danach gesucht, damit ein abgebrochener Lauf nichts doppelt ablegt.
+  HEIC/WebP kann die App nicht in PDF wandeln (siehe unten). Verschlüsselte PDFs lassen
+  sich nur als ganze Datei ablegen (mit `seiten` → Fehler mit Hinweis).
+- Vorschau in der App nur bis 4 MB (Vercel-Antwortlimit 4,5 MB); größere Belege nach der
+  Ablage in Google Drive öffnen. Speichern im Eingang weiterhin bis 20 MB.
 - Nach neuen Belegen/wichtigen Mails schickt der **Cron** eine Push-Nachricht
   („3 neue Belege eingegangen · 1 wichtige Mail“). Manuelles „Abrufen“ pusht nicht.
 

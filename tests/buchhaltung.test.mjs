@@ -77,6 +77,12 @@ test("PDF: Seiten ausschneiden und Fotos in A4 setzen", async () => {
 
   await assert.rejects(() => buildPdf(bytes, "application/pdf", "6"), /existiert nicht/);
 
+  // Verschlüsseltes PDF: trennen → klare Fehlermeldung, ganze Datei → unverändert
+  const plain = await src.save({ useObjectStreams: false }); // klassischer Trailer
+  const enc = Buffer.from(Buffer.from(plain).toString("latin1").replace(/trailer\s*<</, "trailer\n<<\n/Encrypt 1 0 R"), "latin1");
+  await assert.rejects(() => buildPdf(new Uint8Array(enc), "application/pdf", "1"), /verschlüsselt/);
+  assert.ok(await buildPdf(new Uint8Array(enc), "application/pdf", ""));
+
   // 1x1-PNG → eine A4-Seite
   const png = Buffer.from(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
@@ -118,6 +124,11 @@ test("Drive: Ordnerpfad anlegen, Shared-Drive-Parameter, nie überschreiben (gem
       const parent = qy.match(/^'([^']+)' in parents/)[1];
       const exact = qy.match(/name = '((?:[^'\\]|\\.)*)'/);
       const contains = qy.match(/name contains '((?:[^'\\]|\\.)*)'/);
+      const app = qy.match(/appProperties has \{ key='ablageId' and value='(\d+)' \}/);
+      if (app) {
+        const path = folders.get(parent);
+        return json({ files: files.filter((f) => f.parent === path && f.ablageId === app[1]).map((f) => ({ id: f.id, name: f.name })) });
+      }
       if (qy.includes("application/vnd.google-apps.folder")) {
         const name = exact[1].replace(/\\(.)/g, "$1");
         const id = [...folders.entries()].find(([, v]) => v === `${parent}/${name}`)?.[0];
@@ -139,7 +150,7 @@ test("Drive: Ordnerpfad anlegen, Shared-Drive-Parameter, nie überschreiben (gem
       const text = Buffer.from(init.body).toString("latin1");
       const meta = JSON.parse(text.match(/\r\n\r\n(\{.*?\})\r\n/)[1]);
       const id = `file-${++n}`;
-      files.push({ id, name: meta.name, parent: folders.get(meta.parents[0]) });
+      files.push({ id, name: meta.name, parent: folders.get(meta.parents[0]), ablageId: meta.appProperties?.ablageId });
       return json({ id, name: meta.name, webViewLink: `https://drive.google.com/file/d/${id}/view` });
     }
     if (init.method === "DELETE" || u.pathname.includes("/trash")) throw new Error("Löschen ist verboten");
@@ -160,6 +171,11 @@ test("Drive: Ordnerpfad anlegen, Shared-Drive-Parameter, nie überschreiben (gem
     assert.equal(b.name, "O'Neil_10,00 (2).pdf");
     assert.match(b.url, /^https:\/\/drive\.google\.com\//);
     assert.throws(() => drive.splitDrivePath("Ausgaben/../geheim"), /\.\./);
+    // Idempotenz: Upload mit ablageId wird beim erneuten Versuch gefunden statt doppelt hochgeladen
+    assert.equal(await drive.findByAblageId(fid, 77), null);
+    const c = await drive.uploadFile(fid, "Aral_5,00.pdf", pdf, "application/pdf", { appProperties: { ablageId: "77" } });
+    const found = await drive.findByAblageId(fid, 77, { deadline: Date.now() + 5_000 });
+    assert.equal(found?.id, c.id);
     assert.ok(!calls.some((c) => c.startsWith("DELETE")));
   } finally {
     globalThis.fetch = realFetch;
@@ -191,4 +207,33 @@ test("Mail-Anhänge: PDFs/Fotos ja, Logos/Signaturen/Weiterleitungen nein", asyn
   assert.ok(isScanSource("Scan", "scan@arion-logistics.de", "irgendwas"));
   assert.ok(isScanSource("IONOS", "info@arion-logistics.de", "Scan Bürodrucker 17.10."));
   assert.ok(!isScanSource("IONOS", "info@arion-logistics.de", "Rechnung"));
+});
+
+test("Lauf-Sperre: nur ein Lauf gleichzeitig, verwaiste Sperre wird übernommen", async () => {
+  const { default: Database } = await import("better-sqlite3");
+  const { acquireLock, releaseLock, withLock } = await import("../lib/run-lock.ts");
+  const raw = new Database(":memory:");
+  raw.exec("CREATE TABLE app_config (key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '')");
+  const d = {
+    dialect: "sqlite",
+    all: async (q, p = []) => raw.prepare(q).all(...p),
+    get: async (q, p = []) => raw.prepare(q).get(...p),
+    run: async (q, p = []) => void raw.prepare(q).run(...p),
+  };
+  const t1 = await acquireLock(d, "x");
+  assert.ok(t1);
+  assert.equal(await acquireLock(d, "x"), null); // läuft bereits
+  await releaseLock(d, "x", t1);
+  const t2 = await acquireLock(d, "x");
+  assert.ok(t2);
+  await new Promise((r) => setTimeout(r, 5));
+  assert.ok(await acquireLock(d, "x", 1)); // nach Ablauf (1 ms) übernehmbar
+  raw.prepare("UPDATE app_config SET value = '000000000000000'").run();
+  let inner = "frei";
+  const out = await withLock(d, "y", async () => {
+    inner = String(await withLock(d, "y", async () => "doppelt"));
+    return "ok";
+  });
+  assert.equal(out, "ok");
+  assert.equal(inner, "null");
 });
