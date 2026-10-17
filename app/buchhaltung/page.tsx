@@ -58,10 +58,27 @@ type Overview = {
   zaehler: { eingang_neu: number; ablage_offen: number; ablage_fehler: number };
 };
 
-type RunResult = {
-  mail: { configured: boolean; neu: number; wichtig: number; belege: number; hinweise: string[] };
-  ablage: { configured: boolean; erledigt: number; fehler: number; offen: number; hinweise: string[] };
-};
+type RunResult =
+  | {
+      mail: { configured: boolean; neu: number; wichtig: number; belege: number; hinweise: string[] };
+      ablage: { configured: boolean; erledigt: number; fehler: number; offen: number; hinweise: string[] };
+      skipped?: undefined;
+    }
+  | { skipped: string };
+
+type BackfillResult =
+  | {
+      fertig: boolean;
+      belege_neu: number;
+      belege_gesamt: number;
+      konten: { label: string; verarbeitet: number; gesamt: number; fertig: boolean }[];
+      hinweise: string[];
+      skipped?: undefined;
+    }
+  | { skipped: string };
+
+/** Vercel liefert höchstens ~4,5 MB pro Antwort – größere Belege nur über Drive. */
+const MAX_PREVIEW_BYTES = 4 * 1024 * 1024;
 
 const eur = (n: number | null | undefined) =>
   n === null || n === undefined ? "–" : n.toLocaleString("de-DE", { style: "currency", currency: "EUR" });
@@ -144,6 +161,46 @@ export default function BuchhaltungPage() {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setRunning(false);
+    }
+  };
+
+  // Einmaliges Nachholen der Anhänge der letzten 30 Tage – ruft den Endpunkt in Etappen auf
+  const [backfill, setBackfill] = useState<{ running: boolean; text: string; hints: string[] } | null>(null);
+  const runBackfill = async () => {
+    if (backfill?.running) return;
+    setBackfill({ running: true, text: "Starte …", hints: [] });
+    let neustart = true;
+    let stalled = 0;
+    let last = -1;
+    try {
+      for (let round = 0; round < 40; round++) {
+        const res = await fetch(`/api/buchhaltung/nachholen?tage=30${neustart ? "&neustart=1" : ""}`, { method: "POST" });
+        neustart = false;
+        const body = (await res.json().catch(() => null)) as BackfillResult | { error?: string } | null;
+        if (!res.ok || !body || "error" in body) throw new Error((body as { error?: string })?.error ?? `Server-Fehler ${res.status}`);
+        if ("skipped" in body && body.skipped) {
+          setBackfill({ running: false, text: `Nachholen ${body.skipped}.`, hints: [] });
+          return;
+        }
+        const r = body as Exclude<BackfillResult, { skipped: string }>;
+        const done = r.konten.reduce((a, k) => a + k.verarbeitet, 0);
+        const total = r.konten.reduce((a, k) => a + k.gesamt, 0);
+        setBackfill({
+          running: !r.fertig,
+          text: `${r.fertig ? "Fertig" : "Läuft"}: ${done} von ${total} Mails geprüft · ${r.belege_gesamt} ${r.belege_gesamt === 1 ? "Beleg" : "Belege"} nachgeholt`,
+          hints: r.hinweise,
+        });
+        if (r.fertig) break;
+        stalled = done === last ? stalled + 1 : 0;
+        last = done;
+        if (stalled >= 2) {
+          setBackfill((b) => (b ? { ...b, running: false, text: `${b.text} – angehalten (kein Fortschritt, siehe Hinweise)` } : b));
+          break;
+        }
+      }
+      await load(monat);
+    } catch (e) {
+      setBackfill({ running: false, text: e instanceof Error ? e.message : String(e), hints: [] });
     }
   };
 
@@ -240,7 +297,12 @@ export default function BuchhaltungPage() {
       {header}
       <ErrorNote error={error} />
 
-      {result && (
+      {result && "skipped" in result && result.skipped && (
+        <div className="bg-inset border border-line rounded-[12px] px-4 py-3 mb-4 text-[13px] text-ink-2">
+          Ein Abruf läuft bereits – bitte gleich noch einmal laden.
+        </div>
+      )}
+      {result && "mail" in result && (
         <div className="bg-accent-soft border border-accent/25 rounded-[12px] px-4 py-3 mb-4 text-[13px]">
           <p>
             <span className="font-semibold text-accent">Abruf fertig:</span> {result.mail.neu}{" "}
@@ -411,18 +473,33 @@ export default function BuchhaltungPage() {
                       {e.auftraege > 0 && <Badge>{e.auftraege} {e.auftraege === 1 ? "Dokument" : "Dokumente"}</Badge>}
                     </div>
                     {e.notiz && <div className="text-[11px] text-ink-3 mt-1 [overflow-wrap:anywhere]">{e.notiz}</div>}
+                    {e.size > MAX_PREVIEW_BYTES && (
+                      <div className="text-[11px] text-ink-3 mt-1">
+                        Zu groß für die Vorschau – nach der Ablage über Google Drive öffnen
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-0.5 shrink-0">
-                    <a
-                      href={`/api/buchhaltung/eingang/${e.id}/datei`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label="Vorschau"
-                      title="Vorschau"
-                      className="w-9 h-9 rounded-full flex items-center justify-center text-ink-3 hover:text-accent hover:bg-inset transition-all"
-                    >
-                      <Icon name="visibility" size={19} />
-                    </a>
+                    {e.size > MAX_PREVIEW_BYTES ? (
+                      <span
+                        title="Zu groß für die Vorschau – nach der Ablage über Google Drive öffnen"
+                        aria-label="Zu groß für die Vorschau – nach der Ablage über Google Drive öffnen"
+                        className="w-9 h-9 rounded-full flex items-center justify-center text-ink-3 opacity-50"
+                      >
+                        <Icon name="visibility_off" size={19} />
+                      </span>
+                    ) : (
+                      <a
+                        href={`/api/buchhaltung/eingang/${e.id}/datei`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label="Vorschau"
+                        title="Vorschau"
+                        className="w-9 h-9 rounded-full flex items-center justify-center text-ink-3 hover:text-accent hover:bg-inset transition-all"
+                      >
+                        <Icon name="visibility" size={19} />
+                      </a>
+                    )}
                     {(e.status === "neu" || e.status === "fehler") && (
                       <button
                         onClick={() => setEingangStatus(e.id, "ignoriert")}
@@ -448,6 +525,24 @@ export default function BuchhaltungPage() {
               );
             })}
           </Card>
+
+          {/* Nachholen: Anhänge, die vor Einführung des Moduls schon abgerufen waren */}
+          <div className="-mt-3 px-1 text-[12px]">
+            <button
+              onClick={runBackfill}
+              disabled={backfill?.running}
+              className="inline-flex items-center gap-1.5 text-accent font-medium disabled:opacity-50"
+            >
+              <Icon name="history" size={16} className={backfill?.running ? "animate-spin" : ""} />
+              Anhänge der letzten 30 Tage nachholen
+            </button>
+            {backfill && <p className="text-ink-2 mt-1">{backfill.text}</p>}
+            {backfill?.hints.map((h, i) => (
+              <p key={i} className="text-ink-3 mt-0.5 break-words">
+                {h}
+              </p>
+            ))}
+          </div>
 
           {/* Abgelegt */}
           <Card>
