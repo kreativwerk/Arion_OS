@@ -16,6 +16,7 @@ type FetchResult = {
   neu: number;
   wichtig: number;
   notizen: number;
+  belege?: number;
   hinweise: string[];
 };
 
@@ -223,6 +224,7 @@ export default function MailPage() {
                 ` (${result.accounts.map((a) => `${a.label}: ${a.neu}`).join(", ")})`}{" "}
               · {result.wichtig} wichtig im Digest · {result.notizen}{" "}
               {result.notizen === 1 ? "neue Wissens-Notiz" : "neue Wissens-Notizen"}
+              {result.belege ? ` · ${result.belege} ${result.belege === 1 ? "neuer Beleg" : "neue Belege"} in der Buchhaltung` : ""}
             </p>
           ) : (
             <p className="text-warn font-medium">Noch keine Postfächer konfiguriert.</p>
@@ -486,7 +488,7 @@ export default function MailPage() {
                   className="group"
                 >
                   <Badge tone={r.kind === "absender" ? "accent" : "warn"}>
-                    {r.kind === "absender" ? "@" : "#"} {r.value} ✕
+                    {r.kind === "absender" ? "@" : r.kind === "betreff" ? "Betreff:" : "#"} {r.value} ✕
                   </Badge>
                 </button>
               ))}
@@ -495,9 +497,10 @@ export default function MailPage() {
               <Select value={ruleKind} onChange={(e) => setRuleKind(e.target.value)}>
                 <option value="absender">Absender</option>
                 <option value="stichwort">Stichwort</option>
+                <option value="betreff">Betreff</option>
               </Select>
               <Input
-                placeholder={ruleKind === "absender" ? "z.B. arval.de" : "z.B. Rechnung"}
+                placeholder={ruleKind === "absender" ? "z.B. arval.de" : ruleKind === "betreff" ? "z.B. Mahnung" : "z.B. Rechnung"}
                 value={ruleValue}
                 onChange={(e) => setRuleValue(e.target.value)}
                 onKeyDown={(e) => {

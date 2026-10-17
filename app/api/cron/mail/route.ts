@@ -21,5 +21,5 @@ export const GET = withApi(async (req: NextRequest) => {
   if (req.headers.get("authorization") !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "Ungültiges Cron-Secret." }, { status: 401 });
   }
-  return NextResponse.json(await runMailFetch());
+  return NextResponse.json(await runMailFetch({ push: true }));
 });
