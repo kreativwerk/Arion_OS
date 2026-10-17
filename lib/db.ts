@@ -1,6 +1,6 @@
 import path from "path";
 import fs from "fs";
-import { seed, seedConfigDefaults } from "./seed";
+import { seed, seedConfigDefaults, seedBuchhaltungMailRules } from "./seed";
 
 /**
  * Datenkern von Arion OS – eine Schnittstelle, zwei Treiber:
@@ -366,8 +366,104 @@ function schemaStatements(dialect: "sqlite" | "postgres"): string[] {
       user_agent TEXT DEFAULT '',
       created_at TEXT DEFAULT ${NOW}
     )`,
+    ...buchhaltungStatements(dialect, ID, NOW, WS),
   ];
 }
+
+/**
+ * Buchhaltungs-Modul (siehe docs/BUCHHALTUNG.md):
+ * Eingang (Mail-/Scan-Anhänge) → Ablage-Aufträge (von der Claude-Routine per SQL
+ * angelegt) → Upload nach Google Drive. Dazu Monatsabgleich, Fristen, Kennzahlen.
+ * Beträge: NUMERIC auf Postgres (exakt), REAL auf SQLite.
+ */
+function buchhaltungStatements(dialect: "sqlite" | "postgres", ID: string, NOW: string, WS: string): string[] {
+  const MONEY = dialect === "sqlite" ? "REAL" : "NUMERIC(14,2)";
+  return [
+    `CREATE TABLE IF NOT EXISTS buch_eingang (
+      ${ID}, ${WS},
+      quelle TEXT NOT NULL DEFAULT 'mail',
+      account TEXT DEFAULT '',
+      message_id TEXT DEFAULT '',
+      from_addr TEXT DEFAULT '',
+      subject TEXT DEFAULT '',
+      received_at TEXT,
+      filename TEXT NOT NULL DEFAULT '',
+      mime TEXT DEFAULT '',
+      size INTEGER DEFAULT 0,
+      sha256 TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'neu',
+      firma TEXT,
+      notiz TEXT DEFAULT '',
+      created_at TEXT DEFAULT ${NOW},
+      updated_at TEXT DEFAULT ${NOW}
+    )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS buch_eingang_sha256_uq ON buch_eingang (workspace_id, sha256)`,
+    `CREATE INDEX IF NOT EXISTS buch_eingang_status_idx ON buch_eingang (status, created_at)`,
+    dialect === "sqlite"
+      ? `CREATE TABLE IF NOT EXISTS buch_eingang_blobs (
+          eingang_id INTEGER PRIMARY KEY,
+          data BLOB NOT NULL
+        )`
+      : `CREATE TABLE IF NOT EXISTS buch_eingang_blobs (
+          eingang_id bigint PRIMARY KEY,
+          data bytea NOT NULL
+        )`,
+    `CREATE TABLE IF NOT EXISTS buch_ablage (
+      ${ID}, ${WS},
+      eingang_id INTEGER NOT NULL,
+      seiten TEXT DEFAULT '',
+      ziel_pfad TEXT NOT NULL,
+      dateiname TEXT NOT NULL,
+      lieferant TEXT DEFAULT '',
+      betrag ${MONEY},
+      belegdatum TEXT,
+      monat TEXT,
+      status TEXT NOT NULL DEFAULT 'offen',
+      drive_file_id TEXT DEFAULT '',
+      drive_url TEXT DEFAULT '',
+      fehler TEXT DEFAULT '',
+      gestartet_at TEXT,
+      created_at TEXT DEFAULT ${NOW},
+      done_at TEXT
+    )`,
+    `CREATE INDEX IF NOT EXISTS buch_ablage_status_idx ON buch_ablage (status, id)`,
+    `CREATE INDEX IF NOT EXISTS buch_ablage_eingang_idx ON buch_ablage (eingang_id)`,
+    `CREATE TABLE IF NOT EXISTS buch_ausgaben (
+      ${ID}, ${WS},
+      monat TEXT NOT NULL,
+      datum TEXT,
+      empfaenger TEXT DEFAULT '',
+      zweck TEXT DEFAULT '',
+      betrag ${MONEY} NOT NULL DEFAULT 0,
+      kategorie TEXT DEFAULT '',
+      beleg TEXT DEFAULT '',
+      hinweis TEXT DEFAULT '',
+      qonto_id TEXT
+    )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS buch_ausgaben_qonto_uq ON buch_ausgaben (workspace_id, qonto_id)`,
+    `CREATE INDEX IF NOT EXISTS buch_ausgaben_monat_idx ON buch_ausgaben (monat)`,
+    `CREATE TABLE IF NOT EXISTS buch_fristen (
+      ${ID}, ${WS},
+      titel TEXT NOT NULL,
+      faellig TEXT,
+      betrag ${MONEY},
+      art TEXT DEFAULT 'sonstiges',
+      status TEXT NOT NULL DEFAULT 'offen',
+      quelle TEXT DEFAULT '',
+      notiz TEXT DEFAULT ''
+    )`,
+    `CREATE TABLE IF NOT EXISTS buch_kennzahlen (
+      ${WS},
+      key TEXT NOT NULL,
+      value TEXT NOT NULL DEFAULT '',
+      updated_at TEXT DEFAULT ${NOW},
+      PRIMARY KEY (workspace_id, key)
+    )`,
+  ];
+}
+
+/** Tabellen des Buchhaltungs-Moduls – auf Supabase per RLS für die öffentliche API gesperrt. */
+const BUCH_TABLES = ["buch_eingang", "buch_eingang_blobs", "buch_ablage", "buch_ausgaben", "buch_fristen", "buch_kennzahlen"];
 
 /** Spalten, die die Briefpost nachträglich bekommen hat (Upload + KI-Analyse). */
 const LETTER_COLUMNS = ["category", "action", "due_date", "reference", "notes", "mime", "extracted"];
@@ -407,6 +503,8 @@ async function ensureSchema(d: DB) {
     // Scans sind sensibel: öffentliche Supabase-API sperren (die App selbst
     // verbindet als Tabellen-Owner und ist davon nicht betroffen).
     await d.run("ALTER TABLE letter_blobs ENABLE ROW LEVEL SECURITY");
+    // Belege + Bankdaten ebenso (Liste ist fest im Code, keine Eingabe)
+    for (const t of BUCH_TABLES) await d.run(`ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`);
   }
 
   // Altbestand des Wasser-Trackers in die generische Ernährungs-Tabelle übernehmen
@@ -425,6 +523,7 @@ async function ensureSchema(d: DB) {
     if (Number(row?.n ?? 0) === 0) await seed(d);
   }
   await seedConfigDefaults(d);
+  await seedBuchhaltungMailRules(d);
 }
 
 export async function getConfig(): Promise<Record<string, string>> {
