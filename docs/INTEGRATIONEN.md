@@ -56,6 +56,9 @@ MAIL_2_USER=<deine GMX-Adresse>
 MAIL_2_PASS=<GMX-Passwort>
 ```
 
+Bis zu acht Konten (`MAIL_1_…` bis `MAIL_8_…`). PDF- und Bild-Anhänge neuer Mails
+landen zusätzlich im Buchhaltungs-Eingang – Details in `docs/BUCHHALTUNG.md`.
+
 Anbieter-Hinweise:
 - **IONOS:** Host `imap.ionos.de`, Port 993 (Standard), Benutzer = vollständige
   E-Mail-Adresse, normales Postfach-Passwort.

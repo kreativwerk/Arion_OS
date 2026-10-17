@@ -38,6 +38,7 @@ Beide Treiber teilen dieselben Queries – das Verhalten der App ist identisch.
 | **Mail-Digest** | Zusammenfassungen wichtiger Mails aus mehreren Postfächern, gefiltert nach VIP-Absendern und Stichwörtern |
 | **Briefpost** | Beliebig viele Scans auf einmal hochladen (auch Stapelscans mit vielen Briefen in einer PDF – Claude zerlegt sie); Claude erkennt Absender, Anliegen, To-do, Frist und Aktenzeichen. Liste nach Absender gruppiert, bearbeitbar, als erledigt markierbar |
 | **Wissen** | Persönliches Wissen, Firmenwissen und Partnerwissen (Amazon, Arval, LeasePlan …), durchsuchbar |
+| **Buchhaltung** | Belege aus Mail-Anhängen und Scans, Drive-Ablage, Bank-Abgleich (fehlende Belege), Steuerfristen |
 | **Verträge** | Versicherungen, Leasing & Co. mit Kündigungsfrist-Countdown und Jahreskosten |
 | **Clipboard** | Textbausteine, IBANs, Kundennummern, Links – ein Klick kopiert |
 | **Portale** | Watcher für Vendor Central, Arval-Portal etc. – neue Aufgaben/Infos laufen als Meldungen ein |
@@ -64,6 +65,7 @@ cp .env.example .env.local
 
 - [`docs/ARCHITEKTUR.md`](docs/ARCHITEKTUR.md) – Aufbau, Datenmodell, Designprinzipien
 - [`docs/INTEGRATIONEN.md`](docs/INTEGRATIONEN.md) – Anbindung von IMAP-Postfächern, Slack, Kalender, Portal-Watchern, Brief-Scans und Claude API
+- [`docs/BUCHHALTUNG.md`](docs/BUCHHALTUNG.md) – Belegpipeline: Mail-Abruf, Google-Drive-Ablage, Cron, SQL-Vertrag für die Claude-Routine
 - [`docs/CODRIVER.md`](docs/CODRIVER.md) – API für die Mitarbeiter-App (Aufgaben-Eingang)
 - [`docs/SAAS.md`](docs/SAAS.md) – Verkaufsfähigkeit: White-Label heute, Multi-Tenant-Fahrplan
 

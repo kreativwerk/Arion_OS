@@ -22,7 +22,10 @@ mit einer klaren Fehlermeldung).
    | `APP_PASSWORD` | **dringend empfohlen** – aktiviert das Login (siehe unten) |
    | `AUTH_SECRET` | optional – eigenes Secret für die Cookie-Signatur |
    | `CRON_SECRET` | lange Zufallszeichenkette – schützt den täglichen Mail-Cron |
-   | `MAIL_1_LABEL/HOST/USER/PASS` … | IMAP-Postfächer (IONOS, GMX …), siehe `docs/INTEGRATIONEN.md` |
+   | `MAIL_1_LABEL/HOST/USER/PASS` … `MAIL_8_…` | IMAP-Postfächer (IONOS, GMX …), siehe `docs/INTEGRATIONEN.md` |
+   | `GOOGLE_SERVICE_ACCOUNT_JSON` | Buchhaltung: JSON-Schlüssel des Google-Service-Accounts, siehe `docs/BUCHHALTUNG.md` |
+   | `DRIVE_BUCHHALTUNG_ROOT_ID` | Buchhaltung: ID des Drive-Ordners „Buchhaltung“ |
+   | `GOOGLE_IMPERSONATE_USER` | optional, nur bei domänenweiter Delegation |
 
 5. **Deploy** klicken. Jeder Push auf den Branch deployt danach automatisch.
 
