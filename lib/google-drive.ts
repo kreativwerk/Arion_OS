@@ -54,7 +54,16 @@ async function netFetch(url: string, init: RequestInit): Promise<Response> {
   }
 }
 
-export async function getAccessToken(): Promise<string> {
+/** Optionaler Zeitpunkt (ms), bis zu dem alle Drive-Aufrufe fertig sein müssen. */
+export type DriveOpts = { deadline?: number };
+
+/** Timeout-Signal: höchstens `capMs`, nie über die Deadline hinaus (min. 1 s). */
+function timeout(capMs: number, deadline?: number): AbortSignal {
+  const left = deadline ? deadline - Date.now() : capMs;
+  return AbortSignal.timeout(Math.max(1_000, Math.min(capMs, left)));
+}
+
+export async function getAccessToken(opts: DriveOpts = {}): Promise<string> {
   if (tokenCache && tokenCache.exp > Date.now() + 60_000) return tokenCache.token;
   const key = serviceAccount();
   const assertion = buildServiceAccountJwt(key, SCOPE, undefined, process.env.GOOGLE_IMPERSONATE_USER || undefined);
@@ -62,7 +71,7 @@ export async function getAccessToken(): Promise<string> {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion }),
-    signal: AbortSignal.timeout(15_000),
+    signal: timeout(15_000, opts.deadline),
   });
   const data = (await res.json().catch(() => ({}))) as { access_token?: string; expires_in?: number; error_description?: string; error?: string };
   if (!res.ok || !data.access_token) {
@@ -72,12 +81,17 @@ export async function getAccessToken(): Promise<string> {
   return data.access_token;
 }
 
-async function driveFetch<T>(url: string, init: RequestInit = {}): Promise<{ data: T; res: Response }> {
-  const token = await getAccessToken();
+async function driveFetch<T>(
+  url: string,
+  init: RequestInit = {},
+  opts: DriveOpts = {},
+  capMs = 30_000
+): Promise<{ data: T; res: Response }> {
+  const token = await getAccessToken(opts);
   const res = await netFetch(url, {
     ...init,
     headers: { ...(init.headers as Record<string, string>), authorization: `Bearer ${token}` },
-    signal: init.signal ?? AbortSignal.timeout(30_000),
+    signal: timeout(capMs, opts.deadline),
   });
   const text = await res.text();
   let data: unknown = null;
@@ -102,7 +116,7 @@ const ALL_DRIVES = "supportsAllDrives=true&includeItemsFromAllDrives=true";
 
 type DriveFile = { id: string; name: string; webViewLink?: string };
 
-async function listChildren(parentId: string, query: string): Promise<DriveFile[]> {
+async function listChildren(parentId: string, query: string, opts: DriveOpts = {}): Promise<DriveFile[]> {
   const out: DriveFile[] = [];
   let pageToken = "";
   do {
@@ -114,7 +128,9 @@ async function listChildren(parentId: string, query: string): Promise<DriveFile[
     });
     if (pageToken) params.set("pageToken", pageToken);
     const { data } = await driveFetch<{ files: DriveFile[]; nextPageToken?: string }>(
-      `${DRIVE}/files?${params}&${ALL_DRIVES}`
+      `${DRIVE}/files?${params}&${ALL_DRIVES}`,
+      {},
+      opts
     );
     out.push(...(data.files ?? []));
     pageToken = data.nextPageToken ?? "";
@@ -139,7 +155,7 @@ export function splitDrivePath(path: string): string[] {
 const folderCache = new Map<string, string>();
 
 /** Läuft den Pfad vom Root aus ab (exakter Name) und legt fehlende Ordner an. */
-export async function resolveFolderPath(path: string, create = true): Promise<string | null> {
+export async function resolveFolderPath(path: string, create = true, opts: DriveOpts = {}): Promise<string | null> {
   const root = rootId();
   let parent = root;
   let walked = "";
@@ -150,7 +166,7 @@ export async function resolveFolderPath(path: string, create = true): Promise<st
       parent = cached;
       continue;
     }
-    const found = await listChildren(parent, `mimeType = '${FOLDER_MIME}' and name = '${q(name)}'`);
+    const found = await listChildren(parent, `mimeType = '${FOLDER_MIME}' and name = '${q(name)}'`, opts);
     let id = found.find((f) => f.name === name)?.id;
     if (!id) {
       if (!create) return null;
@@ -158,7 +174,7 @@ export async function resolveFolderPath(path: string, create = true): Promise<st
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ name, mimeType: FOLDER_MIME, parents: [parent] }),
-      });
+      }, opts);
       id = data.id;
     }
     folderCache.set(root + walked, id);
@@ -170,13 +186,28 @@ export async function resolveFolderPath(path: string, create = true): Promise<st
 export type UploadResult = { id: string; name: string; url: string };
 
 /** Lädt eine Datei hoch – überschreibt nie; bei Namensgleichheit " (2)", " (3)" … */
-export async function uploadFile(folderId: string, name: string, bytes: Uint8Array, mime: string): Promise<UploadResult> {
+/** Sucht im Ordner eine Datei mit appProperties ablageId = id (Idempotenz:
+ *  ein früherer, abgebrochener Lauf hat sie evtl. schon hochgeladen). */
+export async function findByAblageId(folderId: string, ablageId: number, opts: DriveOpts = {}): Promise<UploadResult | null> {
+  const hit = (
+    await listChildren(folderId, `appProperties has { key='ablageId' and value='${String(Math.floor(ablageId))}' }`, opts)
+  )[0];
+  return hit ? { id: hit.id, name: hit.name, url: hit.webViewLink ?? `https://drive.google.com/file/d/${hit.id}/view` } : null;
+}
+
+export async function uploadFile(
+  folderId: string,
+  name: string,
+  bytes: Uint8Array,
+  mime: string,
+  opts: DriveOpts & { appProperties?: Record<string, string> } = {}
+): Promise<UploadResult> {
   const cleanName = name.replace(/[\\/\u0000-\u001f]/g, "_").trim().slice(0, 240) || "Beleg.pdf";
   const dot = cleanName.lastIndexOf(".");
   const stem = dot > 0 ? cleanName.slice(0, dot) : cleanName;
-  const similar = await listChildren(folderId, `name contains '${q(stem)}'`);
+  const similar = await listChildren(folderId, `name contains '${q(stem)}'`, opts);
   const finalName = firstFreeName(cleanName, similar.map((f) => f.name));
-  const metadata = { name: finalName, parents: [folderId], mimeType: mime };
+  const metadata = { name: finalName, parents: [folderId], mimeType: mime, ...(opts.appProperties ? { appProperties: opts.appProperties } : {}) };
   const fields = "fields=id,name,webViewLink";
 
   let file: DriveFile;
@@ -192,8 +223,7 @@ export async function uploadFile(folderId: string, name: string, bytes: Uint8Arr
       method: "POST",
       headers: { "content-type": `multipart/related; boundary=${boundary}` },
       body: new Uint8Array(body),
-      signal: AbortSignal.timeout(60_000),
-    }));
+    }, opts, 60_000));
   } else {
     const { res } = await driveFetch<unknown>(`${UPLOAD}/files?uploadType=resumable&${ALL_DRIVES}&${fields}`, {
       method: "POST",
@@ -203,15 +233,14 @@ export async function uploadFile(folderId: string, name: string, bytes: Uint8Arr
         "x-upload-content-length": String(bytes.length),
       },
       body: JSON.stringify(metadata),
-    });
+    }, opts);
     const session = res.headers.get("location");
     if (!session || !session.startsWith("https://www.googleapis.com/")) throw new Error("Drive lieferte keine Upload-Sitzung.");
     ({ data: file } = await driveFetch<DriveFile>(session, {
       method: "PUT",
       headers: { "content-type": mime },
       body: new Uint8Array(bytes),
-      signal: AbortSignal.timeout(90_000),
-    }));
+    }, opts, 90_000));
   }
   return {
     id: file.id,

@@ -11,8 +11,13 @@ const MARGIN = 24;
 export async function buildPdf(data: Uint8Array, mime: string, seiten: string | null): Promise<Uint8Array> {
   if (mime === "application/pdf") {
     const src = await PDFDocument.load(data, { ignoreEncryption: true });
+    if (!seiten?.trim()) return data; // alle Seiten → Original unverändert ablegen (auch verschlüsselt)
+    if (src.isEncrypted) {
+      throw new Error(
+        "PDF ist verschlüsselt – kann nicht getrennt werden, bitte ganze Datei ablegen oder entschlüsselte Fassung einsetzen."
+      );
+    }
     const pages = parsePageRanges(seiten, src.getPageCount());
-    if (!seiten?.trim()) return data; // alle Seiten → Original unverändert ablegen
     const out = await PDFDocument.create();
     const copied = await out.copyPages(src, pages);
     copied.forEach((p) => out.addPage(p));

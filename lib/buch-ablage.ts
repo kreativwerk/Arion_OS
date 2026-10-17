@@ -1,6 +1,6 @@
 import { getDb, nowExpr, type DB } from "@/lib/db";
 import { buildPdf } from "@/lib/buch-pdf";
-import { driveConfigured, resolveFolderPath, uploadFile } from "@/lib/google-drive";
+import { driveConfigured, findByAblageId, resolveFolderPath, uploadFile } from "@/lib/google-drive";
 
 /**
  * Führt Ablage-Aufträge aus (Tabelle buch_ablage, angelegt von der
@@ -14,6 +14,8 @@ import { driveConfigured, resolveFolderPath, uploadFile } from "@/lib/google-dri
 
 const MAX_PER_RUN = 15;
 const STALE_MINUTES = 10;
+/** Ein Auftrag wird nur begonnen, wenn noch so viel Zeit bleibt (Download, Schnitt, Upload). */
+const ORDER_MIN_MS = 25_000;
 
 export type AblageResult = {
   configured: boolean;
@@ -81,7 +83,7 @@ export async function runAblage(opts: { deadline?: number } = {}): Promise<Ablag
   let fehler = 0;
   const touched = new Set<number>();
   for (const o of orders) {
-    if (Date.now() > deadline - 8_000) {
+    if (deadline - Date.now() < ORDER_MIN_MS) {
       hints.push("Zeitbudget erreicht – restliche Aufträge folgen beim nächsten Lauf.");
       break;
     }
@@ -94,9 +96,15 @@ export async function runAblage(opts: { deadline?: number } = {}): Promise<Ablag
       ]);
       if (!meta || !blob) throw new Error(`Eingang ${o.eingang_id} oder dessen Datei fehlt.`);
       const bytes = await buildPdf(new Uint8Array(blob.data), meta.mime, o.seiten);
-      const folderId = await resolveFolderPath(o.ziel_pfad, true);
+      const folderId = await resolveFolderPath(o.ziel_pfad, true, { deadline });
       if (!folderId) throw new Error("Zielordner konnte nicht angelegt werden.");
-      const up = await uploadFile(folderId, pdfName(o.dateiname), bytes, "application/pdf");
+      // Idempotent: ein abgebrochener Lauf kann die Datei schon hochgeladen haben
+      const up =
+        (await findByAblageId(folderId, o.id, { deadline })) ??
+        (await uploadFile(folderId, pdfName(o.dateiname), bytes, "application/pdf", {
+          deadline,
+          appProperties: { ablageId: String(o.id) },
+        }));
       await d.run(
         `UPDATE buch_ablage SET status = 'erledigt', drive_file_id = ?, drive_url = ?, dateiname = ?, fehler = '', done_at = ${nowExpr(d)} WHERE id = ?`,
         [up.id, up.url, up.name, o.id]
