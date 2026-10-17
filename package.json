@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:buchhaltung": "node --experimental-strip-types --no-warnings --import ./tests/ts-resolve.mjs --test tests/buchhaltung.test.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
