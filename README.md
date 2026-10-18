@@ -44,6 +44,7 @@ Beide Treiber teilen dieselben Queries – das Verhalten der App ist identisch.
 | **Portale** | Watcher für Vendor Central, Arval-Portal etc. – neue Aufgaben/Infos laufen als Meldungen ein |
 | **Slack** | Nur Nachrichten von definierten wichtigen Personen |
 | **Arion Bot** | Chat-Assistent, der alle Daten der App **und dein Profil** kennt; mit `ANTHROPIC_API_KEY` antwortet er frei formuliert über die Claude API |
+| **ARION** | Sprachassistent (`/arion`): Push-to-Talk, Live-Daten aus Buchhaltung, Mails und Aufgaben, Antworten werden vorgelesen; Server-Stimme/Whisper optional über Tunnel |
 | **Einstellungen** | Profil („Über mich" für Arion Bot), White-Label (App-Name), API-Tokens für externe Apps |
 
 ## Mitarbeiter-Aufgaben über Codriver
@@ -66,6 +67,7 @@ cp .env.example .env.local
 - [`docs/ARCHITEKTUR.md`](docs/ARCHITEKTUR.md) – Aufbau, Datenmodell, Designprinzipien
 - [`docs/INTEGRATIONEN.md`](docs/INTEGRATIONEN.md) – Anbindung von IMAP-Postfächern, Slack, Kalender, Portal-Watchern, Brief-Scans und Claude API
 - [`docs/BUCHHALTUNG.md`](docs/BUCHHALTUNG.md) – Belegpipeline: Mail-Abruf, Google-Drive-Ablage, Cron, SQL-Vertrag für die Claude-Routine
+- [`docs/ARION.md`](docs/ARION.md) – Sprachassistent: Architektur, Umgebungsvariablen, Wake-Hook, Mac-Anbindung, Sicherheit
 - [`docs/CODRIVER.md`](docs/CODRIVER.md) – API für die Mitarbeiter-App (Aufgaben-Eingang)
 - [`docs/SAAS.md`](docs/SAAS.md) – Verkaufsfähigkeit: White-Label heute, Multi-Tenant-Fahrplan
 
