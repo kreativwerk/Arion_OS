@@ -319,10 +319,12 @@ function schemaStatements(dialect: "sqlite" | "postgres"): string[] {
       read INTEGER DEFAULT 0,
       created_at TEXT DEFAULT ${NOW}
     )`,
+    // conversation_id: '' = Chat „Arion Bot“; ARION-Sprachgespräche bekommen eigene IDs
     `CREATE TABLE IF NOT EXISTS assistant_messages (
       ${ID}, ${WS},
       role TEXT NOT NULL,
       content TEXT NOT NULL,
+      conversation_id TEXT DEFAULT '',
       created_at TEXT DEFAULT ${NOW}
     )`,
     `CREATE TABLE IF NOT EXISTS app_config (
@@ -487,6 +489,7 @@ async function ensureSchema(d: DB) {
     await addColumn("mail_accounts", "username", "TEXT DEFAULT ''");
     await addColumn("mail_accounts", "password_enc", "TEXT DEFAULT ''");
     for (const col of LETTER_COLUMNS) await addColumn("letters", col, "TEXT DEFAULT ''");
+    await addColumn("assistant_messages", "conversation_id", "TEXT DEFAULT ''");
   } else {
     // Postgres kennt IF NOT EXISTS direkt
     for (const [col, def] of [
@@ -500,12 +503,17 @@ async function ensureSchema(d: DB) {
     for (const col of LETTER_COLUMNS) {
       await d.run(`ALTER TABLE letters ADD COLUMN IF NOT EXISTS ${col} TEXT DEFAULT ''`);
     }
+    await d.run("ALTER TABLE assistant_messages ADD COLUMN IF NOT EXISTS conversation_id TEXT DEFAULT ''");
     // Scans sind sensibel: öffentliche Supabase-API sperren (die App selbst
     // verbindet als Tabellen-Owner und ist davon nicht betroffen).
     await d.run("ALTER TABLE letter_blobs ENABLE ROW LEVEL SECURITY");
     // Belege + Bankdaten ebenso (Liste ist fest im Code, keine Eingabe)
     for (const t of BUCH_TABLES) await d.run(`ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`);
   }
+
+  await d.run(
+    "CREATE INDEX IF NOT EXISTS assistant_messages_conv_idx ON assistant_messages (conversation_id, id)"
+  );
 
   // Altbestand des Wasser-Trackers in die generische Ernährungs-Tabelle übernehmen
   // ("WHERE true" ist für SQLite nötig, damit ON CONFLICT nach SELECT parst)

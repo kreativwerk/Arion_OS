@@ -180,7 +180,7 @@ export async function answer(question: string): Promise<string> {
   const d = await getDb();
   const history = (
     await d.all<{ role: string; content: string }>(
-      "SELECT role, content FROM assistant_messages ORDER BY id DESC LIMIT 10"
+      "SELECT role, content FROM assistant_messages WHERE COALESCE(conversation_id, '') = '' ORDER BY id DESC LIMIT 10"
     )
   ).reverse();
 
