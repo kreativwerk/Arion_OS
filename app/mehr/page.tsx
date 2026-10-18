@@ -4,6 +4,7 @@ import Link from "next/link";
 import { PageHeader, Icon } from "@/components/ui";
 
 const MODULES = [
+  { href: "/arion", label: "ARION", icon: "graphic_eq", desc: "Sprachassistent, Push-to-Talk" },
   { href: "/gewohnheiten", label: "Gewohnheiten", icon: "autorenew", desc: "Habit-Tracker & Serien" },
   { href: "/kalender", label: "Kalender", icon: "calendar_month", desc: "Termine & Einträge" },
   { href: "/mail", label: "Mail-Digest", icon: "mail", desc: "Wichtige Mails, gefiltert" },

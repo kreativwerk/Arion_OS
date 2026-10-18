@@ -122,6 +122,14 @@ export default function TodayPage() {
           {/* Schnellzugriff oben rechts: Clipboard, Einstellungen, Profil */}
           <div className="flex items-center gap-1 shrink-0 mt-1">
             <Link
+              href="/arion"
+              aria-label="ARION – Sprachassistent"
+              title="ARION – Sprachassistent"
+              className="w-10 h-10 rounded-full flex items-center justify-center bg-accent-soft text-accent hover:bg-accent hover:text-on-accent transition-all"
+            >
+              <Icon name="graphic_eq" size={22} />
+            </Link>
+            <Link
               href="/clipboard"
               aria-label="Clipboard"
               className="w-10 h-10 rounded-full flex items-center justify-center text-ink-2 hover:text-accent hover:bg-inset transition-all"

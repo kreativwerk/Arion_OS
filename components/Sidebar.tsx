@@ -18,6 +18,7 @@ const NAV: { href: string; label: string; icon: string }[] = [
   { href: "/watcher", label: "Portale", icon: "travel_explore" },
   { href: "/slack", label: "Slack", icon: "forum" },
   { href: "/assistent", label: "Arion Bot", icon: "auto_awesome" },
+  { href: "/arion", label: "ARION Sprache", icon: "graphic_eq" },
   { href: "/einstellungen", label: "Einstellungen", icon: "settings" },
 ];
 
