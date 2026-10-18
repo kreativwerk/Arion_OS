@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:buchhaltung": "node --experimental-strip-types --no-warnings --import ./tests/ts-resolve.mjs --test tests/buchhaltung.test.mjs"
+    "test:buchhaltung": "node --experimental-strip-types --no-warnings --import ./tests/ts-resolve.mjs --test tests/buchhaltung.test.mjs",
+    "test:arion": "node --experimental-strip-types --no-warnings --import ./tests/ts-resolve.mjs --test tests/arion.test.mjs",
+    "test": "node --experimental-strip-types --no-warnings --import ./tests/ts-resolve.mjs --test tests/buchhaltung.test.mjs tests/arion.test.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
