@@ -628,8 +628,11 @@ async function ensureSchema(d: DB) {
   await seedBuchhaltungMailRules(d);
 }
 
+/** Ohne geheime Schlüssel (verschlüsselte Tokens) – getConfig landet u. a. im Browser und in Prompts. */
 export async function getConfig(): Promise<Record<string, string>> {
   const d = await getDb();
-  const rows = await d.all<{ key: string; value: string }>("SELECT key, value FROM app_config");
+  const rows = await d.all<{ key: string; value: string }>(
+    "SELECT key, value FROM app_config WHERE key NOT IN ('google_drive_refresh')"
+  );
   return Object.fromEntries(rows.map((r) => [r.key, r.value]));
 }

@@ -61,13 +61,13 @@ export async function runAblage(opts: { deadline?: number } = {}): Promise<Ablag
   const countOpen = async () =>
     Number((await d.get<{ n: number }>("SELECT COUNT(*) AS n FROM buch_ablage WHERE status IN ('offen','in_arbeit')"))?.n ?? 0);
 
-  if (!driveConfigured()) {
+  if (!(await driveConfigured())) {
     return {
       configured: false,
       erledigt: 0,
       fehler: 0,
       offen: await countOpen(),
-      hinweise: ["Google Drive ist nicht verbunden (GOOGLE_SERVICE_ACCOUNT_JSON / DRIVE_BUCHHALTUNG_ROOT_ID fehlen) – Ablage-Aufträge warten."],
+      hinweise: ["Google Drive ist nicht verbunden – in Arion OS unter Buchhaltung „Mit Google verbinden“. Ablage-Aufträge warten."],
     };
   }
 

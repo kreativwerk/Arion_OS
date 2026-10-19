@@ -60,6 +60,25 @@ bekommen `quelle = 'scan'`.
 
 Nach dem Setzen: **Redeploy**.
 
+## Google Drive verbinden – „Mit Google verbinden“ (normales Google-Konto)
+
+Für Konten **ohne** Workspace-Admin-Konsole (keine domänenweite Delegation möglich).
+Arion OS legt dann als dieses Konto ab; gespeichert wird nur ein Refresh-Token
+(verschlüsselt in `app_config.google_drive_refresh`, nie an den Browser).
+
+1. Cloud Console → Projekt „Arion OS“ → **Google Drive API** aktivieren.
+2. **Google Auth Platform → Branding/Zielgruppe:** App-Name „Arion OS“, Support-Mail,
+   Zielgruppe **Extern**, dann **„App veröffentlichen“** (im Testmodus laufen
+   Refresh-Tokens nach 7 Tagen ab). Die Warnung „Google hat diese App nicht
+   überprüft“ beim Verbinden einmal mit *Erweitert → Weiter zu Arion OS* bestätigen.
+3. **Clients → Client erstellen → Webanwendung**, autorisierte Weiterleitungs-URI:
+   `https://arion-os.vercel.app/api/google/callback`
+4. Vercel: `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, Redeploy.
+5. Zielordner: `DRIVE_BUCHHALTUNG_ROOT_ID` (Env) **oder** `app_config.drive_root_id`.
+6. /buchhaltung → **„Mit Google verbinden“** → Konto wählen → Drive erlauben.
+
+Ist beides eingerichtet, hat die OAuth-Verbindung Vorrang vor dem Service-Account.
+
 ## Schritt für Schritt: Google Drive anbinden
 
 1. **Projekt anlegen:** <https://console.cloud.google.com> mit dem Workspace-Konto
