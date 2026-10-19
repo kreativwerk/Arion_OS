@@ -62,6 +62,7 @@ type RunResult =
   | {
       mail: { configured: boolean; neu: number; wichtig: number; belege: number; hinweise: string[] };
       ablage: { configured: boolean; erledigt: number; fehler: number; offen: number; hinweise: string[] };
+      einsortiert?: { bearbeitet: number; auftraege: number; ignoriert: number; hinweise: string[] };
       skipped?: undefined;
     }
   | { skipped: string };
@@ -155,7 +156,26 @@ export default function BuchhaltungPage() {
       const res = await fetch("/api/buchhaltung/abrufen", { method: "POST" });
       const body = await res.json().catch(() => null);
       if (!res.ok) throw new Error(body?.error ?? `Server-Fehler ${res.status}`);
-      setResult(body as RunResult);
+      const first = body as RunResult;
+      setResult(first);
+      // Danach neue Belege automatisch einsortieren – in Etappen, solange es etwas zu tun gibt
+      if ("mail" in first) {
+        const sum = { bearbeitet: 0, auftraege: 0, ignoriert: 0, hinweise: [] as string[] };
+        let ablage = first.ablage;
+        for (let round = 0; round < 8; round++) {
+          const r = await fetch("/api/buchhaltung/einsortieren", { method: "POST" });
+          const b = await r.json().catch(() => null);
+          if (!r.ok || !b || "skipped" in b) break;
+          const e = b.einsortiert ?? { bearbeitet: 0, auftraege: 0, ignoriert: 0, hinweise: [] };
+          sum.bearbeitet += e.bearbeitet;
+          sum.auftraege += e.auftraege;
+          sum.ignoriert += e.ignoriert;
+          sum.hinweise.push(...e.hinweise);
+          ablage = { ...b.ablage, erledigt: ablage.erledigt + b.ablage.erledigt, fehler: ablage.fehler + b.ablage.fehler };
+          setResult({ ...first, ablage, einsortiert: { ...sum, hinweise: [...new Set(sum.hinweise)] } });
+          if (e.bearbeitet === 0 && b.ablage.offen === 0) break;
+        }
+      }
       await load(monat);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -309,8 +329,13 @@ export default function BuchhaltungPage() {
             {result.mail.neu === 1 ? "neue Mail" : "neue Mails"} · {result.mail.belege ?? 0}{" "}
             {result.mail.belege === 1 ? "neuer Beleg" : "neue Belege"} · {result.ablage.erledigt} abgelegt
             {result.ablage.fehler > 0 ? ` · ${result.ablage.fehler} Fehler` : ""}
+            {result.einsortiert
+              ? ` · ${result.einsortiert.bearbeitet} automatisch einsortiert (${result.einsortiert.auftraege} Dokumente${
+                  result.einsortiert.ignoriert ? `, ${result.einsortiert.ignoriert} ignoriert` : ""
+                })`
+              : ""}
           </p>
-          {[...result.mail.hinweise, ...result.ablage.hinweise].map((h, i) => (
+          {[...result.mail.hinweise, ...result.ablage.hinweise, ...(result.einsortiert?.hinweise ?? [])].map((h, i) => (
             <p key={i} className="text-[12px] text-ink-2 mt-1.5 break-words">
               {h}
             </p>

@@ -186,6 +186,43 @@ der Wert noch nicht existiert; gelöschte Regeln kommen nicht zurück – Flag
 
 ---
 
+## Automatische Ablage (ohne Claude-Routine)
+
+Neue Einträge im Eingang sortiert Arion OS jetzt selbst ein (`lib/buch-klassifizieren.ts`):
+Claude liest jede Datei, trennt Stapel in Dokumente und liefert nur **Fakten** (Firma, Art,
+Lieferant, Betrag, Datum, Kennzeichen, Person, Objekt). Zielordner und Dateinamen baut
+`lib/beleg-regeln.ts` nach Alberts Struktur:
+
+| Fall | Ziel (relativ zum Drive-Root „Buchhaltung“) |
+| --- | --- |
+| Arion-Beleg/Gutschrift | `Ausgaben/<Jahr>/<Monat>/Rechnungseingang/Belege/Lieferant_Betrag (RG …).pdf` |
+| … mit Kennzeichen | zusätzlich `Archiv/Arion Logistics/02 Fahrzeuge/<Kennzeichen>/Wartung & TÜV/` |
+| Mahnung / Lieferschein | `Ausgaben/<Jahr>/<Monat>/Sonstiges/Mahnungen` bzw. `…/Lieferscheine & Sonstiges` |
+| Arion-Dokument | `Archiv/Arion Logistics/02 Fahrzeuge…`, `03 Personal/<Name>`, `04 Verträge`, `05 Versicherungen`, `06 Behörden & Recht`, `07 Firma` |
+| Wohnwerk / Kreativwerk / Fleetfix | `Archiv/<Firma>/01 Buchhaltung/<Jahr>/<MM Monat>/Ausgaben|Einnahmen`, Objekte/Kunden/Verträge |
+| privat / bar ohne Firma | `Scans/_Nicht Arion` |
+| unsicher | `Archiv/_Unklar` |
+| gleicher Lieferant + Betrag + Monat schon abgelegt | `Archiv/_Duplikate prüfen` |
+
+Arion-Karten (Kassenbons ohne Empfänger) stehen in `app_config.arion_karten`
+(Standard `9138, 9779, 4152, 3753`). Abschalten: `app_config.beleg_autoablage = '0'`.
+Modell: `BELEG_MODEL` (sonst `ANTHROPIC_MODEL`, sonst claude-opus-5-5). Voraussetzung:
+`ANTHROPIC_API_KEY` und die Drive-Anbindung oben.
+
+Ausgelöst wird das Einsortieren über **„Abrufen“** auf /buchhaltung (läuft danach in
+Etappen weiter, bis alles einsortiert ist) und per Cron
+`/api/cron/buchhaltung?modus=belege` – eigener Lauf, weil das Lesen eines Belegs bis zu
+~30 s dauert. pg_cron (alle 10 Minuten, versetzt zum Mail-Abruf):
+
+```sql
+select cron.schedule('arion-belege-10min', '5-59/10 * * * *', $$
+  select net.http_post(
+    url := 'https://<DEINE-APP>.vercel.app/api/cron/buchhaltung?modus=belege',
+    headers := jsonb_build_object('Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'arion_cron_secret')),
+    body := '{}'::jsonb, timeout_milliseconds := 60000);
+$$);
+```
+
 ## SQL-Vertrag für die Claude-Routine
 
 Die Routine verbindet sich direkt mit der Supabase-Datenbank (Rolle mit Tabellenrechten,
