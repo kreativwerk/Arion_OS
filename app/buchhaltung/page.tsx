@@ -123,6 +123,84 @@ async function fetchOverview(m: string | null): Promise<{ data?: Overview; error
   }
 }
 
+type DriveStatus = { oauth_client: boolean; service_account: boolean; konto: string; verbunden: boolean };
+
+/** „Mit Google verbinden“ – Drive-Ablage über das eigene Google-Konto (OAuth). */
+function DriveVerbindung() {
+  const [st, setSt] = useState<DriveStatus | null>(null);
+  const [meldung, setMeldung] = useState<{ ok: boolean; text: string } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/google/status")
+      .then((r) => r.json())
+      .then((b: DriveStatus) => {
+        if (cancelled) return;
+        setSt(b);
+        const p = new URLSearchParams(window.location.search);
+        if (p.get("drive") === "verbunden") setMeldung({ ok: true, text: `Google Drive verbunden${b.konto ? ` (${b.konto})` : ""}.` });
+        else if (p.get("drive_fehler")) setMeldung({ ok: false, text: p.get("drive_fehler") || "" });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const trennen = async () => {
+    if (!confirm("Google-Drive-Verbindung trennen? Bereits abgelegte Dateien bleiben unverändert.")) return;
+    await fetch("/api/google/status", { method: "DELETE" });
+    setSt((s) => (s ? { ...s, konto: "", verbunden: s.service_account } : s));
+    setMeldung(null);
+  };
+
+  if (!st) return null;
+  return (
+    <div className="mx-5 mb-2 space-y-2">
+      {meldung && (
+        <div
+          className={`rounded-[10px] px-3 py-2 text-[12px] border break-words ${
+            meldung.ok ? "bg-accent-soft border-accent/30 text-accent" : "bg-bad/10 border-bad/30 text-bad"
+          }`}
+        >
+          {meldung.text}
+        </div>
+      )}
+      {st.verbunden ? (
+        <div className="flex items-center gap-2 text-[12px] text-ink-2">
+          <Icon name="cloud_done" size={16} className="text-accent" />
+          <span className="flex-1 min-w-0 [overflow-wrap:anywhere]">
+            Google Drive verbunden{st.konto ? ` als ${st.konto}` : st.service_account ? " (Service-Account)" : ""}
+          </span>
+          {st.konto && (
+            <button onClick={trennen} className="text-[12px] text-ink-3 shrink-0">
+              Trennen
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2 bg-warn/10 border border-warn/30 rounded-[10px] px-3 py-2.5 text-[12px] text-warn">
+          <div className="flex items-start gap-2">
+            <Icon name="cloud_off" size={16} className="mt-0.5" />
+            <span>Google Drive ist noch nicht verbunden – erkannte Belege warten auf die Ablage.</span>
+          </div>
+          {st.oauth_client ? (
+            <a
+              href="/api/google/connect"
+              className="self-start inline-flex items-center gap-1.5 px-3 h-8 rounded-full bg-accent text-on-accent text-[12px] font-semibold"
+            >
+              <Icon name="add_link" size={15} />
+              Mit Google verbinden
+            </a>
+          ) : (
+            <span className="text-ink-3">OAuth-Client fehlt noch (GOOGLE_OAUTH_CLIENT_ID / _SECRET in Vercel).</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function BuchhaltungPage() {
   const [monat, setMonat] = useState<string | null>(null);
   const [data, setData] = useState<Overview | null>(null);
@@ -572,12 +650,7 @@ export default function BuchhaltungPage() {
           {/* Abgelegt */}
           <Card>
             <CardHeader title="Abgelegt" subtitle="Zuletzt nach Google Drive abgelegte Belege" />
-            {!data.drive_verbunden && (
-              <div className="mx-5 mb-2 flex items-start gap-2 bg-warn/10 border border-warn/30 rounded-[10px] px-3 py-2 text-[12px] text-warn">
-                <Icon name="cloud_off" size={16} className="mt-0.5" />
-                <span>Google Drive ist noch nicht verbunden – Aufträge warten, bis der Service-Account eingerichtet ist.</span>
-              </div>
-            )}
+            <DriveVerbindung />
             {data.ablage.length === 0 && <EmptyState text="Noch nichts abgelegt." />}
             {data.ablage.map((a) => {
               const st = STATUS[a.status] ?? { label: a.status, tone: "neutral" as const };

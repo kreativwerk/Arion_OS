@@ -1,9 +1,16 @@
 import { buildServiceAccountJwt, GOOGLE_TOKEN_URL, type ServiceAccountKey } from "@/lib/google-jwt";
 import { firstFreeName } from "@/lib/buch-pages";
+import { getDb } from "@/lib/db";
+import { decryptSecret } from "@/lib/secret-store";
+import { oauthClientConfigured, refreshAccessToken } from "@/lib/google-oauth";
 
 /**
- * Google-Drive-Ablage über einen Service-Account (ohne SDK, nur fetch).
+ * Google-Drive-Ablage (ohne SDK, nur fetch). Zwei Anmeldewege:
  *
+ * 1. „Mit Google verbinden“ (empfohlen für normale Google-Konten): OAuth-Client
+ *    GOOGLE_OAUTH_CLIENT_ID / GOOGLE_OAUTH_CLIENT_SECRET, Refresh-Token
+ *    verschlüsselt in app_config.google_drive_refresh (lib/google-oauth.ts).
+ * 2. Service-Account (Workspace mit Admin-Konsole):
  *   GOOGLE_SERVICE_ACCOUNT_JSON   kompletter JSON-Schlüssel des Service-Accounts
  *   DRIVE_BUCHHALTUNG_ROOT_ID     ID des Ordners „Buchhaltung“ (geteilte Ablage oder freigegebener Ordner)
  *   GOOGLE_IMPERSONATE_USER       optional: Nutzer für domänenweite Delegation
@@ -21,8 +28,42 @@ const FOLDER_MIME = "application/vnd.google-apps.folder";
 /** Bis 5 MB reicht ein Multipart-Upload, darüber verlangt Drive den Resumable-Upload. */
 const MULTIPART_LIMIT = 5 * 1024 * 1024;
 
-export function driveConfigured(): boolean {
-  return Boolean(process.env.GOOGLE_SERVICE_ACCOUNT_JSON && process.env.DRIVE_BUCHHALTUNG_ROOT_ID);
+/** Gespeicherte OAuth-Verbindung („Mit Google verbinden“) – siehe lib/google-oauth.ts. */
+type DriveAuth = { refreshEnc: string; rootId: string };
+let authCache: { v: DriveAuth; at: number } | null = null;
+
+async function driveAuth(): Promise<DriveAuth> {
+  if (authCache && Date.now() - authCache.at < 60_000) return authCache.v;
+  const d = await getDb();
+  const rows = await d.all<{ key: string; value: string }>(
+    "SELECT key, value FROM app_config WHERE key IN ('google_drive_refresh','drive_root_id')"
+  );
+  const m = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+  const v = { refreshEnc: m.google_drive_refresh || "", rootId: (m.drive_root_id || "").trim() };
+  authCache = { v, at: Date.now() };
+  return v;
+}
+
+/** Nach Verbinden/Trennen sofort neu laden. */
+export function resetDriveAuthCache() {
+  authCache = null;
+  tokenCache = null;
+}
+
+/** Welche Anmeldung genutzt wird: OAuth (Nutzerkonto) hat Vorrang vor dem Service-Account. */
+async function authMode(): Promise<"oauth" | "service" | null> {
+  const a = await driveAuth();
+  if (a.refreshEnc && oauthClientConfigured()) return "oauth";
+  if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) return "service";
+  return null;
+}
+
+export async function driveConfigured(): Promise<boolean> {
+  try {
+    return Boolean((await authMode()) && (await rootId()));
+  } catch {
+    return false;
+  }
 }
 
 function serviceAccount(): ServiceAccountKey {
@@ -35,8 +76,8 @@ function serviceAccount(): ServiceAccountKey {
   }
 }
 
-function rootId(): string {
-  const id = process.env.DRIVE_BUCHHALTUNG_ROOT_ID?.trim();
+async function rootId(): Promise<string> {
+  const id = (process.env.DRIVE_BUCHHALTUNG_ROOT_ID?.trim() || (await driveAuth()).rootId).trim();
   if (!id || !/^[A-Za-z0-9_-]{10,}$/.test(id)) throw new Error("DRIVE_BUCHHALTUNG_ROOT_ID fehlt oder ist ungültig.");
   return id;
 }
@@ -65,6 +106,11 @@ function timeout(capMs: number, deadline?: number): AbortSignal {
 
 export async function getAccessToken(opts: DriveOpts = {}): Promise<string> {
   if (tokenCache && tokenCache.exp > Date.now() + 60_000) return tokenCache.token;
+  if ((await authMode()) === "oauth") {
+    const t = await refreshAccessToken(decryptSecret((await driveAuth()).refreshEnc), opts.deadline);
+    tokenCache = { token: t.access_token, exp: Date.now() + t.expires_in * 1000 };
+    return t.access_token;
+  }
   const key = serviceAccount();
   const assertion = buildServiceAccountJwt(key, SCOPE, undefined, process.env.GOOGLE_IMPERSONATE_USER || undefined);
   const res = await netFetch(GOOGLE_TOKEN_URL, {
@@ -156,7 +202,7 @@ const folderCache = new Map<string, string>();
 
 /** Läuft den Pfad vom Root aus ab (exakter Name) und legt fehlende Ordner an. */
 export async function resolveFolderPath(path: string, create = true, opts: DriveOpts = {}): Promise<string | null> {
-  const root = rootId();
+  const root = await rootId();
   let parent = root;
   let walked = "";
   for (const name of splitDrivePath(path)) {

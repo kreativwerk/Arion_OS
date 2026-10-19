@@ -81,7 +81,7 @@ export async function buildOverview(monatParam: string | null) {
   return {
     monat,
     monate,
-    drive_verbunden: driveConfigured(),
+    drive_verbunden: await driveConfigured(),
     zusammenfassung: summary,
     eingang: eingang.map((e) => ({ ...e, size: Number(e.size ?? 0), auftraege: Number(e.auftraege ?? 0) })),
     ablage: ablage.map((a) => ({ ...a, betrag: a.betrag === null ? null : num(a.betrag) })),
