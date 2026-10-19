@@ -96,6 +96,7 @@ test("SMTP-Server aus IMAP-Server", () => {
   assert.deepEqual(smtpFor("imap.ionos.de"), { host: "smtp.ionos.de", port: 465 });
   assert.deepEqual(smtpFor("imap.gmx.net"), { host: "mail.gmx.net", port: 465 });
   assert.deepEqual(smtpFor("imap.strato.de"), { host: "smtp.strato.de", port: 465 });
+  assert.deepEqual(smtpFor("imap.strato.de"), { host: "smtp.strato.de", port: 465 });
   assert.deepEqual(smtpFor("imap.ionos.de", "mail.example.de", 587), { host: "mail.example.de", port: 587 });
 });
 
