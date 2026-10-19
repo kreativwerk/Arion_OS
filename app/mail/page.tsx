@@ -7,6 +7,7 @@ import { useTable } from "@/lib/client";
 const PROVIDERS = [
   { key: "ionos", name: "IONOS", host: "imap.ionos.de" },
   { key: "gmx", name: "GMX", host: "imap.gmx.net" },
+  { key: "strato", name: "STRATO", host: "imap.strato.de" },
   { key: "custom", name: "Anderer Anbieter", host: "" },
 ] as const;
 

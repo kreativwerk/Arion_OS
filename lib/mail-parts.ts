@@ -157,6 +157,7 @@ export function smtpFor(imapHost: string, smtpHost?: string | null, smtpPort?: n
   const h = imapHost.toLowerCase();
   if (h === "imap.ionos.de") return { host: "smtp.ionos.de", port };
   if (h === "imap.gmx.net") return { host: "mail.gmx.net", port };
+  if (h === "imap.strato.de") return { host: "smtp.strato.de", port };
   if (h.startsWith("imap.")) return { host: "smtp." + h.slice(5), port };
   return { host: h, port };
 }
