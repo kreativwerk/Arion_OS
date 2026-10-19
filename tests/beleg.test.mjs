@@ -1,7 +1,17 @@
 // Ablage-Regeln für die automatische Belegablage. Aufruf: npm run test:beleg
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { betragDe, kennzeichenNorm, pfadOk, sauber, zielFuer } from "../lib/beleg-regeln.ts";
+import { betragDe, gleicherBeleg, kennzeichenNorm, pfadOk, sauber, zielFuer } from "../lib/beleg-regeln.ts";
+
+test("Duplikat nur bei gleicher oder fehlender Rechnungsnummer", () => {
+  const a = { lieferant: "GO EZY (EZY GmbH)", betrag: 1487.74, dateiname: "GO EZY_1.487,74 (RG 2026-MR52979-RENT, SAD-EZ 45).pdf" };
+  const b = { lieferant: "GoEzy", betrag: 1487.74, dateiname: "GoEzy_1.487,74 (RG 2026-MR52981-RENT, SAD-EZ 53).pdf" };
+  assert.equal(gleicherBeleg(a, b), false);
+  assert.equal(gleicherBeleg(a, { ...b, dateiname: a.dateiname }), true);
+  assert.equal(gleicherBeleg(a, { ...b, dateiname: "GoEzy_1.487,74.pdf" }), true);
+  assert.equal(gleicherBeleg(a, { ...b, betrag: 1309.14 }), false);
+  assert.equal(gleicherBeleg(a, { ...b, lieferant: "Allianz" }), false);
+});
 
 const basis = {
   seiten: "1", firma: "arion", art: "beleg", kategorie: "sonstiges", lieferant: "Aral", betrag: 19, belegdatum: "2026-05-19",
