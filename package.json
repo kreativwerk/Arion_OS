@@ -9,8 +9,9 @@
     "lint": "eslint",
     "test:buchhaltung": "node --experimental-strip-types --no-warnings --import ./tests/ts-resolve.mjs --test tests/buchhaltung.test.mjs",
     "test:arion": "node --experimental-strip-types --no-warnings --import ./tests/ts-resolve.mjs --test tests/arion.test.mjs",
-    "test": "node --experimental-strip-types --no-warnings --import ./tests/ts-resolve.mjs --test tests/buchhaltung.test.mjs tests/arion.test.mjs tests/postfach.test.mjs",
-    "test:postfach": "node --experimental-strip-types --no-warnings --import ./tests/ts-resolve.mjs --test tests/postfach.test.mjs"
+    "test": "node --experimental-strip-types --no-warnings --import ./tests/ts-resolve.mjs --test tests/buchhaltung.test.mjs tests/arion.test.mjs tests/postfach.test.mjs tests/beleg.test.mjs",
+    "test:postfach": "node --experimental-strip-types --no-warnings --import ./tests/ts-resolve.mjs --test tests/postfach.test.mjs",
+    "test:beleg": "node --experimental-strip-types --no-warnings --import ./tests/ts-resolve.mjs --test tests/beleg.test.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",

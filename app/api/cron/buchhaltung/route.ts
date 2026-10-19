@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withApi } from "@/lib/api-error";
-import { runBuchhaltung } from "@/lib/buch-run";
+import { runBelegeEinsortieren, runBuchhaltung } from "@/lib/buch-run";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -9,6 +9,7 @@ export const maxDuration = 60;
  * Buchhaltungs-Lauf (Mail-Abruf inkl. Belege + Drive-Ablage).
  * Auslöser: Vercel Cron (täglich, siehe vercel.json) oder häufiger über
  * Supabase pg_cron + pg_net (siehe docs/BUCHHALTUNG.md).
+ * `?modus=belege`: nur neue Eingänge automatisch einsortieren + ablegen.
  * Geschützt mit `Authorization: Bearer ${CRON_SECRET}` wie /api/cron/mail.
  */
 async function handler(req: NextRequest) {
@@ -22,6 +23,7 @@ async function handler(req: NextRequest) {
   if (req.headers.get("authorization") !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "Ungültiges Cron-Secret." }, { status: 401 });
   }
+  if (req.nextUrl.searchParams.get("modus") === "belege") return NextResponse.json(await runBelegeEinsortieren());
   return NextResponse.json(await runBuchhaltung({ push: true }));
 }
 
