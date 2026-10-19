@@ -1,6 +1,6 @@
 import path from "path";
 import fs from "fs";
-import { seed, seedConfigDefaults } from "./seed";
+import { seed, seedConfigDefaults, seedBuchhaltungMailRules } from "./seed";
 
 /**
  * Datenkern von Arion OS – eine Schnittstelle, zwei Treiber:
@@ -319,10 +319,12 @@ function schemaStatements(dialect: "sqlite" | "postgres"): string[] {
       read INTEGER DEFAULT 0,
       created_at TEXT DEFAULT ${NOW}
     )`,
+    // conversation_id: '' = Chat „Arion Bot“; ARION-Sprachgespräche bekommen eigene IDs
     `CREATE TABLE IF NOT EXISTS assistant_messages (
       ${ID}, ${WS},
       role TEXT NOT NULL,
       content TEXT NOT NULL,
+      conversation_id TEXT DEFAULT '',
       created_at TEXT DEFAULT ${NOW}
     )`,
     `CREATE TABLE IF NOT EXISTS app_config (
@@ -366,8 +368,191 @@ function schemaStatements(dialect: "sqlite" | "postgres"): string[] {
       user_agent TEXT DEFAULT '',
       created_at TEXT DEFAULT ${NOW}
     )`,
+    ...buchhaltungStatements(dialect, ID, NOW, WS),
+    ...postfachStatements(dialect, ID, NOW, WS),
   ];
 }
+
+/**
+ * Postfach-Archiv + Versand (siehe docs/INTEGRATIONEN.md, Abschnitt Postfach):
+ * komplette Mails aller verbundenen Konten (alle Ordner außer Papierkorb/Spam/
+ * Entwürfe) als durchsuchbare Kopie; Anhänge bleiben auf dem IMAP-Server und
+ * werden bei Bedarf geladen. Entwürfe werden erst nach Freigabe in der App
+ * per SMTP versendet.
+ */
+function postfachStatements(dialect: "sqlite" | "postgres", ID: string, NOW: string, WS: string): string[] {
+  const BLOB = dialect === "sqlite" ? "BLOB" : "bytea";
+  const REF = dialect === "sqlite" ? "INTEGER" : "bigint";
+  return [
+    `CREATE TABLE IF NOT EXISTS mails (
+      ${ID}, ${WS},
+      account TEXT NOT NULL,
+      folder TEXT NOT NULL,
+      uidvalidity TEXT NOT NULL DEFAULT '',
+      uid INTEGER NOT NULL,
+      message_id TEXT DEFAULT '',
+      from_addr TEXT DEFAULT '',
+      to_addr TEXT DEFAULT '',
+      cc_addr TEXT DEFAULT '',
+      reply_to TEXT DEFAULT '',
+      subject TEXT DEFAULT '',
+      date TEXT,
+      body_text TEXT DEFAULT '',
+      has_html INTEGER DEFAULT 0,
+      attachments TEXT DEFAULT '[]',
+      flags TEXT DEFAULT '',
+      in_reply_to TEXT DEFAULT '',
+      references_hdr TEXT DEFAULT '',
+      size INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT ${NOW}
+    )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS mails_uid_uq ON mails (account, folder, uidvalidity, uid)`,
+    `CREATE INDEX IF NOT EXISTS mails_date_idx ON mails (date)`,
+    `CREATE INDEX IF NOT EXISTS mails_msgid_idx ON mails (message_id)`,
+    `CREATE TABLE IF NOT EXISTS mail_html (
+      mail_id ${REF} PRIMARY KEY,
+      html TEXT NOT NULL
+    )`,
+    // Fortschritt pro Konto + Ordner: neue Mails ab max_uid, Nachladen älterer bis min_uid
+    `CREATE TABLE IF NOT EXISTS mail_sync (
+      account TEXT NOT NULL,
+      folder TEXT NOT NULL,
+      uidvalidity TEXT NOT NULL DEFAULT '',
+      max_uid INTEGER NOT NULL DEFAULT 0,
+      min_uid INTEGER NOT NULL DEFAULT 0,
+      backfill_done INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT DEFAULT ${NOW},
+      PRIMARY KEY (account, folder)
+    )`,
+    // status: entwurf → sendet → gesendet | fehler; verworfen statt Löschen
+    `CREATE TABLE IF NOT EXISTS mail_drafts (
+      ${ID}, ${WS},
+      account_id INTEGER NOT NULL,
+      to_addr TEXT NOT NULL DEFAULT '',
+      cc_addr TEXT DEFAULT '',
+      bcc_addr TEXT DEFAULT '',
+      subject TEXT NOT NULL DEFAULT '',
+      body_text TEXT NOT NULL DEFAULT '',
+      reply_mail_id INTEGER,
+      in_reply_to TEXT DEFAULT '',
+      references_hdr TEXT DEFAULT '',
+      source TEXT DEFAULT 'app',
+      note TEXT DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'entwurf',
+      error TEXT DEFAULT '',
+      smtp_message_id TEXT DEFAULT '',
+      created_at TEXT DEFAULT ${NOW},
+      updated_at TEXT DEFAULT ${NOW},
+      sent_at TEXT
+    )`,
+    `CREATE INDEX IF NOT EXISTS mail_drafts_status_idx ON mail_drafts (status, id)`,
+    `CREATE TABLE IF NOT EXISTS mail_draft_files (
+      ${ID},
+      draft_id INTEGER NOT NULL,
+      filename TEXT NOT NULL,
+      mime TEXT DEFAULT 'application/octet-stream',
+      data ${BLOB} NOT NULL
+    )`,
+  ];
+}
+
+/** Postfach-Tabellen – Mailinhalte sind sensibel, öffentliche Supabase-API sperren. */
+const POSTFACH_TABLES = ["mails", "mail_html", "mail_sync", "mail_drafts", "mail_draft_files"];
+
+/**
+ * Buchhaltungs-Modul (siehe docs/BUCHHALTUNG.md):
+ * Eingang (Mail-/Scan-Anhänge) → Ablage-Aufträge (von der Claude-Routine per SQL
+ * angelegt) → Upload nach Google Drive. Dazu Monatsabgleich, Fristen, Kennzahlen.
+ * Beträge: NUMERIC auf Postgres (exakt), REAL auf SQLite.
+ */
+function buchhaltungStatements(dialect: "sqlite" | "postgres", ID: string, NOW: string, WS: string): string[] {
+  const MONEY = dialect === "sqlite" ? "REAL" : "NUMERIC(14,2)";
+  return [
+    `CREATE TABLE IF NOT EXISTS buch_eingang (
+      ${ID}, ${WS},
+      quelle TEXT NOT NULL DEFAULT 'mail',
+      account TEXT DEFAULT '',
+      message_id TEXT DEFAULT '',
+      from_addr TEXT DEFAULT '',
+      subject TEXT DEFAULT '',
+      received_at TEXT,
+      filename TEXT NOT NULL DEFAULT '',
+      mime TEXT DEFAULT '',
+      size INTEGER DEFAULT 0,
+      sha256 TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'neu',
+      firma TEXT,
+      notiz TEXT DEFAULT '',
+      created_at TEXT DEFAULT ${NOW},
+      updated_at TEXT DEFAULT ${NOW}
+    )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS buch_eingang_sha256_uq ON buch_eingang (workspace_id, sha256)`,
+    `CREATE INDEX IF NOT EXISTS buch_eingang_status_idx ON buch_eingang (status, created_at)`,
+    dialect === "sqlite"
+      ? `CREATE TABLE IF NOT EXISTS buch_eingang_blobs (
+          eingang_id INTEGER PRIMARY KEY,
+          data BLOB NOT NULL
+        )`
+      : `CREATE TABLE IF NOT EXISTS buch_eingang_blobs (
+          eingang_id bigint PRIMARY KEY,
+          data bytea NOT NULL
+        )`,
+    `CREATE TABLE IF NOT EXISTS buch_ablage (
+      ${ID}, ${WS},
+      eingang_id INTEGER NOT NULL,
+      seiten TEXT DEFAULT '',
+      ziel_pfad TEXT NOT NULL,
+      dateiname TEXT NOT NULL,
+      lieferant TEXT DEFAULT '',
+      betrag ${MONEY},
+      belegdatum TEXT,
+      monat TEXT,
+      status TEXT NOT NULL DEFAULT 'offen',
+      drive_file_id TEXT DEFAULT '',
+      drive_url TEXT DEFAULT '',
+      fehler TEXT DEFAULT '',
+      gestartet_at TEXT,
+      created_at TEXT DEFAULT ${NOW},
+      done_at TEXT
+    )`,
+    `CREATE INDEX IF NOT EXISTS buch_ablage_status_idx ON buch_ablage (status, id)`,
+    `CREATE INDEX IF NOT EXISTS buch_ablage_eingang_idx ON buch_ablage (eingang_id)`,
+    `CREATE TABLE IF NOT EXISTS buch_ausgaben (
+      ${ID}, ${WS},
+      monat TEXT NOT NULL,
+      datum TEXT,
+      empfaenger TEXT DEFAULT '',
+      zweck TEXT DEFAULT '',
+      betrag ${MONEY} NOT NULL DEFAULT 0,
+      kategorie TEXT DEFAULT '',
+      beleg TEXT DEFAULT '',
+      hinweis TEXT DEFAULT '',
+      qonto_id TEXT
+    )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS buch_ausgaben_qonto_uq ON buch_ausgaben (workspace_id, qonto_id)`,
+    `CREATE INDEX IF NOT EXISTS buch_ausgaben_monat_idx ON buch_ausgaben (monat)`,
+    `CREATE TABLE IF NOT EXISTS buch_fristen (
+      ${ID}, ${WS},
+      titel TEXT NOT NULL,
+      faellig TEXT,
+      betrag ${MONEY},
+      art TEXT DEFAULT 'sonstiges',
+      status TEXT NOT NULL DEFAULT 'offen',
+      quelle TEXT DEFAULT '',
+      notiz TEXT DEFAULT ''
+    )`,
+    `CREATE TABLE IF NOT EXISTS buch_kennzahlen (
+      ${WS},
+      key TEXT NOT NULL,
+      value TEXT NOT NULL DEFAULT '',
+      updated_at TEXT DEFAULT ${NOW},
+      PRIMARY KEY (workspace_id, key)
+    )`,
+  ];
+}
+
+/** Tabellen des Buchhaltungs-Moduls – auf Supabase per RLS für die öffentliche API gesperrt. */
+const BUCH_TABLES = ["buch_eingang", "buch_eingang_blobs", "buch_ablage", "buch_ausgaben", "buch_fristen", "buch_kennzahlen"];
 
 /** Spalten, die die Briefpost nachträglich bekommen hat (Upload + KI-Analyse). */
 const LETTER_COLUMNS = ["category", "action", "due_date", "reference", "notes", "mime", "extracted"];
@@ -390,7 +575,11 @@ async function ensureSchema(d: DB) {
     await addColumn("mail_accounts", "port", "INTEGER DEFAULT 993");
     await addColumn("mail_accounts", "username", "TEXT DEFAULT ''");
     await addColumn("mail_accounts", "password_enc", "TEXT DEFAULT ''");
+    await addColumn("mail_accounts", "smtp_host", "TEXT DEFAULT ''");
+    await addColumn("mail_accounts", "smtp_port", "INTEGER DEFAULT 465");
+    await addColumn("mail_accounts", "display_name", "TEXT DEFAULT ''");
     for (const col of LETTER_COLUMNS) await addColumn("letters", col, "TEXT DEFAULT ''");
+    await addColumn("assistant_messages", "conversation_id", "TEXT DEFAULT ''");
   } else {
     // Postgres kennt IF NOT EXISTS direkt
     for (const [col, def] of [
@@ -398,16 +587,27 @@ async function ensureSchema(d: DB) {
       ["port", "INTEGER DEFAULT 993"],
       ["username", "TEXT DEFAULT ''"],
       ["password_enc", "TEXT DEFAULT ''"],
+      ["smtp_host", "TEXT DEFAULT ''"],
+      ["smtp_port", "INTEGER DEFAULT 465"],
+      ["display_name", "TEXT DEFAULT ''"],
     ]) {
       await d.run(`ALTER TABLE mail_accounts ADD COLUMN IF NOT EXISTS ${col} ${def}`);
     }
     for (const col of LETTER_COLUMNS) {
       await d.run(`ALTER TABLE letters ADD COLUMN IF NOT EXISTS ${col} TEXT DEFAULT ''`);
     }
+    await d.run("ALTER TABLE assistant_messages ADD COLUMN IF NOT EXISTS conversation_id TEXT DEFAULT ''");
     // Scans sind sensibel: öffentliche Supabase-API sperren (die App selbst
     // verbindet als Tabellen-Owner und ist davon nicht betroffen).
     await d.run("ALTER TABLE letter_blobs ENABLE ROW LEVEL SECURITY");
+    // Belege + Bankdaten ebenso (Liste ist fest im Code, keine Eingabe)
+    for (const t of BUCH_TABLES) await d.run(`ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`);
+    for (const t of POSTFACH_TABLES) await d.run(`ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`);
   }
+
+  await d.run(
+    "CREATE INDEX IF NOT EXISTS assistant_messages_conv_idx ON assistant_messages (conversation_id, id)"
+  );
 
   // Altbestand des Wasser-Trackers in die generische Ernährungs-Tabelle übernehmen
   // ("WHERE true" ist für SQLite nötig, damit ON CONFLICT nach SELECT parst)
@@ -425,6 +625,7 @@ async function ensureSchema(d: DB) {
     if (Number(row?.n ?? 0) === 0) await seed(d);
   }
   await seedConfigDefaults(d);
+  await seedBuchhaltungMailRules(d);
 }
 
 export async function getConfig(): Promise<Record<string, string>> {

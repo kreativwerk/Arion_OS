@@ -22,12 +22,13 @@ type AccountRow = {
   port: number;
   username: string;
   password_enc: string;
+  display_name: string;
 };
 
 async function safeList() {
   const d = await getDb();
   const rows = await d.all<AccountRow>(
-    "SELECT id, label, address, active, host, port, username, password_enc FROM mail_accounts ORDER BY id ASC"
+    "SELECT id, label, address, active, host, port, username, password_enc, display_name FROM mail_accounts ORDER BY id ASC"
   );
   return rows.map((r) => ({
     id: r.id,
@@ -37,6 +38,7 @@ async function safeList() {
     host: r.host,
     port: r.port,
     has_password: Boolean(r.password_enc),
+    display_name: r.display_name || "",
   }));
 }
 
@@ -118,11 +120,14 @@ export const POST = withApi(async (req: NextRequest) => {
 });
 
 export const PATCH = withApi(async (req: NextRequest) => {
-  const body = (await req.json().catch(() => ({}))) as { id?: number; active?: number; password?: string };
+  const body = (await req.json().catch(() => ({}))) as { id?: number; active?: number; password?: string; display_name?: string };
   if (!body.id) return NextResponse.json({ error: "id erforderlich" }, { status: 400 });
   const d = await getDb();
   if (typeof body.active === "number") {
     await d.run("UPDATE mail_accounts SET active = ? WHERE id = ?", [body.active ? 1 : 0, body.id]);
+  }
+  if (typeof body.display_name === "string") {
+    await d.run("UPDATE mail_accounts SET display_name = ? WHERE id = ?", [body.display_name.trim().slice(0, 120), body.id]);
   }
   if (body.password) {
     await d.run("UPDATE mail_accounts SET password_enc = ? WHERE id = ?", [encryptSecret(body.password), body.id]);

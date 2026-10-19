@@ -23,4 +23,11 @@ export const TABLES: Record<string, { columns: string[]; orderBy?: string }> = {
   watcher_events: { columns: ["watcher_id", "title", "detail", "seen"], orderBy: "created_at DESC" },
   slack_rules: { columns: ["person", "note"] },
   slack_notifications: { columns: ["from_person", "channel", "text", "important", "read"], orderBy: "created_at DESC" },
+  // Buchhaltung: Fristen dürfen in der App gepflegt werden (z.B. „bezahlt“).
+  // Eingang, Ablage und Bank-Abgleich laufen bewusst NICHT über die generische
+  // API (Blobs, Statusübergänge) – siehe /api/buchhaltung/* und docs/BUCHHALTUNG.md.
+  buch_fristen: {
+    columns: ["titel", "faellig", "betrag", "art", "status", "quelle", "notiz"],
+    orderBy: "status ASC, faellig IS NULL, faellig ASC",
+  },
 };

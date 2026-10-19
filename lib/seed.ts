@@ -181,3 +181,36 @@ export async function seedConfigDefaults(d: DB) {
     await d.run("INSERT INTO app_config (key, value) VALUES (?,?) ON CONFLICT (key) DO NOTHING", [k, v]);
   }
 }
+
+/**
+ * Standard-Wichtig-Regeln für die Buchhaltung (Finanzamt, BG, Steuerbüro,
+ * Krankenkassen, Mahnungen …). Läuft genau EINMAL (Flag in app_config) und
+ * legt nur Regeln an, deren Wert noch nicht existiert – vom Nutzer gelöschte
+ * Regeln kommen so nicht zurück.
+ */
+export async function seedBuchhaltungMailRules(d: DB) {
+  const claimed = await d.all<{ key: string }>(
+    "INSERT INTO app_config (key, value) VALUES ('buch_rules_seeded','1') ON CONFLICT (key) DO NOTHING RETURNING key"
+  );
+  if (claimed.length === 0) return;
+  const defaults: [string, string][] = [
+    ["absender", "finanzamt"],
+    ["absender", "bg-verkehr"],
+    ["absender", "walkowiak"],
+    ["absender", "rnhs"],
+    ["absender", "staatsoberkasse"],
+    ["absender", "krankenkasse"],
+    ["absender", "aok"],
+    ["absender", "kkh"],
+    ["betreff", "Mahnung"],
+    ["betreff", "Frist"],
+    ["betreff", "Bescheid"],
+  ];
+  const existing = new Set(
+    (await d.all<{ value: string }>("SELECT value FROM mail_rules")).map((r) => r.value.trim().toLowerCase())
+  );
+  for (const [kind, value] of defaults) {
+    if (existing.has(value.toLowerCase())) continue;
+    await d.run("INSERT INTO mail_rules (kind, value) VALUES (?,?)", [kind, value]);
+  }
+}

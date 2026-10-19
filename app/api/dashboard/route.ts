@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { withApi } from "@/lib/api-error";
 import { getDb, getConfig, todayIso } from "@/lib/db";
+import { dashboardBuchhaltung } from "@/lib/buch-overview";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +39,7 @@ export const GET = withApi(async () => {
     watcherEvents,
     slack,
     contractsDue,
+    buchhaltung,
   ] = await Promise.all([
     getConfig(),
     d.all(
@@ -59,6 +61,7 @@ export const GET = withApi(async () => {
     ),
     d.all("SELECT * FROM slack_notifications WHERE read = 0 AND important = 1 ORDER BY created_at DESC LIMIT 5"),
     d.all(contractsDueQuery),
+    dashboardBuchhaltung(d),
   ]);
 
   return NextResponse.json({
@@ -80,5 +83,6 @@ export const GET = withApi(async () => {
     watcherEvents,
     slack,
     contractsDue,
+    buchhaltung,
   });
 });

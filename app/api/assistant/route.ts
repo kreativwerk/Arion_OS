@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export const GET = withApi(async () => {
   const d = await getDb();
-  const rows = await d.all("SELECT * FROM assistant_messages ORDER BY id ASC");
+  const rows = await d.all("SELECT * FROM assistant_messages WHERE COALESCE(conversation_id, '') = '' ORDER BY id ASC");
   return NextResponse.json(rows);
 });
 
@@ -20,6 +20,6 @@ export const POST = withApi(async (req: NextRequest) => {
 
 export const DELETE = withApi(async () => {
   const d = await getDb();
-  await d.run("DELETE FROM assistant_messages");
+  await d.run("DELETE FROM assistant_messages WHERE COALESCE(conversation_id, '') = ''");
   return NextResponse.json({ ok: true });
 });

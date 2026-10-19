@@ -9,14 +9,17 @@ const NAV: { href: string; label: string; icon: string }[] = [
   { href: "/aufgaben", label: "Aufgaben", icon: "task_alt" },
   { href: "/gewohnheiten", label: "Gewohnheiten", icon: "autorenew" },
   { href: "/kalender", label: "Kalender", icon: "calendar_month" },
+  { href: "/postfach", label: "Postfach", icon: "inbox" },
   { href: "/mail", label: "Mail-Digest", icon: "mail" },
   { href: "/post", label: "Briefpost", icon: "markunread_mailbox" },
   { href: "/wissen", label: "Wissen", icon: "school" },
+  { href: "/buchhaltung", label: "Buchhaltung", icon: "account_balance" },
   { href: "/vertraege", label: "Verträge", icon: "contract" },
   { href: "/clipboard", label: "Clipboard", icon: "content_paste" },
   { href: "/watcher", label: "Portale", icon: "travel_explore" },
   { href: "/slack", label: "Slack", icon: "forum" },
   { href: "/assistent", label: "Arion Bot", icon: "auto_awesome" },
+  { href: "/arion", label: "ARION Sprache", icon: "graphic_eq" },
   { href: "/einstellungen", label: "Einstellungen", icon: "settings" },
 ];
 

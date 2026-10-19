@@ -6,7 +6,9 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 /**
- * Täglicher Mail-Abruf über Vercel Cron (siehe vercel.json).
+ * Mail-Abruf + Postfach-Archiv. Täglich über Vercel Cron (vercel.json) und –
+ * für ein aktuelles Postfach – alle 10 Minuten über Supabase pg_cron
+ * (siehe docs/INTEGRATIONEN.md, Abschnitt Postfach).
  * Vercel schickt automatisch `Authorization: Bearer ${CRON_SECRET}`,
  * wenn die Umgebungsvariable CRON_SECRET gesetzt ist.
  */
@@ -21,5 +23,9 @@ export const GET = withApi(async (req: NextRequest) => {
   if (req.headers.get("authorization") !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "Ungültiges Cron-Secret." }, { status: 401 });
   }
-  return NextResponse.json(await runMailFetch());
+  // maxDuration 60 s: 50 s Budget, Rest als Puffer für den Abschluss
+  return NextResponse.json(await runMailFetch({ push: true, deadline: Date.now() + 50_000 }));
 });
+
+/** pg_cron (net.http_post) ruft per POST auf – gleiche Logik. */
+export const POST = GET;

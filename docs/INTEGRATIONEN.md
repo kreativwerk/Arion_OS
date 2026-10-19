@@ -56,6 +56,9 @@ MAIL_2_USER=<deine GMX-Adresse>
 MAIL_2_PASS=<GMX-Passwort>
 ```
 
+Bis zu acht Konten (`MAIL_1_…` bis `MAIL_8_…`). PDF- und Bild-Anhänge neuer Mails
+landen zusätzlich im Buchhaltungs-Eingang – Details in `docs/BUCHHALTUNG.md`.
+
 Anbieter-Hinweise:
 - **IONOS:** Host `imap.ionos.de`, Port 993 (Standard), Benutzer = vollständige
   E-Mail-Adresse, normales Postfach-Passwort.
@@ -73,6 +76,60 @@ Nach dem Setzen der Variablen: **Redeploy**.
 Vorschläge; häufige Wörter aus deinen Betreffzeilen → Stichwort-Vorschläge.
 Eigene Adressen, no-reply-Absender und bereits vorhandene Regeln werden
 ausgefiltert; ein Tipp auf einen Vorschlag übernimmt ihn als Regel.
+
+### 2a. Postfach: alle Mails lesen, suchen, antworten (ersetzt Thunderbird)
+
+Seite **/postfach**. Jeder Abruf-Lauf nutzt das restliche Zeitbudget, um **komplette
+Mails** aller verbundenen Postfächer in die Datenbank zu kopieren (`lib/mail-archive.ts`):
+Posteingang, Gesendet und eigene Ordner; Papierkorb, Spam und Entwürfe nicht.
+
+- **Nur lesend:** Im Postfach wird nichts gelöscht, verschoben oder als gelesen markiert.
+- **Neu zuerst, dann rückwärts:** Pro Konto und Ordner merkt sich `mail_sync`, bis wohin
+  archiviert ist. Neue Mails kommen in jedem Lauf; ältere werden nach und nach
+  nachgeladen, bis `MAIL_ARCHIVE_DAYS` (Standard 400 Tage) erreicht ist.
+- **Anhänge** bleiben auf dem Server; die Liste steht in `mails.attachments`, der
+  Download läuft live über `/api/mail/attachment`.
+- **HTML-Originalansicht** im Sandbox-iframe ohne Skripte und ohne externe Bilder (kein Tracking).
+
+**Antworten und Versand:** „Antworten“ legt einen Entwurf an (`mail_drafts`, Empfänger,
+„Re:“-Betreff, Threading-Header und Absender-Postfach automatisch). Versendet wird **nur**
+über den Button „Senden“ in der App (`/api/mail/drafts/send`, Session-Login; ohne
+`APP_PASSWORD` ist der Versand auf Vercel gesperrt). SMTP-Server werden aus dem
+IMAP-Server abgeleitet (IONOS `smtp.ionos.de:465`, GMX `mail.gmx.net:465`), Zugangsdaten
+sind dieselben wie für IMAP. Die gesendete Mail wird per IMAP in „Gesendet“ abgelegt und
+das Original als beantwortet markiert. Entwürfe werden nie gelöscht, nur „verworfen“.
+Absendername pro Postfach: `mail_accounts.display_name` (PATCH `/api/mail/accounts`).
+
+**Entwürfe von Claude:** Claude kann Entwürfe direkt per SQL anlegen
+(`source = 'claude'`, `note` = kurze Erklärung); sie erscheinen unter „Entwürfe“ mit
+dem Hinweis „von Claude“ und gehen erst nach deinem Tipp auf „Senden“ raus.
+
+**Automatischer Abruf alle 10 Minuten (kostenlos, unabhängig vom Vercel-Plan)** –
+im Supabase-Projekt „Arion OS“ → SQL Editor, einmalig:
+
+```sql
+create extension if not exists pg_cron;
+create extension if not exists pg_net;
+-- Wert von CRON_SECRET aus Vercel einsetzen (liegt danach verschlüsselt im Vault)
+select vault.create_secret('<CRON_SECRET>', 'arion_cron_secret');
+select cron.schedule(
+  'arion-postfach-10min',
+  '*/10 * * * *',
+  $$
+  select net.http_post(
+    url := 'https://<DEINE-APP>.vercel.app/api/cron/mail',
+    headers := jsonb_build_object(
+      'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'arion_cron_secret'),
+      'Content-Type', 'application/json'
+    ),
+    body := '{}'::jsonb,
+    timeout_milliseconds := 60000
+  );
+  $$
+);
+```
+
+Die Seite /postfach aktualisiert sich zusätzlich jede Minute selbst, solange sie offen ist.
 
 ## 3. Briefpost-Scans vom Mitarbeiter
 

@@ -4,10 +4,13 @@ import Link from "next/link";
 import { PageHeader, Icon } from "@/components/ui";
 
 const MODULES = [
+  { href: "/arion", label: "ARION", icon: "graphic_eq", desc: "Sprachassistent, Push-to-Talk" },
   { href: "/gewohnheiten", label: "Gewohnheiten", icon: "autorenew", desc: "Habit-Tracker & Serien" },
   { href: "/kalender", label: "Kalender", icon: "calendar_month", desc: "Termine & Einträge" },
+  { href: "/postfach", label: "Postfach", icon: "inbox", desc: "Alle Mails, suchen & antworten" },
   { href: "/mail", label: "Mail-Digest", icon: "mail", desc: "Wichtige Mails, gefiltert" },
   { href: "/post", label: "Briefpost", icon: "markunread_mailbox", desc: "Digital zugestellte Scans" },
+  { href: "/buchhaltung", label: "Buchhaltung", icon: "account_balance", desc: "Belege, Abgleich, Fristen" },
   { href: "/vertraege", label: "Verträge", icon: "contract", desc: "Fristen & Kosten" },
   { href: "/clipboard", label: "Clipboard", icon: "content_paste", desc: "Textbausteine & Nummern" },
   { href: "/watcher", label: "Portale", icon: "travel_explore", desc: "Watcher & Meldungen" },
