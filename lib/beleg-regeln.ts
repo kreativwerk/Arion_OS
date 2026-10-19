@@ -217,6 +217,33 @@ export function zielFuer(f: DokFakten, jetzt: Date = new Date()): Ziel[] {
   return out;
 }
 
+/** "GO EZY (EZY GmbH)" / "GoEzy" → "goezy" – Lieferanten tolerant vergleichen. */
+export function lieferantKey(s: string): string {
+  return (s || "").toLowerCase().replace(/\(.*?\)/g, "").replace(/gmbh|ag|se|kg|co\b|&/g, "").replace(/[^a-z0-9äöüß]/g, "");
+}
+
+/** Rechnungsnummer aus einem Ablage-Dateinamen ("… (RG 123, KZ).pdf") oder "". */
+export function rgAusName(name: string): string {
+  const m = (name || "").match(/\(RG ([^,)]+)/);
+  return m ? m[1].trim().toLowerCase() : "";
+}
+
+/**
+ * Gleicher Beleg? Gleicher Betrag und ähnlicher Lieferant reichen nur, wenn
+ * nicht beide unterschiedliche Rechnungsnummern tragen (Mietflotten schicken
+ * oft mehrere Rechnungen mit identischem Betrag).
+ */
+export function gleicherBeleg(
+  a: { lieferant: string; betrag: number | null; dateiname: string },
+  b: { lieferant: string; betrag: number | null; dateiname: string }
+): boolean {
+  if (a.betrag == null || b.betrag == null || Math.abs(a.betrag - b.betrag) > 0.005) return false;
+  const la = lieferantKey(a.lieferant), lb = lieferantKey(b.lieferant);
+  if (!la || !lb || !(la.includes(lb) || lb.includes(la))) return false;
+  const ra = rgAusName(a.dateiname), rb = rgAusName(b.dateiname);
+  return !(ra && rb && ra !== rb);
+}
+
 /** Sicherheitsnetz für Pfade aus Modell-Fakten: nichts außerhalb des Roots, max. 12 Ebenen. */
 export function pfadOk(p: string): boolean {
   const teile = p.split("/");

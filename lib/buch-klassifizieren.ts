@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { PDFDocument } from "pdf-lib";
 import { getConfig, nowExpr, type DB } from "@/lib/db";
 import { parsePageRanges } from "@/lib/buch-pages";
-import { pfadOk, zielFuer, type DokFakten } from "@/lib/beleg-regeln";
+import { gleicherBeleg, pfadOk, zielFuer, type DokFakten } from "@/lib/beleg-regeln";
 
 /**
  * Automatische Belegablage: neue Einträge im Buchhaltungs-Eingang (Mail-Anhänge,
@@ -100,14 +100,14 @@ function fileBlock(data: Buffer, mime: string): Anthropic.Beta.BetaContentBlockP
 }
 
 /** Doppelte Zahlungsbelege erkennen: gleicher Lieferant + Betrag + Monat bereits abgelegt/geplant. */
-async function istDuplikat(d: DB, eingangId: number, lieferant: string, betrag: number | null, belegdatum: string) {
-  if (betrag == null || !lieferant || !/^\d{4}-\d{2}/.test(belegdatum)) return false;
-  const row = await d.get<{ id: number }>(
-    `SELECT id FROM buch_ablage WHERE eingang_id <> ? AND lower(lieferant) = lower(?) AND betrag = ? AND monat = ?
-       AND status IN ('offen','in_arbeit','erledigt') AND ziel_pfad LIKE 'Ausgaben/%' LIMIT 1`,
-    [eingangId, lieferant, betrag, belegdatum.slice(0, 7)]
+async function istDuplikat(d: DB, eingangId: number, o: { lieferant: string; betrag: number | null; belegdatum: string; dateiname: string }) {
+  if (o.betrag == null || !o.lieferant || !/^\d{4}-\d{2}/.test(o.belegdatum)) return false;
+  const rows = await d.all<{ lieferant: string; betrag: number | string; dateiname: string }>(
+    `SELECT lieferant, betrag, dateiname FROM buch_ablage WHERE eingang_id <> ? AND betrag = ? AND monat = ?
+       AND status IN ('offen','in_arbeit','erledigt') AND ziel_pfad LIKE 'Ausgaben/%' LIMIT 50`,
+    [eingangId, o.betrag, o.belegdatum.slice(0, 7)]
   );
-  return Boolean(row);
+  return rows.some((r) => gleicherBeleg(o, { lieferant: r.lieferant, betrag: Number(r.betrag), dateiname: r.dateiname }));
 }
 
 export type Auftrag = {
@@ -245,7 +245,7 @@ export async function runKlassifizieren(d: DB, opts: { deadline: number }): Prom
           if (!letzteDoppelt) orders.push(o); // Kopie (Fahrzeugakte) nur, wenn der Beleg selbst neu ist
           continue;
         }
-        letzteDoppelt = o.zahlung && (await istDuplikat(d, e.id, o.lieferant, o.betrag, o.belegdatum));
+        letzteDoppelt = o.zahlung && (await istDuplikat(d, e.id, o));
         orders.push(letzteDoppelt ? { ...o, ziel_pfad: "Archiv/_Duplikate prüfen" } : o);
       }
       const firma = plan.firma;
