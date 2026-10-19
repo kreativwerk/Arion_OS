@@ -3,6 +3,7 @@ import { simpleParser } from "mailparser";
 import { getDb, type DB } from "@/lib/db";
 import { decryptSecret } from "@/lib/secret-store";
 import { sendPushToAll } from "@/lib/push";
+import { runMailArchive } from "@/lib/mail-archive";
 import {
   BELEG_MAX_BYTES,
   IMAGE_MIN_BYTES,
@@ -368,6 +369,8 @@ export type MailFetchResult = {
   notizen: number;
   /** neue Belege im Buchhaltungs-Eingang */
   belege: number;
+  /** neu ins Postfach-Archiv übernommene Mails (alle Ordner, inkl. Nachladen älterer) */
+  archiviert: number;
   hinweise: string[];
 };
 
@@ -376,6 +379,8 @@ export type MailFetchOptions = {
   deadline?: number;
   /** Eine Push-Nachricht bei neuen Belegen/wichtigen Mails senden (Cron) */
   push?: boolean;
+  /** Restliches Budget fürs Postfach-Archiv nutzen (Standard: ja) */
+  archive?: boolean;
 };
 
 export async function runMailFetch(opts: MailFetchOptions = {}): Promise<MailFetchResult> {
@@ -394,6 +399,7 @@ export async function runMailFetch(opts: MailFetchOptions = {}): Promise<MailFet
       wichtig: 0,
       notizen: 0,
       belege: 0,
+      archiviert: 0,
       hinweise: [
         "Keine Postfächer mit Zugangsdaten. Lege sie direkt hier im Mail-Modul unter „Postfächer“ an (IONOS: imap.ionos.de, GMX: imap.gmx.net – IMAP vorher in den GMX-Einstellungen aktivieren). Alternativ gehen weiterhin Umgebungsvariablen MAIL_1_HOST/USER/PASS.",
         ...hints,
@@ -482,5 +488,13 @@ export async function runMailFetch(opts: MailFetchOptions = {}): Promise<MailFet
     }).catch(() => {});
   }
 
-  return { configured: true, accounts: perAccount, neu: allNew.length, wichtig, notizen, belege, hinweise: hints };
+  // Postfach-Archiv mit dem restlichen Budget (Digest und Belege haben Vorrang)
+  let archiviert = 0;
+  if (opts.archive !== false && deadline - Date.now() > 10_000) {
+    const ar = await runMailArchive(d, accounts, deadline);
+    archiviert = ar.neu;
+    hints.push(...ar.hinweise);
+  }
+
+  return { configured: true, accounts: perAccount, neu: allNew.length, wichtig, notizen, belege, archiviert, hinweise: hints };
 }

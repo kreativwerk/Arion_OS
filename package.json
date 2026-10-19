@@ -9,7 +9,8 @@
     "lint": "eslint",
     "test:buchhaltung": "node --experimental-strip-types --no-warnings --import ./tests/ts-resolve.mjs --test tests/buchhaltung.test.mjs",
     "test:arion": "node --experimental-strip-types --no-warnings --import ./tests/ts-resolve.mjs --test tests/arion.test.mjs",
-    "test": "node --experimental-strip-types --no-warnings --import ./tests/ts-resolve.mjs --test tests/buchhaltung.test.mjs tests/arion.test.mjs"
+    "test": "node --experimental-strip-types --no-warnings --import ./tests/ts-resolve.mjs --test tests/buchhaltung.test.mjs tests/arion.test.mjs tests/postfach.test.mjs",
+    "test:postfach": "node --experimental-strip-types --no-warnings --import ./tests/ts-resolve.mjs --test tests/postfach.test.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
@@ -18,6 +19,7 @@
     "mailparser": "^3.9.17",
     "material-symbols": "^0.47.0",
     "next": "16.3.3",
+    "nodemailer": "10.0.14",
     "pdf-lib": "^1.17.1",
     "postgres": "^3.4.9",
     "react": "19.2.8",
@@ -29,6 +31,7 @@
     "@types/better-sqlite3": "^9.6.0",
     "@types/mailparser": "^3.4.6",
     "@types/node": "^20",
+    "@types/nodemailer": "^8.0.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/web-push": "^3.6.4",

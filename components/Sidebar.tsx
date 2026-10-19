@@ -9,6 +9,7 @@ const NAV: { href: string; label: string; icon: string }[] = [
   { href: "/aufgaben", label: "Aufgaben", icon: "task_alt" },
   { href: "/gewohnheiten", label: "Gewohnheiten", icon: "autorenew" },
   { href: "/kalender", label: "Kalender", icon: "calendar_month" },
+  { href: "/postfach", label: "Postfach", icon: "inbox" },
   { href: "/mail", label: "Mail-Digest", icon: "mail" },
   { href: "/post", label: "Briefpost", icon: "markunread_mailbox" },
   { href: "/wissen", label: "Wissen", icon: "school" },

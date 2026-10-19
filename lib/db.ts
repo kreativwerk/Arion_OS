@@ -369,8 +369,95 @@ function schemaStatements(dialect: "sqlite" | "postgres"): string[] {
       created_at TEXT DEFAULT ${NOW}
     )`,
     ...buchhaltungStatements(dialect, ID, NOW, WS),
+    ...postfachStatements(dialect, ID, NOW, WS),
   ];
 }
+
+/**
+ * Postfach-Archiv + Versand (siehe docs/INTEGRATIONEN.md, Abschnitt Postfach):
+ * komplette Mails aller verbundenen Konten (alle Ordner außer Papierkorb/Spam/
+ * Entwürfe) als durchsuchbare Kopie; Anhänge bleiben auf dem IMAP-Server und
+ * werden bei Bedarf geladen. Entwürfe werden erst nach Freigabe in der App
+ * per SMTP versendet.
+ */
+function postfachStatements(dialect: "sqlite" | "postgres", ID: string, NOW: string, WS: string): string[] {
+  const BLOB = dialect === "sqlite" ? "BLOB" : "bytea";
+  const REF = dialect === "sqlite" ? "INTEGER" : "bigint";
+  return [
+    `CREATE TABLE IF NOT EXISTS mails (
+      ${ID}, ${WS},
+      account TEXT NOT NULL,
+      folder TEXT NOT NULL,
+      uidvalidity TEXT NOT NULL DEFAULT '',
+      uid INTEGER NOT NULL,
+      message_id TEXT DEFAULT '',
+      from_addr TEXT DEFAULT '',
+      to_addr TEXT DEFAULT '',
+      cc_addr TEXT DEFAULT '',
+      reply_to TEXT DEFAULT '',
+      subject TEXT DEFAULT '',
+      date TEXT,
+      body_text TEXT DEFAULT '',
+      has_html INTEGER DEFAULT 0,
+      attachments TEXT DEFAULT '[]',
+      flags TEXT DEFAULT '',
+      in_reply_to TEXT DEFAULT '',
+      references_hdr TEXT DEFAULT '',
+      size INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT ${NOW}
+    )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS mails_uid_uq ON mails (account, folder, uidvalidity, uid)`,
+    `CREATE INDEX IF NOT EXISTS mails_date_idx ON mails (date)`,
+    `CREATE INDEX IF NOT EXISTS mails_msgid_idx ON mails (message_id)`,
+    `CREATE TABLE IF NOT EXISTS mail_html (
+      mail_id ${REF} PRIMARY KEY,
+      html TEXT NOT NULL
+    )`,
+    // Fortschritt pro Konto + Ordner: neue Mails ab max_uid, Nachladen älterer bis min_uid
+    `CREATE TABLE IF NOT EXISTS mail_sync (
+      account TEXT NOT NULL,
+      folder TEXT NOT NULL,
+      uidvalidity TEXT NOT NULL DEFAULT '',
+      max_uid INTEGER NOT NULL DEFAULT 0,
+      min_uid INTEGER NOT NULL DEFAULT 0,
+      backfill_done INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT DEFAULT ${NOW},
+      PRIMARY KEY (account, folder)
+    )`,
+    // status: entwurf → sendet → gesendet | fehler; verworfen statt Löschen
+    `CREATE TABLE IF NOT EXISTS mail_drafts (
+      ${ID}, ${WS},
+      account_id INTEGER NOT NULL,
+      to_addr TEXT NOT NULL DEFAULT '',
+      cc_addr TEXT DEFAULT '',
+      bcc_addr TEXT DEFAULT '',
+      subject TEXT NOT NULL DEFAULT '',
+      body_text TEXT NOT NULL DEFAULT '',
+      reply_mail_id INTEGER,
+      in_reply_to TEXT DEFAULT '',
+      references_hdr TEXT DEFAULT '',
+      source TEXT DEFAULT 'app',
+      note TEXT DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'entwurf',
+      error TEXT DEFAULT '',
+      smtp_message_id TEXT DEFAULT '',
+      created_at TEXT DEFAULT ${NOW},
+      updated_at TEXT DEFAULT ${NOW},
+      sent_at TEXT
+    )`,
+    `CREATE INDEX IF NOT EXISTS mail_drafts_status_idx ON mail_drafts (status, id)`,
+    `CREATE TABLE IF NOT EXISTS mail_draft_files (
+      ${ID},
+      draft_id INTEGER NOT NULL,
+      filename TEXT NOT NULL,
+      mime TEXT DEFAULT 'application/octet-stream',
+      data ${BLOB} NOT NULL
+    )`,
+  ];
+}
+
+/** Postfach-Tabellen – Mailinhalte sind sensibel, öffentliche Supabase-API sperren. */
+const POSTFACH_TABLES = ["mails", "mail_html", "mail_sync", "mail_drafts", "mail_draft_files"];
 
 /**
  * Buchhaltungs-Modul (siehe docs/BUCHHALTUNG.md):
@@ -488,6 +575,9 @@ async function ensureSchema(d: DB) {
     await addColumn("mail_accounts", "port", "INTEGER DEFAULT 993");
     await addColumn("mail_accounts", "username", "TEXT DEFAULT ''");
     await addColumn("mail_accounts", "password_enc", "TEXT DEFAULT ''");
+    await addColumn("mail_accounts", "smtp_host", "TEXT DEFAULT ''");
+    await addColumn("mail_accounts", "smtp_port", "INTEGER DEFAULT 465");
+    await addColumn("mail_accounts", "display_name", "TEXT DEFAULT ''");
     for (const col of LETTER_COLUMNS) await addColumn("letters", col, "TEXT DEFAULT ''");
     await addColumn("assistant_messages", "conversation_id", "TEXT DEFAULT ''");
   } else {
@@ -497,6 +587,9 @@ async function ensureSchema(d: DB) {
       ["port", "INTEGER DEFAULT 993"],
       ["username", "TEXT DEFAULT ''"],
       ["password_enc", "TEXT DEFAULT ''"],
+      ["smtp_host", "TEXT DEFAULT ''"],
+      ["smtp_port", "INTEGER DEFAULT 465"],
+      ["display_name", "TEXT DEFAULT ''"],
     ]) {
       await d.run(`ALTER TABLE mail_accounts ADD COLUMN IF NOT EXISTS ${col} ${def}`);
     }
@@ -509,6 +602,7 @@ async function ensureSchema(d: DB) {
     await d.run("ALTER TABLE letter_blobs ENABLE ROW LEVEL SECURITY");
     // Belege + Bankdaten ebenso (Liste ist fest im Code, keine Eingabe)
     for (const t of BUCH_TABLES) await d.run(`ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`);
+    for (const t of POSTFACH_TABLES) await d.run(`ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`);
   }
 
   await d.run(
