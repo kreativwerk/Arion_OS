@@ -67,3 +67,30 @@ curl -X POST "$ARION_OS_URL/api/external/tasks" \
   („angenommen/erledigt") anzuzeigen – einfach ergänzbar, gleiche Token-Auth.
 - Weitere Zulieferer (Scanner-App für Briefpost, Watcher-Jobs) nutzen dasselbe
   Token-System mit eigener Bezeichnung.
+
+## 5. Sync: Codriver-Daten in Arion OS (ohne Mac)
+
+Arion OS spiegelt die Arion-Daten aus Codriver alle 15 Minuten nach `codriver_docs`
+(Supabase) – lesbar in Arion OS und für Claude im Chat, ohne den lokalen MCP.
+
+**Einrichtung**
+1. In Codriver als DSP-Admin einen **Disponenten** anlegen, z. B. „Arion OS“ mit eigener
+   E-Mail und starkem Passwort. Disponenten sehen technisch (Firestore-Regeln) nur den
+   Namensraum ihres Admins – keine anderen DSPs.
+2. Vercel: `CODRIVER_EMAIL`, `CODRIVER_PASSWORD` setzen, Redeploy.
+3. Supabase pg_cron: `/api/cron/codriver` alle 15 Minuten (gleiches `arion_cron_secret`).
+
+**Was gespiegelt wird** (änderbar über `app_config.codriver_collections`, kommagetrennt):
+`drivers, vehicles, fleet_vehicle_extras, fleet_events, calendar_events, absence_requests,
+incident_reports, shift_plans, reports, scores`.
+
+**Datenschutz:** rekursive Schwärzung wie im Codriver-MCP (`lib/codriver-redact.ts`):
+Bank/IBAN, Steuer-ID, Sozialversicherung, Ausweis-/Passnummern, Diagnosen, Unterschriften,
+Passwörter/PINs/Tokens → `[redacted]`; Datei-Links und Base64 → `[file]`. Nur lesend –
+Arion OS schreibt nie nach Codriver. In Codriver gelöschte Dokumente bekommen `removed_at`.
+
+**Abfragen (Beispiele)**
+```sql
+select data::jsonb->>'name' from codriver_docs where collection = 'drivers' and removed_at is null;
+select doc_id, data::jsonb->'summary'->>'overallScore' from codriver_docs where collection = 'reports' order by doc_id desc;
+```
