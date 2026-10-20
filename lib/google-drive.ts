@@ -234,6 +234,11 @@ export type UploadResult = { id: string; name: string; url: string };
 /** Lädt eine Datei hoch – überschreibt nie; bei Namensgleichheit " (2)", " (3)" … */
 /** Sucht im Ordner eine Datei mit appProperties ablageId = id (Idempotenz:
  *  ein früherer, abgebrochener Lauf hat sie evtl. schon hochgeladen). */
+/** Dateinamen (keine Ordner) direkt in einem Ordner – für Doppel-Prüfungen gegen bestehende Ablage. */
+export async function listFileNames(folderId: string, opts: DriveOpts = {}): Promise<string[]> {
+  return (await listChildren(folderId, `mimeType != '${FOLDER_MIME}'`, opts)).map((f) => f.name);
+}
+
 export async function findByAblageId(folderId: string, ablageId: number, opts: DriveOpts = {}): Promise<UploadResult | null> {
   const hit = (
     await listChildren(folderId, `appProperties has { key='ablageId' and value='${String(Math.floor(ablageId))}' }`, opts)

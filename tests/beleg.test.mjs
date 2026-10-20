@@ -1,7 +1,7 @@
 // Ablage-Regeln für die automatische Belegablage. Aufruf: npm run test:beleg
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { betragDe, gleicherBeleg, kennzeichenNorm, pfadOk, sauber, zielFuer } from "../lib/beleg-regeln.ts";
+import { amazonSchonAbgelegt, betragDe, gleicherBeleg, kennzeichenListe, kennzeichenNorm, pfadOk, sauber, zielFuer } from "../lib/beleg-regeln.ts";
 
 test("Duplikat nur bei gleicher oder fehlender Rechnungsnummer", () => {
   const a = { lieferant: "GO EZY (EZY GmbH)", betrag: 1487.74, dateiname: "GO EZY_1.487,74 (RG 2026-MR52979-RENT, SAD-EZ 45).pdf" };
@@ -94,4 +94,33 @@ test("Aufträge planen: Stapel, ungenutzte Seiten, ungültige Angabe", async () 
   assert.equal(bad.orders.length, 1);
   assert.equal(bad.orders[0].seiten, "");
   assert.equal(bad.orders[0].ziel_pfad, "Archiv/_Unklar");
+});
+
+test("Amazon-Gutschriften → Rechnungsausgang, Nullbeträge separat", () => {
+  const am = { art: "gutschrift", lieferant: "Amazon Deutschland S13 Transport GmbH", rg_nr: "INV-DES4FD0V-0000000374", betrag: 105852.29, belegdatum: "2026-09-23" };
+  assert.deepEqual(z(am), [
+    { ziel_pfad: "Ausgaben/2026/September/Rechnungsausgang/Amazon Rechnungen", dateiname: "105.852,29€ (RG INV-DES4FD0V-0000000374).pdf" },
+  ]);
+  assert.equal(z({ ...am, lieferant: "Amazon", betrag: 0 })[0].ziel_pfad, "Ausgaben/2026/September/Rechnungsausgang/Amazon Rechnungen/Nullbeträge");
+  // Erstattung eines Amazon-Einkaufs bleibt ein Eingangsbeleg
+  assert.equal(z({ art: "gutschrift", lieferant: "Amazon EU S.à r.l.", rg_nr: "DE5AB123", betrag: 12 })[0].ziel_pfad, "Ausgaben/2026/Mai/Rechnungseingang/Belege");
+});
+
+test("Amazon-Gutschrift schon abgelegt (Alberts Schreibweisen)", () => {
+  const da = ["105.852,29€.pdf", "93.057,34 €.pdf", "100809,17€.pdf", "1.129,90€ (Korrektur 359).pdf"];
+  assert.equal(amazonSchonAbgelegt("105.852,29€ (RG INV-1).pdf", da), true);
+  assert.equal(amazonSchonAbgelegt("93.057,34€ (RG INV-2).pdf", da), true);
+  assert.equal(amazonSchonAbgelegt("100.809,17€ (RG INV-3).pdf", da), true);
+  assert.equal(amazonSchonAbgelegt("2.003,23€ (RG INV-4).pdf", da), false);
+  assert.equal(amazonSchonAbgelegt("0,00€ (RG INV-5).pdf", ["0,00€ (RG INV-6).pdf"]), false);
+});
+
+test("Mehrere Kennzeichen → je Fahrzeugakte eine Kopie", () => {
+  assert.deepEqual(kennzeichenListe("FÜ-BB 357, FÜ-DE 319"), ["FÜ-BB 357", "FÜ-DE 319"]);
+  assert.deepEqual(kennzeichenListe("erh al 339 und ERH-AL 339"), ["ERH-AL 339"]);
+  const r = z({ kategorie: "fahrzeug", kennzeichen: "FÜ-BB 357, FÜ-DE 319", lieferant: "LeasePlan", fahrzeug_ordner: "Leasing & Miete" });
+  assert.deepEqual(r.map((x) => x.ziel_pfad).slice(1), [
+    "Archiv/Arion Logistics/02 Fahrzeuge/FÜ-BB 357/Leasing & Miete",
+    "Archiv/Arion Logistics/02 Fahrzeuge/FÜ-DE 319/Leasing & Miete",
+  ]);
 });
