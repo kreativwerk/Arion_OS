@@ -90,6 +90,11 @@ function safeSrcDoc(html: string): string {
 
 export default function PostfachPage() {
   const [view, setView] = useState<View>("inbox");
+  // Direktlink von der Startseite: /postfach?ansicht=entwuerfe
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- einmalig aus der URL, erst nach dem Hydrieren verfügbar
+    if (new URLSearchParams(window.location.search).get("ansicht") === "entwuerfe") setView("drafts");
+  }, []);
   const [q, setQ] = useState("");
   const [qDebounced, setQDebounced] = useState("");
   const [account, setAccount] = useState("");

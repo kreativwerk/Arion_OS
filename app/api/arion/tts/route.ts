@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { synthesize, ttsUrl } from "@/lib/arion-tts";
+import { synthesize, ttsConfigured } from "@/lib/arion-tts";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -11,8 +11,8 @@ export const maxDuration = 30;
  * fällt in beiden Fällen auf speechSynthesis zurück.
  */
 export async function POST(req: NextRequest) {
-  if (!ttsUrl()) {
-    return NextResponse.json({ error: "Keine Server-Stimme eingerichtet (ARION_TTS_URL) – der Browser liest selbst vor." }, { status: 501 });
+  if (!ttsConfigured()) {
+    return NextResponse.json({ error: "Keine Server-Stimme eingerichtet (ELEVENLABS_* oder ARION_TTS_URL) – der Browser liest selbst vor." }, { status: 501 });
   }
   const body = (await req.json().catch(() => null)) as { text?: unknown } | null;
   const text = typeof body?.text === "string" ? body.text.trim() : "";

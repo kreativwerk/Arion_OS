@@ -39,7 +39,10 @@ Icon-Farbe `ink-2`/`ink-3`; Akzent nur bei aktiver/wichtiger Bedeutung.
 
 ## Dashboard-Konzept („Heute" = erste und letzte Ansicht des Tages)
 
-Feste Reihenfolge, nicht umbauen:
+Der Kopf ist fest. Alles darunter ist ein **Widget-Baukasten** (`lib/home-widgets.ts`,
+`components/HomeWidgets.tsx`): Albert blendet Widgets über „Anpassen“ ein/aus, sortiert sie
+und schaltet halbe/volle Breite; gespeichert in `app_config.home_layout`. Neue Widgets
+immer dort registrieren (Standard-Reihenfolge = `STANDARD_LAYOUT`). Ursprüngliche Logik:
 1. **Kopf:** Begrüßung (+ Name), Datum, Ein-Satz-Zusammenfassung; abends (ab 17 Uhr)
    wechselt die Semantik zu „Noch offen / Tagesabschluss".
 2. **Triage:** 4 Kacheln (Benachrichtigungen, Mail, Briefpost, Portale) – Icon im
