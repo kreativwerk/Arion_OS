@@ -57,6 +57,26 @@ test("Anhänge: PDF und weitergeleitete Mail, kein eingebettetes Logo; Base64-Gr
   ]);
 });
 
+test("Eingebettete Vertragsfotos (Handy-Mail) zählen als Anhang, Logos nicht", () => {
+  const handy = {
+    type: "multipart/related",
+    childNodes: [
+      { type: "image/jpeg", part: "1", size: 600000, encoding: "base64", disposition: "inline", parameters: { name: "IMG_0412.jpg" } },
+      { type: "image/jpeg", part: "2", size: 580000, encoding: "base64", disposition: "inline" },
+      { type: "image/png", part: "3", size: 6000, encoding: "base64", disposition: "inline", id: "<sig>" },
+    ],
+  };
+  assert.deepEqual(attachmentList(handy), [
+    { part: "1", filename: "IMG_0412.jpg", mime: "image/jpeg", size: 450000 },
+    { part: "2", filename: "Anhang.jpeg", mime: "image/jpeg", size: 435000 },
+  ]);
+  assert.deepEqual(bodyParts(handy), []);
+  // Mail besteht nur aus einem PDF ohne Dateinamen
+  assert.deepEqual(attachmentList({ type: "application/pdf", size: 200000, encoding: "base64" }), [
+    { part: "1", filename: "Anhang.pdf", mime: "application/pdf", size: 150000 },
+  ]);
+});
+
 test("Einfache Mail ohne multipart", () => {
   assert.deepEqual(bodyParts({ type: "text/plain", size: 10 }), [{ part: "1", kind: "plain", size: 10 }]);
   assert.deepEqual(attachmentList({ type: "text/plain", size: 10 }), []);
