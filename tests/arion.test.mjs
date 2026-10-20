@@ -111,3 +111,13 @@ test("Aufgabentitel aus gesprochener Erinnerung", () => {
   assert.equal(taskTitleFromSpeech("Steuerbüro anrufen"), "Steuerbüro anrufen");
   assert.equal(taskTitleFromSpeech("den Vertrag zurückzuschicken"), "Den Vertrag zurückschicken");
 });
+
+test("ElevenLabs: nur saubere Voice-IDs in die URL", async () => {
+  const { elevenLabsUrl } = await import("../lib/arion-tts.ts");
+  assert.equal(
+    elevenLabsUrl("JBFqnCBsd6RMkjVDRZzb"),
+    "https://api.elevenlabs.io/v1/text-to-speech/JBFqnCBsd6RMkjVDRZzb/stream?output_format=mp3_44100_128"
+  );
+  assert.equal(elevenLabsUrl("../../v1/user"), null);
+  assert.equal(elevenLabsUrl(""), null);
+});

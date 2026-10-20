@@ -106,6 +106,9 @@ Alle optional – ohne sie läuft ARION mit Browser-Spracherkennung und Browser-
 |---|---|---|
 | `ANTHROPIC_API_KEY` | Claude mit Tool Use (sonst lokaler Fallback) | `sk-ant-…` |
 | `ARION_MODEL` | Modell nur für ARION (sonst `ANTHROPIC_MODEL`, sonst `claude-sonnet-5`) | `claude-sonnet-5` |
+| `ELEVENLABS_API_KEY` | ElevenLabs-Schlüssel – hat Vorrang vor `ARION_TTS_URL`, läuft ohne Mac | `sk_…` |
+| `ELEVENLABS_VOICE_ID` | Stimme aus der ElevenLabs-Voice-Library (Butler-Stimme) | `JBFqnCBsd6RMkjVDRZzb` |
+| `ELEVENLABS_MODEL` | Modell (Standard `eleven_multilingual_v2`, spricht Deutsch) | `eleven_multilingual_v2` |
 | `ARION_TTS_URL` | OpenAI-kompatibler TTS-Endpunkt (Basis-URL oder voller Pfad `/v1/audio/speech`) | `https://voice.example.com` |
 | `ARION_TTS_VOICE` | Stimmenname, wie ihn der TTS-Server erwartet (Standard `alloy`) | `arion` |
 | `ARION_TTS_MODEL` | Modellname für den TTS-Server (Standard `tts-1`) | `tts-1` |
