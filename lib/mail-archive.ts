@@ -281,6 +281,67 @@ async function archiveFolder(
   }
 }
 
+/**
+ * Nachbesserung für schon archivierte Mails: Bis Okt. 2026 wurden eingebettete
+ * Fotos/PDFs (z. B. Verträge per Handy-Mail) nicht als Anhang erkannt. Mails ohne
+ * Anhangsliste, aber mit nennenswerter Größe, werden einmal neu eingelesen
+ * (nur BODYSTRUCTURE, nur lesend). Der Fortschritt steht in app_config.
+ */
+const REPAIR_MIN_SIZE = 50_000;
+const REPAIR_BATCH = 60;
+
+async function repairAttachments(client: ImapFlow, d: DB, account: string, deadline: number): Promise<number> {
+  const key = `mail_anhang_repair:${account}`;
+  const state = await d.get<{ value: string }>("SELECT value FROM app_config WHERE key = ?", [key]);
+  if (state?.value === "fertig") return 0;
+  const lastId = Number(state?.value || 0);
+  const rows = await d.all<{ id: number; folder: string; uid: number; uidvalidity: string }>(
+    `SELECT id, folder, uid, uidvalidity FROM mails
+     WHERE account = ? AND id > ? AND attachments = '[]' AND size >= ? ORDER BY id LIMIT ?`,
+    [account, lastId, REPAIR_MIN_SIZE, REPAIR_BATCH]
+  );
+  const saveState = (v: string) =>
+    d.run("INSERT INTO app_config (key, value) VALUES (?,?) ON CONFLICT (key) DO UPDATE SET value = excluded.value", [key, v]);
+  if (!rows.length) {
+    await saveState("fertig");
+    return 0;
+  }
+  let fixed = 0;
+  let done = lastId;
+  const byFolder = new Map<string, typeof rows>();
+  for (const r of rows) byFolder.set(r.folder, [...(byFolder.get(r.folder) || []), r]);
+  for (const [folder, list] of byFolder) {
+    if (deadline - Date.now() < 3_000) break;
+    let lock;
+    try {
+      lock = await client.getMailboxLock(folder, { readOnly: true });
+    } catch {
+      continue; // Ordner gibt es nicht mehr
+    }
+    try {
+      const mb = client.mailbox;
+      const uv = mb && typeof mb !== "boolean" ? String(mb.uidValidity ?? "") : "";
+      const valid = list.filter((r) => r.uidvalidity === uv);
+      if (valid.length) {
+        const msgs = await client.fetchAll(valid.map((r) => r.uid).join(","), { uid: true, bodyStructure: true }, { uid: true });
+        for (const m of msgs) {
+          const list2 = attachmentList(m.bodyStructure);
+          const row = valid.find((r) => Number(r.uid) === m.uid);
+          if (row && list2.length) {
+            await d.run("UPDATE mails SET attachments = ? WHERE id = ?", [JSON.stringify(list2), row.id]);
+            fixed++;
+          }
+        }
+      }
+    } finally {
+      lock.release();
+    }
+  }
+  if (deadline - Date.now() >= 3_000) done = Math.max(done, ...rows.map((r) => Number(r.id)));
+  if (done > lastId) await saveState(String(done));
+  return fixed;
+}
+
 export type ArchiveResult = { accounts: { label: string; neu: number }[]; neu: number; hinweise: string[] };
 
 /** Archiviert alle Konten nacheinander, solange das Zeitbudget reicht. */
@@ -311,6 +372,14 @@ export async function runMailArchive(d: DB, accounts: MailAccountEnv[], deadline
           neu += r.neu;
         } catch (e) {
           hints.push(`${acc.label} / ${f.path}: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
+      if (deadline - Date.now() > 6_000) {
+        try {
+          const fixed = await repairAttachments(client, d, acc.label, deadline);
+          if (fixed) hints.push(`${acc.label}: ${fixed} eingebettete Anhänge nachgetragen`);
+        } catch (e) {
+          hints.push(`${acc.label} / Anhänge nachtragen: ${e instanceof Error ? e.message : String(e)}`);
         }
       }
       await client.logout();
