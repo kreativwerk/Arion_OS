@@ -344,7 +344,7 @@ export default function TodayPage() {
         </Link>
         ) : null;
       case "wartet":
-        return <WartetWidget items={data.wartet ?? []} />;
+        return <WartetWidget items={data.wartet ?? []} onChanged={reload} />;
       case "fristen":
         return <FristenWidget items={data.fristen ?? []} />;
       case "konto":

@@ -580,6 +580,7 @@ async function ensureSchema(d: DB) {
     await addColumn("mail_accounts", "display_name", "TEXT DEFAULT ''");
     for (const col of LETTER_COLUMNS) await addColumn("letters", col, "TEXT DEFAULT ''");
     await addColumn("assistant_messages", "conversation_id", "TEXT DEFAULT ''");
+    await addColumn("mail_drafts", "notified_at", "TEXT");
   } else {
     // Postgres kennt IF NOT EXISTS direkt
     for (const [col, def] of [
@@ -597,6 +598,8 @@ async function ensureSchema(d: DB) {
       await d.run(`ALTER TABLE letters ADD COLUMN IF NOT EXISTS ${col} TEXT DEFAULT ''`);
     }
     await d.run("ALTER TABLE assistant_messages ADD COLUMN IF NOT EXISTS conversation_id TEXT DEFAULT ''");
+    // Push „Entwurf wartet“ nur einmal je Entwurf (lib/draft-notify.ts)
+    await d.run("ALTER TABLE mail_drafts ADD COLUMN IF NOT EXISTS notified_at TEXT");
     // Scans sind sensibel: öffentliche Supabase-API sperren (die App selbst
     // verbindet als Tabellen-Owner und ist davon nicht betroffen).
     await d.run("ALTER TABLE letter_blobs ENABLE ROW LEVEL SECURITY");

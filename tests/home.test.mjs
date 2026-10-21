@@ -31,3 +31,15 @@ test("Qonto-Mails auswerten", () => {
   );
   assert.equal(parseQontoLastschrift("E.ON Energie Deutschland GmbH wird Ihr Konto am 3. Mär 2027 belasten", "").datum, "2027-03-03");
 });
+
+test("Entwurf: Vorschau und Push-Text", async () => {
+  const { entwurfVorschau } = await import("../lib/home-data.ts");
+  assert.equal(entwurfVorschau("Hallo Dennis,\r\n\r\nanbei   die Unterlagen.\n\nViele Grüße"), "Hallo Dennis, anbei   die Unterlagen. Viele Grüße");
+  assert.equal(entwurfVorschau("x".repeat(300), 20).length, 20);
+  const { draftPushPayload } = await import("../lib/draft-notify.ts");
+  const p = draftPushPayload({ id: 7, to_addr: "a@b.de, c@d.de", subject: "Hallo", dateien: 3 });
+  assert.equal(p.title, "Entwurf wartet: an a@b.de");
+  assert.match(p.body, /Hallo · 3 Anhänge/);
+  assert.equal(p.url, "/?entwurf=7");
+  assert.equal(draftPushPayload({ id: 1, to_addr: "", subject: "", dateien: 1 }).body.startsWith("(ohne Betreff) · 1 Anhang"), true);
+});

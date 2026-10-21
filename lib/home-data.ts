@@ -23,13 +23,47 @@ async function safe<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
 
 /* ── Wartet auf dich: Mail-Entwürfe ─────────────────────── */
 
-export type WartetItem = { id: number; an: string; betreff: string; status: string; quelle: string; erstellt: string };
+export type WartetItem = {
+  id: number;
+  an: string;
+  betreff: string;
+  status: string;
+  quelle: string;
+  erstellt: string;
+  /** Konto, von dem gesendet wird (Label oder Adresse) */
+  von: string;
+  /** Anfang des Mailtexts für die Vorschau im Widget */
+  vorschau: string;
+  anhaenge: string[];
+};
 
 export function wartetAufDich(d: DB): Promise<WartetItem[]> {
   return safe(async () => {
-    const rows = await d.all<{ id: number; to_addr: string; subject: string; status: string; source: string; created_at: string }>(
-      "SELECT id, to_addr, subject, status, source, created_at FROM mail_drafts WHERE status IN ('entwurf','fehler') ORDER BY id DESC LIMIT 8"
+    const rows = await d.all<{
+      id: number;
+      to_addr: string;
+      subject: string;
+      status: string;
+      source: string;
+      created_at: string;
+      body_text: string;
+      von: string | null;
+    }>(
+      `SELECT m.id, m.to_addr, m.subject, m.status, m.source, m.created_at, m.body_text,
+              COALESCE(NULLIF(a.username, ''), a.address, a.label) AS von
+       FROM mail_drafts m LEFT JOIN mail_accounts a ON a.id = m.account_id
+       WHERE m.status IN ('entwurf','fehler') ORDER BY m.id DESC LIMIT 8`
     );
+    const files = rows.length
+      ? await safe(
+          () =>
+            d.all<{ draft_id: number; filename: string }>(
+              `SELECT draft_id, filename FROM mail_draft_files WHERE draft_id IN (${rows.map(() => "?").join(",")}) ORDER BY id`,
+              rows.map((r) => Number(r.id))
+            ),
+          []
+        )
+      : [];
     return rows.map((r) => ({
       id: Number(r.id),
       an: r.to_addr,
@@ -37,8 +71,17 @@ export function wartetAufDich(d: DB): Promise<WartetItem[]> {
       status: r.status,
       quelle: r.source,
       erstellt: r.created_at,
+      von: r.von ?? "",
+      vorschau: entwurfVorschau(r.body_text ?? ""),
+      anhaenge: files.filter((f) => Number(f.draft_id) === Number(r.id)).map((f) => f.filename),
     }));
   }, []);
+}
+
+/** Erste Zeilen des Mailtexts, ohne Leerzeilen, gekürzt für die Karte. */
+export function entwurfVorschau(text: string, max = 220): string {
+  const flat = text.replace(/\r/g, "").split("\n").map((l) => l.trim()).filter(Boolean).join(" ");
+  return flat.length > max ? `${flat.slice(0, max - 1).trimEnd()}…` : flat;
 }
 
 /* ── Fristen-Ampel ──────────────────────────────────────── */

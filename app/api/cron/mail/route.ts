@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withApi } from "@/lib/api-error";
+import { getDb } from "@/lib/db";
+import { notifyNewDrafts } from "@/lib/draft-notify";
 import { runMailFetch } from "@/lib/mail-fetch";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +26,10 @@ export const GET = withApi(async (req: NextRequest) => {
     return NextResponse.json({ error: "Ungültiges Cron-Secret." }, { status: 401 });
   }
   // maxDuration 60 s: 50 s Budget, Rest als Puffer für den Abschluss
-  return NextResponse.json(await runMailFetch({ push: true, deadline: Date.now() + 50_000 }));
+  // Neue Claude-Entwürfe zuerst melden – das dauert Sekunden, der Abruf nimmt den Rest
+  const entwuerfe = await notifyNewDrafts(await getDb()).catch(() => ({ gemeldet: 0 }));
+  const res = await runMailFetch({ push: true, deadline: Date.now() + 45_000 });
+  return NextResponse.json({ ...res, entwuerfe_gemeldet: entwuerfe.gemeldet });
 });
 
 /** pg_cron (net.http_post) ruft per POST auf – gleiche Logik. */
