@@ -121,3 +121,16 @@ test("ElevenLabs: nur saubere Voice-IDs in die URL", async () => {
   assert.equal(elevenLabsUrl("../../v1/user"), null);
   assert.equal(elevenLabsUrl(""), null);
 });
+
+test("Weckruf: „Hey ARION“ und Varianten, aber nicht mitten im Satz", async () => {
+  const { isWakePhrase, greetingClip } = await import("../lib/arion-wake.ts");
+  for (const t of ["Hey Arion", "hey arion wie ist der Kontostand", "Arion", "Hallo Orion", "okay Ariane", "Hey ARION!"]) {
+    assert.equal(isWakePhrase(t), true, t);
+  }
+  for (const t of ["Wir fahren nach Orion morgen", "der Termin mit Aaron", "Hey", "Marion"]) {
+    assert.equal(isWakePhrase(t), false, t);
+  }
+  assert.equal(greetingClip(7), "guten-morgen");
+  assert.equal(greetingClip(13), "guten-tag");
+  assert.equal(greetingClip(20), "guten-abend");
+});

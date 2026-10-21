@@ -98,6 +98,21 @@ Hinweis auf den fehlenden Schlüssel. Fällt die Claude-API aus, gilt dasselbe.
 
 ---
 
+## Weckruf „Hey ARION“ (Browser)
+
+Auf der ARION-Seite schaltet das Ohr-Symbol oben rechts den Weckruf ein (pro Gerät gemerkt).
+Solange die Seite offen und sichtbar ist, hört eine eigene Spracherkennung (Web Speech API,
+de-DE) auf „Hey/Hallo/Okay ARION“ oder „ARION“ am Satzanfang (`lib/arion-wake.ts`). Dann:
+
+1. Clip in der Butler-Stimme Alistair – erster Weckruf des Tages „Guten Morgen/Tag/Abend, Sir.“,
+   sonst „Zu Diensten, Sir.“ (Clips: `CLIP_URLS` in `lib/arion-wake.ts`),
+2. ARION hört im Freihand-Modus zu, antwortet und schläft danach wieder auf das Weckwort.
+
+Während ARION zuhört/denkt/spricht ist der Weckruf pausiert. Funktioniert in Chrome/Edge am
+Mac und auf Android; auf dem iPhone blendet die Seite den Schalter aus (Safari beendet
+Dauer-Erkennung). Für „immer an“ ohne offene Seite bleibt der Wake-Hook oben für einen
+späteren Mac-Helfer.
+
 ## Umgebungsvariablen
 
 Alle optional – ohne sie läuft ARION mit Browser-Spracherkennung und Browser-Stimme.

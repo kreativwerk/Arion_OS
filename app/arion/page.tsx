@@ -5,6 +5,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/ui";
 import Reactor, { type ArionState } from "@/components/arion/Reactor";
 import { useArionVoice } from "@/components/arion/useArionVoice";
+import { useWakeWord } from "@/components/arion/useWakeWord";
+import { clipUrl, greetingClip } from "@/lib/arion-wake";
 import { compactEuro, formatEuro } from "@/lib/arion-speech";
 
 /**
@@ -52,6 +54,24 @@ const STATE_LABEL: Record<ArionState, string> = {
 
 const CONV_KEY = "arion.conversation";
 const VOICE_KEY = "arion.voice";
+const WAKE_KEY = "arion.wake";
+const GREETED_KEY = "arion.greeted";
+
+/** Kurzen Butler-Clip (Alistair, siehe lib/arion-wake.ts) abspielen; löst spätestens nach 4 s auf. */
+function playClip(name: string): Promise<void> {
+  return new Promise((resolve) => {
+    try {
+      const a = new Audio(clipUrl(name));
+      const done = () => resolve();
+      a.onended = done;
+      a.onerror = done;
+      setTimeout(done, 4000);
+      a.play().catch(done);
+    } catch {
+      resolve();
+    }
+  });
+}
 
 function newConversationId() {
   const rnd = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : String(Math.random()).slice(2);
@@ -82,6 +102,7 @@ export default function ArionPage() {
   const [freehand, setFreehand] = useState(false);
   const [showInput, setShowInput] = useState(false);
   const [input, setInput] = useState("");
+  const [wakeOn, setWakeOn] = useState(false);
 
   const stateRef = useRef<ArionState>("idle");
   const conversationId = useRef<string>("");
@@ -129,7 +150,16 @@ export default function ArionPage() {
       /* Standard: an */
     }
     voiceRef.current = savedVoice;
-    const t = setTimeout(() => setVoiceOn(savedVoice), 0);
+    let savedWake = false;
+    try {
+      savedWake = localStorage.getItem(WAKE_KEY) === "1";
+    } catch {
+      /* Standard: aus */
+    }
+    const t = setTimeout(() => {
+      setVoiceOn(savedVoice);
+      setWakeOn(savedWake);
+    }, 0);
     const t0 = setTimeout(loadStatus, 0);
     const iv = setInterval(loadStatus, 60_000);
     return () => {
@@ -341,6 +371,47 @@ export default function ArionPage() {
     };
   }, [begin, setState, stopListening, stopSpeaking, unlock]);
 
+  /* ── Weckruf „Hey ARION“ (Browser) ───────────────────── */
+
+  const onWakeWord = useCallback(async () => {
+    if (stateRef.current !== "idle") return;
+    // Erster Weckruf des Tages: Begrüßung nach Tageszeit, sonst „Zu Diensten, Sir.“
+    let clip = "zu-diensten";
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      if (localStorage.getItem(GREETED_KEY) !== today) {
+        clip = greetingClip(new Date().getHours());
+        localStorage.setItem(GREETED_KEY, today);
+      }
+    } catch {
+      /* egal */
+    }
+    if (voiceRef.current) await playClip(clip);
+    if (stateRef.current !== "idle") return;
+    begin("wake");
+  }, [begin]);
+
+  const { supported: wakeSupported, lauscht: wakeListening } = useWakeWord({
+    enabled: wakeOn,
+    paused: state !== "idle",
+    onWake: onWakeWord,
+    onBlocked: (msg) => {
+      setError(msg);
+      setWakeOn(false);
+    },
+  });
+
+  const toggleWake = () => {
+    const next = !wakeOn;
+    unlock();
+    setWakeOn(next);
+    try {
+      localStorage.setItem(WAKE_KEY, next ? "1" : "0");
+    } catch {
+      /* egal */
+    }
+  };
+
   /* ── Sonstiges ────────────────────────────────────────── */
 
   const toggleVoice = () => {
@@ -450,6 +521,16 @@ export default function ArionPage() {
           </div>
         </div>
         <div className="flex items-center">
+          {wakeSupported && (
+            <button
+              onClick={toggleWake}
+              aria-label={wakeOn ? "Weckruf aus" : "Weckruf „Hey ARION“ an"}
+              title={wakeOn ? (wakeListening ? "Hört auf „Hey ARION“ – tippen zum Ausschalten" : "Weckruf an") : "Weckruf „Hey ARION“ einschalten"}
+              className={`w-10 h-10 rounded-full flex items-center justify-center hover:bg-inset transition-colors ${wakeOn ? "text-accent" : "text-ink-3"}`}
+            >
+              <Icon name={wakeOn ? "hearing" : "hearing_disabled"} size={21} />
+            </button>
+          )}
           <button
             onClick={toggleVoice}
             aria-label={voiceOn ? "Stimme aus" : "Stimme an"}
