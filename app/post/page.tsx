@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Card,
   PageHeader,
@@ -151,6 +152,7 @@ async function uploadLetter(original: File, scannedBy: string): Promise<UploadRe
 
 export default function PostPage() {
   const { rows, update, reload, error } = useTable<Letter>("letters");
+  const router = useRouter();
   const [view, setView] = useState<View>("offen");
   const [query, setQuery] = useState("");
   const [uploads, setUploads] = useState<UploadItem[]>([]);
@@ -220,6 +222,18 @@ export default function PostPage() {
       setAbruf({ busy: false, text: e instanceof Error ? e.message : String(e) });
     }
     await reload();
+  };
+
+  /** Brief als Mail-Entwurf mit Scan-Anhang anlegen und im Postfach öffnen. */
+  const forwardLetter = async (id: number) => {
+    setPageError("");
+    const res = await fetch(`/api/letters/${id}/forward`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+    const data = (await res.json().catch(() => ({}))) as { draftId?: number; error?: string };
+    if (!res.ok || !data.draftId) {
+      setPageError(data.error ?? `Weiterleiten fehlgeschlagen (${res.status})`);
+      return;
+    }
+    router.push(`/postfach?ansicht=entwuerfe&entwurf=${data.draftId}`);
   };
 
   const removeLetter = async (id: number) => {
@@ -448,6 +462,7 @@ export default function PostPage() {
                         )
                       }
                       onEdit={() => setEditing(l.id)}
+                      onForward={() => forwardLetter(l.id)}
                       onReanalyze={() => reanalyze(l.id)}
                       onDelete={() => removeLetter(l.id)}
                     />
@@ -467,6 +482,7 @@ function LetterRow({
   onStatus,
   onSdworx,
   onEdit,
+  onForward,
   onReanalyze,
   onDelete,
 }: {
@@ -475,6 +491,7 @@ function LetterRow({
   onStatus: (s: string) => void;
   onSdworx: () => void;
   onEdit: () => void;
+  onForward: () => void;
   onReanalyze: () => void;
   onDelete: () => void;
 }) {
@@ -547,6 +564,12 @@ function LetterRow({
             >
               <Icon name={atSdworx ? "undo" : "forward_to_inbox"} size={15} />
               {atSdworx ? "Von SD Worx zurückholen" : "An SD Worx"}
+            </button>
+          )}
+          {hasScan && (
+            <button onClick={onForward} className="text-ink-2 hover:text-ink flex items-center gap-1">
+              <Icon name="forward_to_inbox" size={15} />
+              Als E-Mail weiterleiten
             </button>
           )}
           <button onClick={onEdit} className="text-ink-2 hover:text-ink flex items-center gap-1">

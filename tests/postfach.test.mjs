@@ -171,3 +171,25 @@ test("Briefkasten: nur fertige, neue Scans aus Drive übernehmen", async () => {
   assert.equal(p.title, "Briefkasten: 3 neue Briefe · 1 mit To-do");
   assert.equal(p.body, "Arion · Wohnwerk – Von Finanzamt, Stadtwerke, X");
 });
+
+test("Brief weiterleiten: Absender nach Firma, Betreff, Anhangname", async () => {
+  const { letterForwardDraft, pickForwardAccount } = await import("../lib/letter-forward.ts");
+  const acc = [
+    { id: 4, label: "Info", address: "info@arion-logistics.de", username: "info@arion-logistics.de" },
+    { id: 9, label: "WOHNWERK", address: "info@wohnwerkbau.de", username: "info@wohnwerkbau.de" },
+    { id: 10, label: "FLEET FIX GmbH", address: "info@fleet-fix.app", username: "info@fleet-fix.app" },
+  ];
+  assert.equal(pickForwardAccount("Wohnwerk", acc), 9);
+  assert.equal(pickForwardAccount("Fleet Fix", acc), 10);
+  assert.equal(pickForwardAccount("Unklar", acc), 4);
+  assert.equal(pickForwardAccount("Kreativwerk", acc), 4); // Kreativwerk-Postfach fehlt → Arion
+  const d = letterForwardDraft(
+    { subject: "Erinnerung Entgeltbescheinigung", sender: "BARMER", summary: "Krankengeld fehlt.", action: "", reference: "Y199504797", received_date: "2026-10-22", firma: "Arion", file_ref: "x.pdf", mime: "application/pdf" },
+    acc
+  );
+  assert.equal(d.accountId, 4);
+  assert.equal(d.subject, "Weiterleitung: Erinnerung Entgeltbescheinigung");
+  assert.equal(d.filename, "BARMER – Erinnerung Entgeltbescheinigung.pdf");
+  assert.match(d.body, /eingegangen am 22\.10\.2026/);
+  assert.match(d.body, /Zeichen: Y199504797/);
+});
