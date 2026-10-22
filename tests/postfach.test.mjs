@@ -135,3 +135,16 @@ test("Antwort-Betreff nur einmal mit Re:", () => {
   assert.equal(replySubject("AW: Rechnung"), "AW: Rechnung");
   assert.equal(replySubject("re: x"), "re: x");
 });
+
+test("Briefkasten-Push: Anzahl, To-dos, Absender", async () => {
+  const { letterboxPushText } = await import("../lib/letterbox.ts");
+  const p = letterboxPushText([
+    { sender: "Finanzamt Erlangen", action: "Bis 15.11. zahlen" },
+    { sender: "AOK", action: "Keine Aktion nötig" },
+    { sender: "Finanzamt Erlangen", action: "" },
+  ]);
+  assert.equal(p.title, "Briefkasten: 3 neue Briefe · 1 mit To-do");
+  assert.equal(p.body, "Von Finanzamt Erlangen, AOK");
+  assert.equal(p.url, "/post");
+  assert.equal(letterboxPushText([{ sender: null, action: null }]).title, "Briefkasten: 1 neuer Brief");
+});

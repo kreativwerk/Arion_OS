@@ -154,6 +154,34 @@ Aktenzeichen. Der Volltext wird in `letters.extracted` (JSON) gespeichert.
 Die Liste ist nach Absender gruppiert; jeder Brief lässt sich bearbeiten und als erledigt
 markieren (Status `archiv`).
 
+### Briefkasten-Scan (Scanner → Ordner „Letterbox“ → Post-Modul)
+
+Die komplette Tagespost wird geöffnet, als ein Stapel in den Einzug gelegt und mit dem
+Scan-Profil **„Briefkasten“** gescannt. Der Scanner legt die PDF in
+`\\192.168.2.154\Scans\Letterbox` (Büro-Mac). Dort läuft ein Hintergrunddienst
+(`scripts/letterbox`), der jede fertige PDF zu Arion OS hochlädt:
+
+```
+Brother MFC-L8390CDW ──SMB──▶ Mac: Scans/Letterbox ──launchd──▶ POST /api/external/letters
+ Profil „Briefkasten“          arion-letterbox.sh               (API-Token, 3-MB-Stücke)
+                               → Letterbox/_hochgeladen          → Claude zerlegt den Stapel
+                                                                 → Post-Modul (/post) + Push
+```
+
+- **Einrichtung Mac:** `bash scripts/letterbox/install.sh "/Pfad/zu/Scans"` legt `Letterbox`
+  und `Letterbox/_hochgeladen` an, kopiert das Skript nach `~/.arion/` und startet den
+  Dienst `de.arion.letterbox` (reagiert sofort auf neue Dateien, zusätzlich jede Minute).
+- **Token:** In Arion OS unter Einstellungen → API-Tokens einen Token „Briefkasten“
+  anlegen und in `~/.arion/letterbox-token` speichern.
+- Hochgeladen wird erst, wenn die Datei 30 s unverändert ist (Scanner fertig).
+  Erfolgreich → `_hochgeladen/JJJJ-MM-TT_HHMM_Name.pdf`. Fehler → Datei bleibt liegen,
+  nächster Versuch beim nächsten Lauf. Es wird **nichts gelöscht**.
+- Log: `~/Library/Logs/arion-letterbox.log`
+- Die Briefe tragen „gescannt von Briefkasten“. Nach der Analyse kommt ein Push
+  „Briefkasten: N neue Briefe · M mit To-do“, Tippen öffnet `/post`.
+- Endpunkte: `POST /api/external/letters` (erstes Stück: `file`, `name`, `type`, `size`,
+  `final`, optional `scanned_by`), `PUT /api/external/letters/:id` (`file`, `offset`, `final`).
+
 Ausbaustufe:
 
 - Antworten/Formulare automatisch mit Firmendaten ausfüllen – Grundlage ist der
