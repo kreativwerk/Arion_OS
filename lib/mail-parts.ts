@@ -12,15 +12,25 @@ export type AttachmentInfo = { part: string; filename: string; mime: string; siz
 /** Größte Textteile, die wir laden – riesige Newsletter-HTMLs werden gekappt. */
 export const BODY_PART_MAX_BYTES = 1_000_000;
 
-function isAttachment(node: MessageStructureObject): boolean {
-  const disp = node.disposition?.toLowerCase();
-  const filename = node.dispositionParameters?.filename || node.parameters?.name;
-  return disp === "attachment" || (Boolean(filename) && disp !== "inline");
-}
+/**
+ * Eingebettete Bilder/PDFs ab dieser Größe gelten als echter Anhang. Handy-Mail-
+ * Apps (z. B. GMX) betten Fotos von Verträgen „inline“ ein – kleine Logos und
+ * Signatur-Bilder bleiben darunter und werden weiter ausgeblendet.
+ */
+export const INLINE_ANHANG_MIN_BYTES = 40_000;
 
 function decodedSize(node: MessageStructureObject): number {
   const encoded = Number(node.size || 0);
   return node.encoding?.toLowerCase() === "base64" ? Math.floor(encoded * 0.75) : encoded;
+}
+
+function isAttachment(node: MessageStructureObject): boolean {
+  const disp = node.disposition?.toLowerCase();
+  const filename = node.dispositionParameters?.filename || node.parameters?.name;
+  if (disp === "attachment" || (Boolean(filename) && disp !== "inline")) return true;
+  const type = (node.type || "").toLowerCase();
+  if (type.startsWith("text/") || type.startsWith("multipart/")) return false;
+  return /^(image|application)\//.test(type) && decodedSize(node) >= INLINE_ANHANG_MIN_BYTES;
 }
 
 /**

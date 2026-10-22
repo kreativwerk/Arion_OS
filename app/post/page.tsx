@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Card,
   PageHeader,
@@ -31,20 +32,30 @@ type Letter = {
   reference: string;
   notes: string;
   mime: string;
+  firma: string;
 };
 
 type UploadItem = { name: string; state: "wartet" | "lädt" | "fertig" | "fehler"; message?: string; count?: number };
-type View = "offen" | "erledigt" | "alle";
+type View = "offen" | "sdworx" | "erledigt" | "alle";
 
 /** "archiv" ist der Erledigt-Status (bestehende Daten + Dashboard zählen so). */
 const DONE = "archiv";
-const STATUS_LABEL: Record<string, string> = { neu: "neu", gelesen: "gelesen", aktion: "Aktion nötig", archiv: "erledigt" };
+/** An SD Worx (Lohnbuchhaltung) weitergeleitet – liegt dort zur Bearbeitung, nicht mehr bei uns offen. */
+const SDWORX = "sdworx";
+const STATUS_LABEL: Record<string, string> = { neu: "neu", gelesen: "gelesen", aktion: "Aktion nötig", sdworx: "An SD Worx", archiv: "erledigt" };
+/** Offen = weder erledigt noch an SD Worx abgegeben. */
+const isOpen = (l: { status: string }) => l.status !== DONE && l.status !== SDWORX;
 const STATUS_TONE: Record<string, "accent" | "neutral" | "warn" | "good"> = {
   neu: "accent",
   gelesen: "neutral",
   aktion: "warn",
+  sdworx: "accent",
   archiv: "good",
 };
+/** Firmen (Empfänger laut Anschrift) – siehe LETTER_FIRMEN in lib/letter-analyze.ts */
+const FIRMEN = ["Arion", "Fleet Fix", "Kreativwerk", "Wohnwerk", "Privat", "Unklar"] as const;
+type FirmaFilter = "alle" | (typeof FIRMEN)[number];
+
 const CATEGORIES = ["Rechnung", "Mahnung", "Behörde", "Steuer", "Versicherung", "Bank", "Vertrag", "Bußgeld", "Werbung", "Sonstiges"];
 
 function senderKey(s: string) {
@@ -141,6 +152,7 @@ async function uploadLetter(original: File, scannedBy: string): Promise<UploadRe
 
 export default function PostPage() {
   const { rows, update, reload, error } = useTable<Letter>("letters");
+  const router = useRouter();
   const [view, setView] = useState<View>("offen");
   const [query, setQuery] = useState("");
   const [uploads, setUploads] = useState<UploadItem[]>([]);
@@ -151,6 +163,8 @@ export default function PostPage() {
   const [editing, setEditing] = useState<number | null>(null);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [pageError, setPageError] = useState("");
+  const [firma, setFirma] = useState<FirmaFilter>("alle");
+  const [abruf, setAbruf] = useState<{ busy: boolean; text: string }>({ busy: false, text: "" });
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -192,6 +206,36 @@ export default function PostPage() {
     await reload();
   };
 
+  /** Drive-Ordner „Letterbox“ sofort abrufen (sonst alle 5 Minuten automatisch). */
+  const abrufen = async () => {
+    setAbruf({ busy: true, text: "" });
+    try {
+      const res = await fetch("/api/letters/letterbox", { method: "POST" });
+      const d = (await res.json().catch(() => ({}))) as { neu?: number; briefe?: number; offen?: number; hinweis?: string; error?: string };
+      const text = d.error || d.hinweis
+        ? (d.error ?? d.hinweis ?? "")
+        : d.neu || d.briefe
+          ? `${d.neu ?? 0} ${d.neu === 1 ? "Scan" : "Scans"} geholt, ${d.briefe ?? 0} ${d.briefe === 1 ? "Brief" : "Briefe"} gelesen${d.offen ? `, ${d.offen} folgen` : ""}.`
+          : "Nichts Neues im Briefkasten.";
+      setAbruf({ busy: false, text });
+    } catch (e) {
+      setAbruf({ busy: false, text: e instanceof Error ? e.message : String(e) });
+    }
+    await reload();
+  };
+
+  /** Brief als Mail-Entwurf mit Scan-Anhang anlegen und im Postfach öffnen. */
+  const forwardLetter = async (id: number) => {
+    setPageError("");
+    const res = await fetch(`/api/letters/${id}/forward`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+    const data = (await res.json().catch(() => ({}))) as { draftId?: number; error?: string };
+    if (!res.ok || !data.draftId) {
+      setPageError(data.error ?? `Weiterleiten fehlgeschlagen (${res.status})`);
+      return;
+    }
+    router.push(`/postfach?ansicht=entwuerfe&entwurf=${data.draftId}`);
+  };
+
   const removeLetter = async (id: number) => {
     if (!confirm("Brief samt Scan löschen?")) return;
     await fetch(`/api/letters/${id}`, { method: "DELETE" });
@@ -201,14 +245,16 @@ export default function PostPage() {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return rows.filter((l) => {
-      if (view === "offen" && l.status === DONE) return false;
+      if (view === "offen" && !isOpen(l)) return false;
+      if (view === "sdworx" && l.status !== SDWORX) return false;
       if (view === "erledigt" && l.status !== DONE) return false;
+      if (firma !== "alle" && (l.firma || "Unklar") !== firma) return false;
       if (!q) return true;
       return [l.subject, l.sender, l.summary, l.action, l.reference, l.category, l.notes].some((f) =>
         f?.toLowerCase().includes(q)
       );
     });
-  }, [rows, view, query]);
+  }, [rows, view, query, firma]);
 
   /** Nach Absender gruppiert; Gruppen mit offener Frist/Aktion zuerst, dann neueste. */
   const groups = useMemo(() => {
@@ -220,7 +266,7 @@ export default function PostPage() {
       map.set(key, g);
     }
     const rank = (g: { letters: Letter[] }) => {
-      const dues = g.letters.filter((l) => l.status !== DONE && l.due_date).map((l) => l.due_date).sort();
+      const dues = g.letters.filter((l) => isOpen(l) && l.due_date).map((l) => l.due_date).sort();
       return dues[0] ?? "9999";
     };
     return [...map.entries()].sort(([, a], [, b]) => {
@@ -230,7 +276,8 @@ export default function PostPage() {
     });
   }, [filtered]);
 
-  const openCount = rows.filter((l) => l.status !== DONE).length;
+  const openCount = rows.filter(isOpen).length;
+  const sdworxCount = rows.filter((l) => l.status === SDWORX).length;
   const doneUploads = uploads.filter((u) => u.state === "fertig" || u.state === "fehler").length;
 
   return (
@@ -317,6 +364,7 @@ export default function PostPage() {
         <Segmented<View>
           options={[
             { value: "offen", label: `Offen (${openCount})` },
+            { value: "sdworx", label: `An SD Worx${sdworxCount ? ` (${sdworxCount})` : ""}` },
             { value: "erledigt", label: "Erledigt" },
             { value: "alle", label: "Alle" },
           ]}
@@ -326,16 +374,44 @@ export default function PostPage() {
         />
         <Input placeholder="Suchen: Absender, Aktenzeichen, Anliegen …" value={query} onChange={(e) => setQuery(e.target.value)} />
       </div>
+      <div className="flex items-center gap-2 mb-4 overflow-x-auto -mx-1 px-1 pb-1">
+        {(["alle", ...FIRMEN] as FirmaFilter[])
+          .filter((f) => f === "alle" || f === firma || rows.some((l) => (l.firma || "Unklar") === f))
+          .map((f) => {
+            const n = rows.filter((l) => isOpen(l) && (f === "alle" || (l.firma || "Unklar") === f)).length;
+            return (
+              <button
+                key={f}
+                onClick={() => setFirma(f)}
+                aria-pressed={firma === f}
+                className={`shrink-0 h-8 px-3.5 rounded-full text-[13px] font-medium transition-colors ${
+                  firma === f ? "bg-accent text-on-accent" : "bg-inset text-ink-2 hover:text-ink"
+                }`}
+              >
+                {f === "alle" ? "Alle Firmen" : f}
+                {n > 0 && <span className="ml-1.5 opacity-70">{n}</span>}
+              </button>
+            );
+          })}
+        <div className="flex-1" />
+        <Button variant="ghost" onClick={abrufen} disabled={abruf.busy} className="shrink-0">
+          <Icon name="markunread_mailbox" size={16} className="mr-1.5 -ml-0.5" />
+          {abruf.busy ? "Ruft ab …" : "Briefkasten abrufen"}
+        </Button>
+      </div>
+      {abruf.text && <p className="text-[12px] text-ink-2 -mt-2 mb-4">{abruf.text}</p>}
 
       <div className="space-y-4">
         {groups.length === 0 && (
           <Card>
-            <EmptyState text={view === "offen" ? "Keine offene Post." : "Keine Briefe in dieser Ansicht."} />
+            <EmptyState
+              text={view === "offen" ? "Keine offene Post." : view === "sdworx" ? "Nichts an SD Worx weitergeleitet." : "Keine Briefe in dieser Ansicht."}
+            />
           </Card>
         )}
 
         {groups.map(([key, g]) => {
-          const open = g.letters.filter((l) => l.status !== DONE).length;
+          const open = g.letters.filter(isOpen).length;
           const isCollapsed = collapsed[key];
           return (
             <Card key={key}>
@@ -374,7 +450,19 @@ export default function PostPage() {
                       letter={l}
                       onToggleDone={() => update(l.id, { status: l.status === DONE ? "gelesen" : DONE })}
                       onStatus={(status) => update(l.id, { status })}
+                      onSdworx={() =>
+                        update(
+                          l.id,
+                          l.status === SDWORX
+                            ? { status: "gelesen" }
+                            : {
+                                status: SDWORX,
+                                notes: [l.notes?.trim(), `An SD Worx weitergeleitet am ${fmtDate(todayIso())}`].filter(Boolean).join("\n"),
+                              }
+                        )
+                      }
                       onEdit={() => setEditing(l.id)}
+                      onForward={() => forwardLetter(l.id)}
                       onReanalyze={() => reanalyze(l.id)}
                       onDelete={() => removeLetter(l.id)}
                     />
@@ -392,18 +480,23 @@ function LetterRow({
   letter: l,
   onToggleDone,
   onStatus,
+  onSdworx,
   onEdit,
+  onForward,
   onReanalyze,
   onDelete,
 }: {
   letter: Letter;
   onToggleDone: () => void;
   onStatus: (s: string) => void;
+  onSdworx: () => void;
   onEdit: () => void;
+  onForward: () => void;
   onReanalyze: () => void;
   onDelete: () => void;
 }) {
   const done = l.status === DONE;
+  const atSdworx = l.status === SDWORX;
   const hasScan = Boolean(l.mime);
   return (
     <div className="flex items-start gap-3 px-5 py-3.5 border-t border-line group">
@@ -431,6 +524,7 @@ function LetterRow({
               <option value="neu">neu</option>
               <option value="gelesen">gelesen</option>
               <option value="aktion">Aktion nötig</option>
+              <option value="sdworx">An SD Worx</option>
             </Select>
           )}
         </div>
@@ -445,8 +539,9 @@ function LetterRow({
         {l.notes && <p className="text-[12px] text-ink-2 mt-1.5 bg-inset rounded-[10px] px-3 py-2 whitespace-pre-wrap">{l.notes}</p>}
 
         <div className="flex flex-wrap items-center gap-1.5 mt-2">
-          {done && <Badge tone={STATUS_TONE[l.status]}>{STATUS_LABEL[l.status]}</Badge>}
+          {(done || atSdworx) && <Badge tone={STATUS_TONE[l.status]}>{STATUS_LABEL[l.status]}</Badge>}
           {l.due_date && !done && <Badge tone={dueTone(l.due_date)}>Frist {fmtDate(l.due_date)}</Badge>}
+          {l.firma && l.firma !== "Unklar" && <Badge tone="accent">{l.firma}</Badge>}
           {l.category && <Badge>{l.category}</Badge>}
           {l.reference && <span className="text-[11px] text-ink-3 break-all">{l.reference}</span>}
           <span className="text-[11px] text-ink-3">
@@ -461,6 +556,21 @@ function LetterRow({
               <Icon name={l.mime === "application/pdf" ? "picture_as_pdf" : "image"} size={15} />
               Scan öffnen
             </a>
+          )}
+          {!done && (
+            <button
+              onClick={onSdworx}
+              className={`flex items-center gap-1 ${atSdworx ? "text-ink-3 hover:text-ink" : "text-accent hover:underline"}`}
+            >
+              <Icon name={atSdworx ? "undo" : "forward_to_inbox"} size={15} />
+              {atSdworx ? "Von SD Worx zurückholen" : "An SD Worx"}
+            </button>
+          )}
+          {hasScan && (
+            <button onClick={onForward} className="text-ink-2 hover:text-ink flex items-center gap-1">
+              <Icon name="forward_to_inbox" size={15} />
+              Als E-Mail weiterleiten
+            </button>
           )}
           <button onClick={onEdit} className="text-ink-2 hover:text-ink flex items-center gap-1">
             <Icon name="edit" size={15} />
@@ -499,6 +609,7 @@ function LetterEditor({
     due_date: letter.due_date,
     reference: letter.reference,
     notes: letter.notes,
+    firma: letter.firma || "Unklar",
   });
   const field = (k: keyof typeof f) => ({
     value: f[k],
@@ -514,7 +625,12 @@ function LetterEditor({
       </div>
       <TextArea placeholder="Anliegen – worum geht es?" rows={2} {...field("summary")} />
       <Input placeholder="Was ist zu tun?" {...field("action")} />
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+        <Select aria-label="Firma" {...field("firma")}>
+          {FIRMEN.map((c) => (
+            <option key={c}>{c}</option>
+          ))}
+        </Select>
         <Select {...field("category")}>
           <option value="">Kategorie …</option>
           {CATEGORIES.map((c) => (

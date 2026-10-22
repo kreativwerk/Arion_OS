@@ -2,6 +2,8 @@
  * ARION – Sprachausgabe (TTS) und Spracherkennung (STT), serverseitiger Teil.
  *
  * Reihenfolge der TTS-Provider:
+ *  (0) ELEVENLABS_API_KEY + ELEVENLABS_VOICE_ID gesetzt → ElevenLabs
+ *      (eleven_multilingual_v2, Deutsch, gestreamt). Optional ELEVENLABS_MODEL.
  *  (a) ARION_TTS_URL gesetzt → OpenAI-kompatibler Endpunkt /v1/audio/speech
  *      (geplant: lokaler VoiceStudio-Server auf dem Mac, per Tunnel erreichbar).
  *      Die App proxyt über POST /api/arion/tts – der Browser sieht weder URL
@@ -28,6 +30,21 @@ export function resolveOpenAiUrl(raw: string | undefined, path: "audio/speech" |
   if (base.endsWith("/" + path)) return base;
   if (/\/v1$/.test(base)) return `${base}/${path}`;
   return `${base}/v1/${path}`;
+}
+
+export function elevenLabsConfigured(): boolean {
+  return Boolean(process.env.ELEVENLABS_API_KEY?.trim() && process.env.ELEVENLABS_VOICE_ID?.trim());
+}
+
+/** Irgendeine Server-Stimme eingerichtet? Sonst liest der Browser selbst vor. */
+export function ttsConfigured(): boolean {
+  return elevenLabsConfigured() || Boolean(ttsUrl());
+}
+
+/** ElevenLabs-Endpunkt (Streaming, MP3). Stimme nur aus [A-Za-z0-9] – kein Pfad-Missbrauch. */
+export function elevenLabsUrl(voiceId: string): string | null {
+  if (!/^[A-Za-z0-9]{8,40}$/.test(voiceId)) return null;
+  return `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream?output_format=mp3_44100_128`;
 }
 
 export function ttsUrl(): string | null {
@@ -60,6 +77,7 @@ export function ttsInput(text: string): string {
  * fällt auf speechSynthesis zurück.
  */
 export async function synthesize(text: string): Promise<Response> {
+  if (elevenLabsConfigured()) return synthesizeElevenLabs(text);
   const url = ttsUrl();
   if (!url) throw new Error("ARION_TTS_URL ist nicht gesetzt");
   const res = await fetch(url, {
@@ -107,4 +125,30 @@ export async function transcribe(file: Blob, filename: string): Promise<string> 
     return String(data.text ?? "").trim();
   }
   return (await res.text()).trim();
+}
+
+/** ElevenLabs: deutsche Butler-Stimme (Stimme per ELEVENLABS_VOICE_ID). */
+async function synthesizeElevenLabs(text: string): Promise<Response> {
+  const url = elevenLabsUrl(process.env.ELEVENLABS_VOICE_ID!.trim());
+  if (!url) throw new Error("ELEVENLABS_VOICE_ID ist ungültig");
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      accept: "audio/mpeg",
+      "xi-api-key": process.env.ELEVENLABS_API_KEY!.trim(),
+    },
+    body: JSON.stringify({
+      text: ttsInput(text),
+      model_id: process.env.ELEVENLABS_MODEL || "eleven_multilingual_v2",
+      voice_settings: { stability: 0.55, similarity_boost: 0.8, style: 0.15, use_speaker_boost: true },
+    }),
+    signal: AbortSignal.timeout(TTS_TIMEOUT_MS),
+    cache: "no-store",
+  });
+  if (!res.ok || !res.body) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`ElevenLabs antwortet mit ${res.status}${detail ? `: ${detail.slice(0, 200)}` : ""}`);
+  }
+  return res;
 }

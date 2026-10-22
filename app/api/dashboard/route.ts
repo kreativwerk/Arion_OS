@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { withApi } from "@/lib/api-error";
 import { getDb, getConfig, todayIso } from "@/lib/db";
 import { dashboardBuchhaltung } from "@/lib/buch-overview";
+import { flotte, fristen, konto, station, wartetAufDich, wohnwerk } from "@/lib/home-data";
+import { normalizeLayout } from "@/lib/home-widgets";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +42,13 @@ export const GET = withApi(async () => {
     slack,
     contractsDue,
     buchhaltung,
+    layoutRow,
+    wartet,
+    fristenListe,
+    kontoDaten,
+    wohnwerkDaten,
+    stationDaten,
+    flotteDaten,
   ] = await Promise.all([
     getConfig(),
     d.all(
@@ -62,6 +71,13 @@ export const GET = withApi(async () => {
     d.all("SELECT * FROM slack_notifications WHERE read = 0 AND important = 1 ORDER BY created_at DESC LIMIT 5"),
     d.all(contractsDueQuery),
     dashboardBuchhaltung(d),
+    d.get<{ value: string }>("SELECT value FROM app_config WHERE key = 'home_layout'"),
+    wartetAufDich(d),
+    fristen(d, today),
+    konto(d, today),
+    wohnwerk(d, today),
+    station(d, today),
+    flotte(d),
   ]);
 
   return NextResponse.json({
@@ -84,5 +100,12 @@ export const GET = withApi(async () => {
     slack,
     contractsDue,
     buchhaltung,
+    layout: normalizeLayout(layoutRow?.value ?? null),
+    wartet,
+    fristen: fristenListe,
+    konto: kontoDaten,
+    wohnwerk: wohnwerkDaten,
+    station: stationDaten,
+    flotte: flotteDaten,
   });
 });

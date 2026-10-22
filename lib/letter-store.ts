@@ -27,8 +27,9 @@ export async function appendLetterChunk(id: number, offset: number, chunk: Buffe
 async function applyAnalysis(id: number, a: LetterAnalysis) {
   const d = await getDb();
   await d.run(
-    "UPDATE letters SET sender = ?, subject = ?, summary = ?, action = ?, category = ?, due_date = ?, reference = ?, extracted = ? WHERE id = ?",
+    "UPDATE letters SET firma = ?, sender = ?, subject = ?, summary = ?, action = ?, category = ?, due_date = ?, reference = ?, extracted = ? WHERE id = ?",
     [
+      a.firma,
       a.sender.slice(0, 200),
       (a.subject || "Brief").slice(0, 200),
       a.summary,

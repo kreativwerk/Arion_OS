@@ -111,3 +111,26 @@ test("Aufgabentitel aus gesprochener Erinnerung", () => {
   assert.equal(taskTitleFromSpeech("Steuerbüro anrufen"), "Steuerbüro anrufen");
   assert.equal(taskTitleFromSpeech("den Vertrag zurückzuschicken"), "Den Vertrag zurückschicken");
 });
+
+test("ElevenLabs: nur saubere Voice-IDs in die URL", async () => {
+  const { elevenLabsUrl } = await import("../lib/arion-tts.ts");
+  assert.equal(
+    elevenLabsUrl("JBFqnCBsd6RMkjVDRZzb"),
+    "https://api.elevenlabs.io/v1/text-to-speech/JBFqnCBsd6RMkjVDRZzb/stream?output_format=mp3_44100_128"
+  );
+  assert.equal(elevenLabsUrl("../../v1/user"), null);
+  assert.equal(elevenLabsUrl(""), null);
+});
+
+test("Weckruf: „Hey ARION“ und Varianten, aber nicht mitten im Satz", async () => {
+  const { isWakePhrase, greetingClip } = await import("../lib/arion-wake.ts");
+  for (const t of ["Hey Arion", "hey arion wie ist der Kontostand", "Arion", "Hallo Orion", "okay Ariane", "Hey ARION!"]) {
+    assert.equal(isWakePhrase(t), true, t);
+  }
+  for (const t of ["Wir fahren nach Orion morgen", "der Termin mit Aaron", "Hey", "Marion"]) {
+    assert.equal(isWakePhrase(t), false, t);
+  }
+  assert.equal(greetingClip(7), "guten-morgen");
+  assert.equal(greetingClip(13), "guten-tag");
+  assert.equal(greetingClip(20), "guten-abend");
+});

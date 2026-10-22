@@ -575,7 +575,7 @@ function buchhaltungStatements(dialect: "sqlite" | "postgres", ID: string, NOW: 
 const BUCH_TABLES = ["buch_eingang", "buch_eingang_blobs", "buch_ablage", "buch_ausgaben", "buch_fristen", "buch_kennzahlen"];
 
 /** Spalten, die die Briefpost nachträglich bekommen hat (Upload + KI-Analyse). */
-const LETTER_COLUMNS = ["category", "action", "due_date", "reference", "notes", "mime", "extracted"];
+const LETTER_COLUMNS = ["category", "action", "due_date", "reference", "notes", "mime", "extracted", "firma", "drive_file_id", "analysis_error"];
 
 async function ensureSchema(d: DB) {
   for (const stmt of schemaStatements(d.dialect)) {
@@ -600,6 +600,7 @@ async function ensureSchema(d: DB) {
     await addColumn("mail_accounts", "display_name", "TEXT DEFAULT ''");
     for (const col of LETTER_COLUMNS) await addColumn("letters", col, "TEXT DEFAULT ''");
     await addColumn("assistant_messages", "conversation_id", "TEXT DEFAULT ''");
+    await addColumn("mail_drafts", "notified_at", "TEXT");
   } else {
     // Postgres kennt IF NOT EXISTS direkt
     for (const [col, def] of [
@@ -617,6 +618,8 @@ async function ensureSchema(d: DB) {
       await d.run(`ALTER TABLE letters ADD COLUMN IF NOT EXISTS ${col} TEXT DEFAULT ''`);
     }
     await d.run("ALTER TABLE assistant_messages ADD COLUMN IF NOT EXISTS conversation_id TEXT DEFAULT ''");
+    // Push „Entwurf wartet“ nur einmal je Entwurf (lib/draft-notify.ts)
+    await d.run("ALTER TABLE mail_drafts ADD COLUMN IF NOT EXISTS notified_at TEXT");
     // Scans sind sensibel: öffentliche Supabase-API sperren (die App selbst
     // verbindet als Tabellen-Owner und ist davon nicht betroffen).
     await d.run("ALTER TABLE letter_blobs ENABLE ROW LEVEL SECURITY");

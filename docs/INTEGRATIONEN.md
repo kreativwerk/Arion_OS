@@ -154,6 +154,45 @@ Aktenzeichen. Der Volltext wird in `letters.extracted` (JSON) gespeichert.
 Die Liste ist nach Absender gruppiert; jeder Brief lässt sich bearbeiten und als erledigt
 markieren (Status `archiv`).
 
+### Briefkasten-Scan (Drucker → Google Drive „Letterbox“ → Post-Modul)
+
+Läuft **ohne Büro-Mac**. Die komplette Tagespost wird geöffnet, als ein Stapel in den
+Einzug gelegt und am Drucker per **Brother Web Connect → Google Drive** in den Ordner
+**„Letterbox“** gescannt (am besten als Shortcut „Briefkasten“ auf dem Display).
+
+```
+Brother MFC-L8390CDW ──Web Connect──▶ Google Drive: Letterbox ◀── pg_cron alle 5 Min
+                                                                    /api/cron/letterbox
+                                       Letterbox/_verarbeitet ◀──── Datei wird verschoben
+                                                                    Claude zerlegt den Stapel,
+                                                                    liest jeden Brief, ordnet
+                                                                    die Firma zu → /post + Push
+```
+
+- **Firma:** Claude ordnet jeden Brief nach dem Empfänger im Anschriftenfeld zu – Arion,
+  Fleet Fix, Kreativwerk, Wohnwerk, Privat oder Unklar (`letters.firma`). Auf `/post`
+  filtert eine Leiste nach Firma; im Bearbeiten-Dialog lässt sie sich korrigieren.
+- **Ordner:** `DRIVE_LETTERBOX_ID` (Env) oder `app_config.letterbox_folder_id`; ohne
+  Angabe sucht Arion OS den Drive-Ordner „Letterbox“ und merkt sich die ID. Arion OS
+  braucht Zugriff darauf (gleiches Google-Konto wie „Mit Google verbinden“ oder Ordner
+  dafür freigegeben).
+- Übernommen werden PDF/JPG/PNG bis 20 MB, frühestens 60 s nach dem Upload. Die Datei
+  wandert danach nach `Letterbox/_verarbeitet` – **gelöscht wird nichts**. Bereits
+  übernommene Dateien erkennt Arion OS an `letters.drive_file_id`.
+- Analyse-Fehler landen in `letters.analysis_error` (kein Endlos-Wiederholen);
+  „Neu analysieren“ auf `/post` versucht es erneut.
+- **Abruf:** pg_cron ruft `/api/cron/letterbox` alle 5 Minuten (CRON_SECRET), sofort
+  über „Briefkasten abrufen“ auf `/post`. Nach der Analyse kommt ein Push
+  „Briefkasten: N neue Briefe · M mit To-do“ mit den Firmen.
+
+```sql
+-- pg_cron (Supabase), Muster wie der Mail-Abruf
+select cron.schedule('arion-letterbox', '*/5 * * * *', $$
+  select net.http_post(url := 'https://arion-os.vercel.app/api/cron/letterbox',
+    headers := jsonb_build_object('Authorization', 'Bearer <CRON_SECRET>'), timeout_milliseconds := 300000)
+$$);
+```
+
 Ausbaustufe:
 
 - Antworten/Formulare automatisch mit Firmendaten ausfüllen – Grundlage ist der

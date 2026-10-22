@@ -57,6 +57,26 @@ test("Anhänge: PDF und weitergeleitete Mail, kein eingebettetes Logo; Base64-Gr
   ]);
 });
 
+test("Eingebettete Vertragsfotos (Handy-Mail) zählen als Anhang, Logos nicht", () => {
+  const handy = {
+    type: "multipart/related",
+    childNodes: [
+      { type: "image/jpeg", part: "1", size: 600000, encoding: "base64", disposition: "inline", parameters: { name: "IMG_0412.jpg" } },
+      { type: "image/jpeg", part: "2", size: 580000, encoding: "base64", disposition: "inline" },
+      { type: "image/png", part: "3", size: 6000, encoding: "base64", disposition: "inline", id: "<sig>" },
+    ],
+  };
+  assert.deepEqual(attachmentList(handy), [
+    { part: "1", filename: "IMG_0412.jpg", mime: "image/jpeg", size: 450000 },
+    { part: "2", filename: "Anhang.jpeg", mime: "image/jpeg", size: 435000 },
+  ]);
+  assert.deepEqual(bodyParts(handy), []);
+  // Mail besteht nur aus einem PDF ohne Dateinamen
+  assert.deepEqual(attachmentList({ type: "application/pdf", size: 200000, encoding: "base64" }), [
+    { part: "1", filename: "Anhang.pdf", mime: "application/pdf", size: 150000 },
+  ]);
+});
+
 test("Einfache Mail ohne multipart", () => {
   assert.deepEqual(bodyParts({ type: "text/plain", size: 10 }), [{ part: "1", kind: "plain", size: 10 }]);
   assert.deepEqual(attachmentList({ type: "text/plain", size: 10 }), []);
@@ -114,4 +134,62 @@ test("Antwort-Betreff nur einmal mit Re:", () => {
   assert.equal(replySubject("Rechnung"), "Re: Rechnung");
   assert.equal(replySubject("AW: Rechnung"), "AW: Rechnung");
   assert.equal(replySubject("re: x"), "re: x");
+});
+
+test("Briefkasten-Push: Anzahl, To-dos, Absender", async () => {
+  const { letterboxPushText } = await import("../lib/letterbox.ts");
+  const p = letterboxPushText([
+    { sender: "Finanzamt Erlangen", action: "Bis 15.11. zahlen" },
+    { sender: "AOK", action: "Keine Aktion nötig" },
+    { sender: "Finanzamt Erlangen", action: "" },
+  ]);
+  assert.equal(p.title, "Briefkasten: 3 neue Briefe · 1 mit To-do");
+  assert.equal(p.body, "Von Finanzamt Erlangen, AOK");
+  assert.equal(p.url, "/post");
+  assert.equal(letterboxPushText([{ sender: null, action: null }]).title, "Briefkasten: 1 neuer Brief");
+});
+
+test("Briefkasten: nur fertige, neue Scans aus Drive übernehmen", async () => {
+  const { pickLetterboxFiles, letterboxMime, letterboxPushText } = await import("../lib/letterbox.ts");
+  const now = Date.parse("2026-10-22T10:00:00Z");
+  const f = (id, name, mimeType, ageS, size = 1000) => ({ id, name, mimeType, size, modifiedTime: new Date(now - ageS * 1000).toISOString() });
+  const files = [
+    f("a", "Scan_001.pdf", "application/pdf", 120),
+    f("b", "Scan_002.pdf", "application/pdf", 10), // Drucker lädt noch
+    f("c", "foto.jpg", "application/octet-stream", 300), // Typ über Endung
+    f("d", "notiz.txt", "text/plain", 300),
+    f("e", "Scan_000.pdf", "application/pdf", 900), // schon übernommen
+    f("g", "riesig.pdf", "application/pdf", 900, 30 * 1024 * 1024),
+  ];
+  assert.deepEqual(pickLetterboxFiles(files, new Set(["e"]), now).map((x) => x.id), ["a", "c"]);
+  assert.equal(letterboxMime({ name: "foto.jpg", mimeType: "application/octet-stream" }), "image/jpeg");
+  const p = letterboxPushText([
+    { sender: "Finanzamt", action: "Zahlen", firma: "Arion" },
+    { sender: "Stadtwerke", action: "", firma: "Wohnwerk" },
+    { sender: "X", action: "", firma: "Unklar" },
+  ]);
+  assert.equal(p.title, "Briefkasten: 3 neue Briefe · 1 mit To-do");
+  assert.equal(p.body, "Arion · Wohnwerk – Von Finanzamt, Stadtwerke, X");
+});
+
+test("Brief weiterleiten: Absender nach Firma, Betreff, Anhangname", async () => {
+  const { letterForwardDraft, pickForwardAccount } = await import("../lib/letter-forward.ts");
+  const acc = [
+    { id: 4, label: "Info", address: "info@arion-logistics.de", username: "info@arion-logistics.de" },
+    { id: 9, label: "WOHNWERK", address: "info@wohnwerkbau.de", username: "info@wohnwerkbau.de" },
+    { id: 10, label: "FLEET FIX GmbH", address: "info@fleet-fix.app", username: "info@fleet-fix.app" },
+  ];
+  assert.equal(pickForwardAccount("Wohnwerk", acc), 9);
+  assert.equal(pickForwardAccount("Fleet Fix", acc), 10);
+  assert.equal(pickForwardAccount("Unklar", acc), 4);
+  assert.equal(pickForwardAccount("Kreativwerk", acc), 4); // Kreativwerk-Postfach fehlt → Arion
+  const d = letterForwardDraft(
+    { subject: "Erinnerung Entgeltbescheinigung", sender: "BARMER", summary: "Krankengeld fehlt.", action: "", reference: "Y199504797", received_date: "2026-10-22", firma: "Arion", file_ref: "x.pdf", mime: "application/pdf" },
+    acc
+  );
+  assert.equal(d.accountId, 4);
+  assert.equal(d.subject, "Weiterleitung: Erinnerung Entgeltbescheinigung");
+  assert.equal(d.filename, "BARMER – Erinnerung Entgeltbescheinigung.pdf");
+  assert.match(d.body, /eingegangen am 22\.10\.2026/);
+  assert.match(d.body, /Zeichen: Y199504797/);
 });

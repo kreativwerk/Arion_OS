@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Badge, Button, Card, EmptyState, ErrorNote, Icon, Input, PageHeader, Segmented, Select, TextArea } from "@/components/ui";
 
 /**
@@ -90,6 +90,11 @@ function safeSrcDoc(html: string): string {
 
 export default function PostfachPage() {
   const [view, setView] = useState<View>("inbox");
+  // Direktlink von der Startseite: /postfach?ansicht=entwuerfe
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- einmalig aus der URL, erst nach dem Hydrieren verfügbar
+    if (new URLSearchParams(window.location.search).get("ansicht") === "entwuerfe") setView("drafts");
+  }, []);
   const [q, setQ] = useState("");
   const [qDebounced, setQDebounced] = useState("");
   const [account, setAccount] = useState("");
@@ -106,6 +111,18 @@ export default function PostfachPage() {
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [editing, setEditing] = useState<Draft | null>(null);
+  // Direktlink /postfach?ansicht=entwuerfe&entwurf=ID (z. B. „Als E-Mail weiterleiten“ aus der Briefpost) öffnet den Entwurf
+  const openedFromUrl = useRef(false);
+  useEffect(() => {
+    if (openedFromUrl.current || drafts.length === 0) return;
+    const id = Number(new URLSearchParams(window.location.search).get("entwurf"));
+    const hit = id ? drafts.find((d) => Number(d.id) === id) : undefined;
+    if (hit) {
+      openedFromUrl.current = true;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- einmalig aus der URL, sobald die Entwürfe geladen sind
+      setEditing(hit);
+    }
+  }, [drafts]);
 
   useEffect(() => {
     const t = setTimeout(() => setQDebounced(q), 350);
