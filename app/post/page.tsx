@@ -35,15 +35,20 @@ type Letter = {
 };
 
 type UploadItem = { name: string; state: "wartet" | "lädt" | "fertig" | "fehler"; message?: string; count?: number };
-type View = "offen" | "erledigt" | "alle";
+type View = "offen" | "sdworx" | "erledigt" | "alle";
 
 /** "archiv" ist der Erledigt-Status (bestehende Daten + Dashboard zählen so). */
 const DONE = "archiv";
-const STATUS_LABEL: Record<string, string> = { neu: "neu", gelesen: "gelesen", aktion: "Aktion nötig", archiv: "erledigt" };
+/** An SD Worx (Lohnbuchhaltung) weitergeleitet – liegt dort zur Bearbeitung, nicht mehr bei uns offen. */
+const SDWORX = "sdworx";
+const STATUS_LABEL: Record<string, string> = { neu: "neu", gelesen: "gelesen", aktion: "Aktion nötig", sdworx: "An SD Worx", archiv: "erledigt" };
+/** Offen = weder erledigt noch an SD Worx abgegeben. */
+const isOpen = (l: { status: string }) => l.status !== DONE && l.status !== SDWORX;
 const STATUS_TONE: Record<string, "accent" | "neutral" | "warn" | "good"> = {
   neu: "accent",
   gelesen: "neutral",
   aktion: "warn",
+  sdworx: "accent",
   archiv: "good",
 };
 /** Firmen (Empfänger laut Anschrift) – siehe LETTER_FIRMEN in lib/letter-analyze.ts */
@@ -226,7 +231,8 @@ export default function PostPage() {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return rows.filter((l) => {
-      if (view === "offen" && l.status === DONE) return false;
+      if (view === "offen" && !isOpen(l)) return false;
+      if (view === "sdworx" && l.status !== SDWORX) return false;
       if (view === "erledigt" && l.status !== DONE) return false;
       if (firma !== "alle" && (l.firma || "Unklar") !== firma) return false;
       if (!q) return true;
@@ -246,7 +252,7 @@ export default function PostPage() {
       map.set(key, g);
     }
     const rank = (g: { letters: Letter[] }) => {
-      const dues = g.letters.filter((l) => l.status !== DONE && l.due_date).map((l) => l.due_date).sort();
+      const dues = g.letters.filter((l) => isOpen(l) && l.due_date).map((l) => l.due_date).sort();
       return dues[0] ?? "9999";
     };
     return [...map.entries()].sort(([, a], [, b]) => {
@@ -256,7 +262,8 @@ export default function PostPage() {
     });
   }, [filtered]);
 
-  const openCount = rows.filter((l) => l.status !== DONE).length;
+  const openCount = rows.filter(isOpen).length;
+  const sdworxCount = rows.filter((l) => l.status === SDWORX).length;
   const doneUploads = uploads.filter((u) => u.state === "fertig" || u.state === "fehler").length;
 
   return (
@@ -343,6 +350,7 @@ export default function PostPage() {
         <Segmented<View>
           options={[
             { value: "offen", label: `Offen (${openCount})` },
+            { value: "sdworx", label: `An SD Worx${sdworxCount ? ` (${sdworxCount})` : ""}` },
             { value: "erledigt", label: "Erledigt" },
             { value: "alle", label: "Alle" },
           ]}
@@ -356,7 +364,7 @@ export default function PostPage() {
         {(["alle", ...FIRMEN] as FirmaFilter[])
           .filter((f) => f === "alle" || f === firma || rows.some((l) => (l.firma || "Unklar") === f))
           .map((f) => {
-            const n = rows.filter((l) => l.status !== DONE && (f === "alle" || (l.firma || "Unklar") === f)).length;
+            const n = rows.filter((l) => isOpen(l) && (f === "alle" || (l.firma || "Unklar") === f)).length;
             return (
               <button
                 key={f}
@@ -382,12 +390,14 @@ export default function PostPage() {
       <div className="space-y-4">
         {groups.length === 0 && (
           <Card>
-            <EmptyState text={view === "offen" ? "Keine offene Post." : "Keine Briefe in dieser Ansicht."} />
+            <EmptyState
+              text={view === "offen" ? "Keine offene Post." : view === "sdworx" ? "Nichts an SD Worx weitergeleitet." : "Keine Briefe in dieser Ansicht."}
+            />
           </Card>
         )}
 
         {groups.map(([key, g]) => {
-          const open = g.letters.filter((l) => l.status !== DONE).length;
+          const open = g.letters.filter(isOpen).length;
           const isCollapsed = collapsed[key];
           return (
             <Card key={key}>
@@ -426,6 +436,17 @@ export default function PostPage() {
                       letter={l}
                       onToggleDone={() => update(l.id, { status: l.status === DONE ? "gelesen" : DONE })}
                       onStatus={(status) => update(l.id, { status })}
+                      onSdworx={() =>
+                        update(
+                          l.id,
+                          l.status === SDWORX
+                            ? { status: "gelesen" }
+                            : {
+                                status: SDWORX,
+                                notes: [l.notes?.trim(), `An SD Worx weitergeleitet am ${fmtDate(todayIso())}`].filter(Boolean).join("\n"),
+                              }
+                        )
+                      }
                       onEdit={() => setEditing(l.id)}
                       onReanalyze={() => reanalyze(l.id)}
                       onDelete={() => removeLetter(l.id)}
@@ -444,6 +465,7 @@ function LetterRow({
   letter: l,
   onToggleDone,
   onStatus,
+  onSdworx,
   onEdit,
   onReanalyze,
   onDelete,
@@ -451,11 +473,13 @@ function LetterRow({
   letter: Letter;
   onToggleDone: () => void;
   onStatus: (s: string) => void;
+  onSdworx: () => void;
   onEdit: () => void;
   onReanalyze: () => void;
   onDelete: () => void;
 }) {
   const done = l.status === DONE;
+  const atSdworx = l.status === SDWORX;
   const hasScan = Boolean(l.mime);
   return (
     <div className="flex items-start gap-3 px-5 py-3.5 border-t border-line group">
@@ -483,6 +507,7 @@ function LetterRow({
               <option value="neu">neu</option>
               <option value="gelesen">gelesen</option>
               <option value="aktion">Aktion nötig</option>
+              <option value="sdworx">An SD Worx</option>
             </Select>
           )}
         </div>
@@ -497,7 +522,7 @@ function LetterRow({
         {l.notes && <p className="text-[12px] text-ink-2 mt-1.5 bg-inset rounded-[10px] px-3 py-2 whitespace-pre-wrap">{l.notes}</p>}
 
         <div className="flex flex-wrap items-center gap-1.5 mt-2">
-          {done && <Badge tone={STATUS_TONE[l.status]}>{STATUS_LABEL[l.status]}</Badge>}
+          {(done || atSdworx) && <Badge tone={STATUS_TONE[l.status]}>{STATUS_LABEL[l.status]}</Badge>}
           {l.due_date && !done && <Badge tone={dueTone(l.due_date)}>Frist {fmtDate(l.due_date)}</Badge>}
           {l.firma && l.firma !== "Unklar" && <Badge tone="accent">{l.firma}</Badge>}
           {l.category && <Badge>{l.category}</Badge>}
@@ -514,6 +539,15 @@ function LetterRow({
               <Icon name={l.mime === "application/pdf" ? "picture_as_pdf" : "image"} size={15} />
               Scan öffnen
             </a>
+          )}
+          {!done && (
+            <button
+              onClick={onSdworx}
+              className={`flex items-center gap-1 ${atSdworx ? "text-ink-3 hover:text-ink" : "text-accent hover:underline"}`}
+            >
+              <Icon name={atSdworx ? "undo" : "forward_to_inbox"} size={15} />
+              {atSdworx ? "Von SD Worx zurückholen" : "An SD Worx"}
+            </button>
           )}
           <button onClick={onEdit} className="text-ink-2 hover:text-ink flex items-center gap-1">
             <Icon name="edit" size={15} />
