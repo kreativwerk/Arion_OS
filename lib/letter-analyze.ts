@@ -27,7 +27,11 @@ export const LETTER_CATEGORIES = [
   "Sonstiges",
 ] as const;
 
+/** Für welche Firma der Brief ist – entscheidet der Empfänger im Anschriftenfeld. */
+export const LETTER_FIRMEN = ["Arion", "Fleet Fix", "Kreativwerk", "Wohnwerk", "Privat", "Unklar"] as const;
+
 export type LetterAnalysis = {
+  firma: string;
   sender: string;
   subject: string;
   summary: string;
@@ -44,8 +48,15 @@ const DEFAULT_MODEL = "claude-opus-5-5";
 const SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["sender", "subject", "summary", "action", "category", "due_date", "reference", "letter_date", "text"],
+  required: ["firma", "sender", "subject", "summary", "action", "category", "due_date", "reference", "letter_date", "text"],
   properties: {
+    firma: {
+      type: "string",
+      enum: [...LETTER_FIRMEN],
+      description:
+        "Empfänger laut Anschriftenfeld: Arion = Arion Logistics GmbH; Fleet Fix = Fleet Fix GmbH (Kfz-Werkstatt, gleiche Adresse wie Arion – nach Firmenname unterscheiden); " +
+        "Kreativwerk = Kreativwerk / KW Agentur (Webdesign); Wohnwerk = Wohnwerk Immobilien eGbR; Privat = Albert Dobra persönlich ohne Firma; Unklar, wenn nicht erkennbar",
+    },
     sender: { type: "string", description: "Absender (Firma/Behörde, ggf. Person) – kurz, ohne Adresse" },
     subject: { type: "string", description: "Betreff, max. 80 Zeichen" },
     summary: { type: "string", description: "Anliegen in 1–2 Sätzen: Was will der Absender?" },
@@ -164,5 +175,6 @@ export async function analyzeLetter(data: Buffer, mime: LetterMime): Promise<Let
     ...parsed,
     due_date: ISO_DATE.test(parsed.due_date) ? parsed.due_date : "",
     letter_date: ISO_DATE.test(parsed.letter_date) ? parsed.letter_date : "",
+    firma: (LETTER_FIRMEN as readonly string[]).includes(parsed.firma) ? parsed.firma : "Unklar",
   };
 }

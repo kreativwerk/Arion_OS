@@ -555,7 +555,7 @@ function buchhaltungStatements(dialect: "sqlite" | "postgres", ID: string, NOW: 
 const BUCH_TABLES = ["buch_eingang", "buch_eingang_blobs", "buch_ablage", "buch_ausgaben", "buch_fristen", "buch_kennzahlen"];
 
 /** Spalten, die die Briefpost nachträglich bekommen hat (Upload + KI-Analyse). */
-const LETTER_COLUMNS = ["category", "action", "due_date", "reference", "notes", "mime", "extracted"];
+const LETTER_COLUMNS = ["category", "action", "due_date", "reference", "notes", "mime", "extracted", "firma", "drive_file_id", "analysis_error"];
 
 async function ensureSchema(d: DB) {
   for (const stmt of schemaStatements(d.dialect)) {

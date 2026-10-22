@@ -135,3 +135,39 @@ test("Antwort-Betreff nur einmal mit Re:", () => {
   assert.equal(replySubject("AW: Rechnung"), "AW: Rechnung");
   assert.equal(replySubject("re: x"), "re: x");
 });
+
+test("Briefkasten-Push: Anzahl, To-dos, Absender", async () => {
+  const { letterboxPushText } = await import("../lib/letterbox.ts");
+  const p = letterboxPushText([
+    { sender: "Finanzamt Erlangen", action: "Bis 15.11. zahlen" },
+    { sender: "AOK", action: "Keine Aktion nötig" },
+    { sender: "Finanzamt Erlangen", action: "" },
+  ]);
+  assert.equal(p.title, "Briefkasten: 3 neue Briefe · 1 mit To-do");
+  assert.equal(p.body, "Von Finanzamt Erlangen, AOK");
+  assert.equal(p.url, "/post");
+  assert.equal(letterboxPushText([{ sender: null, action: null }]).title, "Briefkasten: 1 neuer Brief");
+});
+
+test("Briefkasten: nur fertige, neue Scans aus Drive übernehmen", async () => {
+  const { pickLetterboxFiles, letterboxMime, letterboxPushText } = await import("../lib/letterbox.ts");
+  const now = Date.parse("2026-10-22T10:00:00Z");
+  const f = (id, name, mimeType, ageS, size = 1000) => ({ id, name, mimeType, size, modifiedTime: new Date(now - ageS * 1000).toISOString() });
+  const files = [
+    f("a", "Scan_001.pdf", "application/pdf", 120),
+    f("b", "Scan_002.pdf", "application/pdf", 10), // Drucker lädt noch
+    f("c", "foto.jpg", "application/octet-stream", 300), // Typ über Endung
+    f("d", "notiz.txt", "text/plain", 300),
+    f("e", "Scan_000.pdf", "application/pdf", 900), // schon übernommen
+    f("g", "riesig.pdf", "application/pdf", 900, 30 * 1024 * 1024),
+  ];
+  assert.deepEqual(pickLetterboxFiles(files, new Set(["e"]), now).map((x) => x.id), ["a", "c"]);
+  assert.equal(letterboxMime({ name: "foto.jpg", mimeType: "application/octet-stream" }), "image/jpeg");
+  const p = letterboxPushText([
+    { sender: "Finanzamt", action: "Zahlen", firma: "Arion" },
+    { sender: "Stadtwerke", action: "", firma: "Wohnwerk" },
+    { sender: "X", action: "", firma: "Unklar" },
+  ]);
+  assert.equal(p.title, "Briefkasten: 3 neue Briefe · 1 mit To-do");
+  assert.equal(p.body, "Arion · Wohnwerk – Von Finanzamt, Stadtwerke, X");
+});
