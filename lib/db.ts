@@ -370,6 +370,26 @@ function schemaStatements(dialect: "sqlite" | "postgres"): string[] {
     )`,
     ...buchhaltungStatements(dialect, ID, NOW, WS),
     ...postfachStatements(dialect, ID, NOW, WS),
+    ...codriverStatements(),
+  ];
+}
+
+/**
+ * Codriver-Spiegel (siehe docs/CODRIVER.md, Abschnitt Sync): Arion-Daten aus
+ * Codriver (Fahrer, Fahrzeuge, Scorecards, Abwesenheiten, Vorfälle …) als
+ * redigierte JSON-Kopie – Quelle bleibt Codriver, Arion OS liest nur.
+ */
+function codriverStatements(): string[] {
+  return [
+    `CREATE TABLE IF NOT EXISTS codriver_docs (
+      collection TEXT NOT NULL,
+      doc_id TEXT NOT NULL,
+      data TEXT NOT NULL DEFAULT '{}',
+      update_time TEXT DEFAULT '',
+      synced_at TEXT DEFAULT '',
+      removed_at TEXT DEFAULT NULL,
+      PRIMARY KEY (collection, doc_id)
+    )`,
   ];
 }
 
@@ -606,6 +626,7 @@ async function ensureSchema(d: DB) {
     // Belege + Bankdaten ebenso (Liste ist fest im Code, keine Eingabe)
     for (const t of BUCH_TABLES) await d.run(`ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`);
     for (const t of POSTFACH_TABLES) await d.run(`ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`);
+    await d.run("ALTER TABLE codriver_docs ENABLE ROW LEVEL SECURITY");
   }
 
   await d.run(
