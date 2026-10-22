@@ -154,33 +154,44 @@ Aktenzeichen. Der Volltext wird in `letters.extracted` (JSON) gespeichert.
 Die Liste ist nach Absender gruppiert; jeder Brief lässt sich bearbeiten und als erledigt
 markieren (Status `archiv`).
 
-### Briefkasten-Scan (Scanner → Ordner „Letterbox“ → Post-Modul)
+### Briefkasten-Scan (Drucker → Google Drive „Letterbox“ → Post-Modul)
 
-Die komplette Tagespost wird geöffnet, als ein Stapel in den Einzug gelegt und mit dem
-Scan-Profil **„Briefkasten“** gescannt. Der Scanner legt die PDF in
-`\\192.168.2.154\Scans\Letterbox` (Büro-Mac). Dort läuft ein Hintergrunddienst
-(`scripts/letterbox`), der jede fertige PDF zu Arion OS hochlädt:
+Läuft **ohne Büro-Mac**. Die komplette Tagespost wird geöffnet, als ein Stapel in den
+Einzug gelegt und am Drucker per **Brother Web Connect → Google Drive** in den Ordner
+**„Letterbox“** gescannt (am besten als Shortcut „Briefkasten“ auf dem Display).
 
 ```
-Brother MFC-L8390CDW ──SMB──▶ Mac: Scans/Letterbox ──launchd──▶ POST /api/external/letters
- Profil „Briefkasten“          arion-letterbox.sh               (API-Token, 3-MB-Stücke)
-                               → Letterbox/_hochgeladen          → Claude zerlegt den Stapel
-                                                                 → Post-Modul (/post) + Push
+Brother MFC-L8390CDW ──Web Connect──▶ Google Drive: Letterbox ◀── pg_cron alle 5 Min
+                                                                    /api/cron/letterbox
+                                       Letterbox/_verarbeitet ◀──── Datei wird verschoben
+                                                                    Claude zerlegt den Stapel,
+                                                                    liest jeden Brief, ordnet
+                                                                    die Firma zu → /post + Push
 ```
 
-- **Einrichtung Mac:** `bash scripts/letterbox/install.sh "/Pfad/zu/Scans"` legt `Letterbox`
-  und `Letterbox/_hochgeladen` an, kopiert das Skript nach `~/.arion/` und startet den
-  Dienst `de.arion.letterbox` (reagiert sofort auf neue Dateien, zusätzlich jede Minute).
-- **Token:** In Arion OS unter Einstellungen → API-Tokens einen Token „Briefkasten“
-  anlegen und in `~/.arion/letterbox-token` speichern.
-- Hochgeladen wird erst, wenn die Datei 30 s unverändert ist (Scanner fertig).
-  Erfolgreich → `_hochgeladen/JJJJ-MM-TT_HHMM_Name.pdf`. Fehler → Datei bleibt liegen,
-  nächster Versuch beim nächsten Lauf. Es wird **nichts gelöscht**.
-- Log: `~/Library/Logs/arion-letterbox.log`
-- Die Briefe tragen „gescannt von Briefkasten“. Nach der Analyse kommt ein Push
-  „Briefkasten: N neue Briefe · M mit To-do“, Tippen öffnet `/post`.
-- Endpunkte: `POST /api/external/letters` (erstes Stück: `file`, `name`, `type`, `size`,
-  `final`, optional `scanned_by`), `PUT /api/external/letters/:id` (`file`, `offset`, `final`).
+- **Firma:** Claude ordnet jeden Brief nach dem Empfänger im Anschriftenfeld zu – Arion,
+  Fleet Fix, Kreativwerk, Wohnwerk, Privat oder Unklar (`letters.firma`). Auf `/post`
+  filtert eine Leiste nach Firma; im Bearbeiten-Dialog lässt sie sich korrigieren.
+- **Ordner:** `DRIVE_LETTERBOX_ID` (Env) oder `app_config.letterbox_folder_id`; ohne
+  Angabe sucht Arion OS den Drive-Ordner „Letterbox“ und merkt sich die ID. Arion OS
+  braucht Zugriff darauf (gleiches Google-Konto wie „Mit Google verbinden“ oder Ordner
+  dafür freigegeben).
+- Übernommen werden PDF/JPG/PNG bis 20 MB, frühestens 60 s nach dem Upload. Die Datei
+  wandert danach nach `Letterbox/_verarbeitet` – **gelöscht wird nichts**. Bereits
+  übernommene Dateien erkennt Arion OS an `letters.drive_file_id`.
+- Analyse-Fehler landen in `letters.analysis_error` (kein Endlos-Wiederholen);
+  „Neu analysieren“ auf `/post` versucht es erneut.
+- **Abruf:** pg_cron ruft `/api/cron/letterbox` alle 5 Minuten (CRON_SECRET), sofort
+  über „Briefkasten abrufen“ auf `/post`. Nach der Analyse kommt ein Push
+  „Briefkasten: N neue Briefe · M mit To-do“ mit den Firmen.
+
+```sql
+-- pg_cron (Supabase), Muster wie der Mail-Abruf
+select cron.schedule('arion-letterbox', '*/5 * * * *', $$
+  select net.http_post(url := 'https://arion-os.vercel.app/api/cron/letterbox',
+    headers := jsonb_build_object('Authorization', 'Bearer <CRON_SECRET>'), timeout_milliseconds := 300000)
+$$);
+```
 
 Ausbaustufe:
 

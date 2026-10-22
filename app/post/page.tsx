@@ -31,6 +31,7 @@ type Letter = {
   reference: string;
   notes: string;
   mime: string;
+  firma: string;
 };
 
 type UploadItem = { name: string; state: "wartet" | "lädt" | "fertig" | "fehler"; message?: string; count?: number };
@@ -45,6 +46,10 @@ const STATUS_TONE: Record<string, "accent" | "neutral" | "warn" | "good"> = {
   aktion: "warn",
   archiv: "good",
 };
+/** Firmen (Empfänger laut Anschrift) – siehe LETTER_FIRMEN in lib/letter-analyze.ts */
+const FIRMEN = ["Arion", "Fleet Fix", "Kreativwerk", "Wohnwerk", "Privat", "Unklar"] as const;
+type FirmaFilter = "alle" | (typeof FIRMEN)[number];
+
 const CATEGORIES = ["Rechnung", "Mahnung", "Behörde", "Steuer", "Versicherung", "Bank", "Vertrag", "Bußgeld", "Werbung", "Sonstiges"];
 
 function senderKey(s: string) {
@@ -151,6 +156,8 @@ export default function PostPage() {
   const [editing, setEditing] = useState<number | null>(null);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [pageError, setPageError] = useState("");
+  const [firma, setFirma] = useState<FirmaFilter>("alle");
+  const [abruf, setAbruf] = useState<{ busy: boolean; text: string }>({ busy: false, text: "" });
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -192,6 +199,24 @@ export default function PostPage() {
     await reload();
   };
 
+  /** Drive-Ordner „Letterbox“ sofort abrufen (sonst alle 5 Minuten automatisch). */
+  const abrufen = async () => {
+    setAbruf({ busy: true, text: "" });
+    try {
+      const res = await fetch("/api/letters/letterbox", { method: "POST" });
+      const d = (await res.json().catch(() => ({}))) as { neu?: number; briefe?: number; offen?: number; hinweis?: string; error?: string };
+      const text = d.error || d.hinweis
+        ? (d.error ?? d.hinweis ?? "")
+        : d.neu || d.briefe
+          ? `${d.neu ?? 0} ${d.neu === 1 ? "Scan" : "Scans"} geholt, ${d.briefe ?? 0} ${d.briefe === 1 ? "Brief" : "Briefe"} gelesen${d.offen ? `, ${d.offen} folgen` : ""}.`
+          : "Nichts Neues im Briefkasten.";
+      setAbruf({ busy: false, text });
+    } catch (e) {
+      setAbruf({ busy: false, text: e instanceof Error ? e.message : String(e) });
+    }
+    await reload();
+  };
+
   const removeLetter = async (id: number) => {
     if (!confirm("Brief samt Scan löschen?")) return;
     await fetch(`/api/letters/${id}`, { method: "DELETE" });
@@ -203,12 +228,13 @@ export default function PostPage() {
     return rows.filter((l) => {
       if (view === "offen" && l.status === DONE) return false;
       if (view === "erledigt" && l.status !== DONE) return false;
+      if (firma !== "alle" && (l.firma || "Unklar") !== firma) return false;
       if (!q) return true;
       return [l.subject, l.sender, l.summary, l.action, l.reference, l.category, l.notes].some((f) =>
         f?.toLowerCase().includes(q)
       );
     });
-  }, [rows, view, query]);
+  }, [rows, view, query, firma]);
 
   /** Nach Absender gruppiert; Gruppen mit offener Frist/Aktion zuerst, dann neueste. */
   const groups = useMemo(() => {
@@ -326,6 +352,32 @@ export default function PostPage() {
         />
         <Input placeholder="Suchen: Absender, Aktenzeichen, Anliegen …" value={query} onChange={(e) => setQuery(e.target.value)} />
       </div>
+      <div className="flex items-center gap-2 mb-4 overflow-x-auto -mx-1 px-1 pb-1">
+        {(["alle", ...FIRMEN] as FirmaFilter[])
+          .filter((f) => f === "alle" || f === firma || rows.some((l) => (l.firma || "Unklar") === f))
+          .map((f) => {
+            const n = rows.filter((l) => l.status !== DONE && (f === "alle" || (l.firma || "Unklar") === f)).length;
+            return (
+              <button
+                key={f}
+                onClick={() => setFirma(f)}
+                aria-pressed={firma === f}
+                className={`shrink-0 h-8 px-3.5 rounded-full text-[13px] font-medium transition-colors ${
+                  firma === f ? "bg-accent text-on-accent" : "bg-inset text-ink-2 hover:text-ink"
+                }`}
+              >
+                {f === "alle" ? "Alle Firmen" : f}
+                {n > 0 && <span className="ml-1.5 opacity-70">{n}</span>}
+              </button>
+            );
+          })}
+        <div className="flex-1" />
+        <Button variant="ghost" onClick={abrufen} disabled={abruf.busy} className="shrink-0">
+          <Icon name="markunread_mailbox" size={16} className="mr-1.5 -ml-0.5" />
+          {abruf.busy ? "Ruft ab …" : "Briefkasten abrufen"}
+        </Button>
+      </div>
+      {abruf.text && <p className="text-[12px] text-ink-2 -mt-2 mb-4">{abruf.text}</p>}
 
       <div className="space-y-4">
         {groups.length === 0 && (
@@ -447,6 +499,7 @@ function LetterRow({
         <div className="flex flex-wrap items-center gap-1.5 mt-2">
           {done && <Badge tone={STATUS_TONE[l.status]}>{STATUS_LABEL[l.status]}</Badge>}
           {l.due_date && !done && <Badge tone={dueTone(l.due_date)}>Frist {fmtDate(l.due_date)}</Badge>}
+          {l.firma && l.firma !== "Unklar" && <Badge tone="accent">{l.firma}</Badge>}
           {l.category && <Badge>{l.category}</Badge>}
           {l.reference && <span className="text-[11px] text-ink-3 break-all">{l.reference}</span>}
           <span className="text-[11px] text-ink-3">
@@ -499,6 +552,7 @@ function LetterEditor({
     due_date: letter.due_date,
     reference: letter.reference,
     notes: letter.notes,
+    firma: letter.firma || "Unklar",
   });
   const field = (k: keyof typeof f) => ({
     value: f[k],
@@ -514,7 +568,12 @@ function LetterEditor({
       </div>
       <TextArea placeholder="Anliegen – worum geht es?" rows={2} {...field("summary")} />
       <Input placeholder="Was ist zu tun?" {...field("action")} />
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+        <Select aria-label="Firma" {...field("firma")}>
+          {FIRMEN.map((c) => (
+            <option key={c}>{c}</option>
+          ))}
+        </Select>
         <Select {...field("category")}>
           <option value="">Kategorie …</option>
           {CATEGORIES.map((c) => (

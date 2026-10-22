@@ -299,3 +299,70 @@ export async function uploadFile(
     url: file.webViewLink ?? `https://drive.google.com/file/d/${file.id}/view`,
   };
 }
+
+/* ── Briefkasten-Ordner (lib/letterbox.ts) ─────────────────────────────── */
+
+export type DriveInboxFile = { id: string; name: string; mimeType: string; modifiedTime: string; size: number };
+
+/** Ordner per Name finden (irgendwo im Drive, nicht im Papierkorb). */
+export async function findFolderByName(name: string, opts: DriveOpts = {}): Promise<string | null> {
+  const params = new URLSearchParams({
+    q: `mimeType = '${FOLDER_MIME}' and name = '${q(name)}' and trashed = false`,
+    fields: "files(id, name)",
+    pageSize: "10",
+    corpora: "allDrives",
+  });
+  const { data } = await driveFetch<{ files: DriveFile[] }>(`${DRIVE}/files?${params}&${ALL_DRIVES}`, {}, opts);
+  return data.files?.find((f) => f.name === name)?.id ?? null;
+}
+
+/** Unterordner anlegen, falls er fehlt (z.B. „_verarbeitet“). */
+export async function ensureChildFolder(parentId: string, name: string, opts: DriveOpts = {}): Promise<string> {
+  const found = await listChildren(parentId, `mimeType = '${FOLDER_MIME}' and name = '${q(name)}'`, opts);
+  const hit = found.find((f) => f.name === name);
+  if (hit) return hit.id;
+  const { data } = await driveFetch<DriveFile>(`${DRIVE}/files?${ALL_DRIVES}&fields=id,name`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name, mimeType: FOLDER_MIME, parents: [parentId] }),
+  }, opts);
+  return data.id;
+}
+
+/** Dateien (keine Ordner) direkt in einem Ordner, mit Typ, Größe und Änderungszeit. */
+export async function listInboxFiles(folderId: string, opts: DriveOpts = {}): Promise<DriveInboxFile[]> {
+  const params = new URLSearchParams({
+    q: `'${q(folderId)}' in parents and trashed = false and mimeType != '${FOLDER_MIME}'`,
+    fields: "files(id, name, mimeType, modifiedTime, size)",
+    pageSize: "100",
+    orderBy: "modifiedTime",
+    corpora: "allDrives",
+  });
+  const { data } = await driveFetch<{ files: (Omit<DriveInboxFile, "size"> & { size?: string })[] }>(
+    `${DRIVE}/files?${params}&${ALL_DRIVES}`,
+    {},
+    opts
+  );
+  return (data.files ?? []).map((f) => ({ ...f, size: Number(f.size ?? 0) }));
+}
+
+/** Datei-Inhalt laden. */
+export async function downloadFile(id: string, opts: DriveOpts = {}): Promise<Buffer> {
+  const token = await getAccessToken(opts);
+  const res = await netFetch(`${DRIVE}/files/${encodeURIComponent(id)}?alt=media&supportsAllDrives=true`, {
+    headers: { authorization: `Bearer ${token}` },
+    signal: timeout(90_000, opts.deadline),
+  });
+  if (!res.ok) throw new Error(`Google Drive ${res.status}: Download fehlgeschlagen`);
+  return Buffer.from(await res.arrayBuffer());
+}
+
+/** Datei in einen anderen Ordner verschieben (nichts wird gelöscht). */
+export async function moveFile(id: string, fromParent: string, toParent: string, opts: DriveOpts = {}): Promise<void> {
+  const params = new URLSearchParams({ addParents: toParent, removeParents: fromParent, fields: "id" });
+  await driveFetch(`${DRIVE}/files/${encodeURIComponent(id)}?${params}&supportsAllDrives=true`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: "{}",
+  }, opts);
+}
