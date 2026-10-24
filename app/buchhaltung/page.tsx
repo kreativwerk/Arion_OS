@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Card, CardHeader, PageHeader, Button, EmptyState, Row, Badge, Icon, ErrorNote, Segmented } from "@/components/ui";
 import { fmtDate, todayIso } from "@/lib/client";
+import Konto1590 from "@/components/Konto1590";
 
 type Fehlt = { id: number; datum: string | null; empfaenger: string; zweck: string; betrag: number; hinweis: string };
 type Eingang = {
@@ -41,6 +42,8 @@ type Overview = {
   monat: string;
   monate: string[];
   drive_verbunden: boolean;
+  qonto_verbunden: boolean;
+  monate_status: { monat: string; buchungen: number; fehlt: number | null; abgeglichen: string | null }[];
   zusammenfassung: {
     anzahl: number;
     summe: number;
@@ -83,6 +86,11 @@ const MAX_PREVIEW_BYTES = 4 * 1024 * 1024;
 
 const eur = (n: number | null | undefined) =>
   n === null || n === undefined ? "–" : n.toLocaleString("de-DE", { style: "currency", currency: "EUR" });
+
+type AbgleichResult = { monat: string; importiert: number; geprueft: number; gefunden: number; fehlt: number; ohne: number; hinweise: string[] };
+
+const monthShort = (m: string) =>
+  new Date(`${m}-01T12:00:00`).toLocaleDateString("de-DE", { month: "short", year: "2-digit" }).replace(".", "");
 
 const monthLabel = (m: string) =>
   new Date(`${m}-01T12:00:00`).toLocaleDateString("de-DE", { month: "long", year: "numeric" });
@@ -208,6 +216,7 @@ export default function BuchhaltungPage() {
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<RunResult | null>(null);
   const [filter, setFilter] = useState<"offen" | "alle">("offen");
+  const [abgleich, setAbgleich] = useState<{ running: boolean; res?: AbgleichResult }>({ running: false });
 
   const apply = useCallback((r: { data?: Overview; error?: string }) => {
     if (r.data) setData(r.data);
@@ -302,6 +311,32 @@ export default function BuchhaltungPage() {
     }
   };
 
+  const runAbgleich = async (m: string) => {
+    if (abgleich.running) return;
+    setAbgleich({ running: true });
+    setError("");
+    try {
+      const res = await fetch("/api/buchhaltung/abgleich", { method: "POST", body: JSON.stringify({ monat: m }) });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(body?.error ?? `Server-Fehler ${res.status}`);
+      setAbgleich({ running: false, res: body as AbgleichResult });
+      await load(m);
+    } catch (e) {
+      setAbgleich({ running: false });
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const ohneBeleg = async (id: number, merken: boolean) => {
+    const res = await fetch("/api/buchhaltung/ausgaben", { method: "PATCH", body: JSON.stringify({ id, aktion: "ohne", merken }) });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      setError(body?.error ?? `Server-Fehler ${res.status}`);
+      return;
+    }
+    await load(monat);
+  };
+
   const setEingangStatus = async (id: number, status: "neu" | "ignoriert") => {
     const res = await fetch(`/api/buchhaltung/eingang/${id}`, { method: "PATCH", body: JSON.stringify({ status }) });
     if (!res.ok) {
@@ -358,9 +393,6 @@ export default function BuchhaltungPage() {
   }
 
   const z = data.zusammenfassung;
-  const idx = data.monate.indexOf(data.monat);
-  const older = idx >= 0 && idx < data.monate.length - 1 ? data.monate[idx + 1] : null;
-  const newer = idx > 0 ? data.monate[idx - 1] : null;
   const saldo = data.kennzahlen.qonto_saldo;
   const saldoStand = data.kennzahlen.qonto_stand?.value || saldo?.updated_at;
   const eingang = filter === "offen" ? data.eingang.filter((e) => ["neu", "in_pruefung", "fehler"].includes(e.status)) : data.eingang;
@@ -421,32 +453,72 @@ export default function BuchhaltungPage() {
         </div>
       )}
 
-      {/* Monatswahl */}
-      <div className="flex items-center justify-between gap-2 mb-4">
-        <div className="inline-flex items-center bg-inset border border-line rounded-full p-0.5">
-          <button
-            onClick={() => older && setMonat(older)}
-            disabled={!older}
-            aria-label="Vorheriger Monat"
-            className="w-8 h-8 rounded-full flex items-center justify-center text-ink-2 hover:text-ink disabled:opacity-30 transition-all"
-          >
-            <Icon name="chevron_left" size={20} />
-          </button>
-          <span className="px-2 text-[13px] font-semibold min-w-[132px] text-center">{monthLabel(data.monat)}</span>
-          <button
-            onClick={() => newer && setMonat(newer)}
-            disabled={!newer}
-            aria-label="Nächster Monat"
-            className="w-8 h-8 rounded-full flex items-center justify-center text-ink-2 hover:text-ink disabled:opacity-30 transition-all"
-          >
-            <Icon name="chevron_right" size={20} />
-          </button>
+      {/* Monate mit Zähler fehlender Belege */}
+      <div className="flex items-center gap-2 mb-2">
+        <div className="flex-1 min-w-0 overflow-x-auto [scrollbar-width:none] -mx-1 px-1">
+          <div className="flex gap-1.5 w-max py-0.5">
+            {data.monate_status.map((m) => {
+              const aktiv = m.monat === data.monat;
+              return (
+                <button
+                  key={m.monat}
+                  onClick={() => setMonat(m.monat)}
+                  className={`inline-flex items-center gap-1.5 h-8 pl-3 pr-1.5 rounded-full border text-[12px] font-medium transition-all whitespace-nowrap ${
+                    aktiv ? "bg-accent-soft border-accent/40 text-ink" : "bg-inset border-line text-ink-2 hover:text-ink"
+                  }`}
+                >
+                  {monthShort(m.monat)}
+                  {m.fehlt === null ? (
+                    <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-inset text-ink-3 text-[11px] flex items-center justify-center">–</span>
+                  ) : m.fehlt > 0 ? (
+                    <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-bad/15 text-bad text-[11px] font-semibold flex items-center justify-center">
+                      {m.fehlt}
+                    </span>
+                  ) : (
+                    <span className="w-5 h-5 rounded-full bg-accent-soft text-accent flex items-center justify-center">
+                      <Icon name="check" size={13} />
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
-        <div className="flex items-center gap-1.5 text-[11px] text-ink-3">
+        <Button onClick={() => runAbgleich(data.monat)} disabled={abgleich.running} className="shrink-0 whitespace-nowrap">
+          <span className="inline-flex items-center gap-1.5">
+            <Icon name="rule" size={16} className={abgleich.running ? "animate-pulse" : ""} />
+            {abgleich.running ? "Gleiche ab …" : "Abgleichen"}
+          </span>
+        </Button>
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-4 text-[11px] text-ink-3">
+        <span>
+          {monthLabel(data.monat)}
+          {(() => {
+            const st = data.monate_status.find((m) => m.monat === data.monat);
+            return st?.abgeglichen ? ` · abgeglichen ${fmtDate(st.abgeglichen)}` : " · noch nicht abgeglichen";
+          })()}
+          {!data.qonto_verbunden && " · Qonto noch nicht verbunden"}
+        </span>
+        <span className="flex items-center gap-1.5">
           {data.zaehler.ablage_offen > 0 && <Badge>{data.zaehler.ablage_offen} in Ablage</Badge>}
           {data.zaehler.ablage_fehler > 0 && <Badge tone="bad">{data.zaehler.ablage_fehler} Fehler</Badge>}
-        </div>
+        </span>
       </div>
+      {abgleich.res && abgleich.res.monat === data.monat && (
+        <div className="bg-accent-soft border border-accent/25 rounded-[12px] px-4 py-3 mb-4 text-[13px]">
+          <p>
+            <span className="font-semibold text-accent">Abgleich fertig:</span> {abgleich.res.gefunden} belegt · {abgleich.res.fehlt} fehlen
+            {abgleich.res.ohne ? ` · ${abgleich.res.ohne} ohne Beleg nötig` : ""}
+            {abgleich.res.importiert ? ` · ${abgleich.res.importiert} neu aus Qonto` : ""}
+          </p>
+          {abgleich.res.hinweise.map((h, i) => (
+            <p key={i} className="text-[12px] text-ink-2 mt-1.5 break-words">
+              {h}
+            </p>
+          ))}
+        </div>
+      )}
 
       {/* Kennzahlen */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 mb-5">
@@ -479,7 +551,7 @@ export default function BuchhaltungPage() {
                   : monthLabel(data.monat)
               }
             />
-            {z.anzahl === 0 && <EmptyState text="Für diesen Monat liegt noch kein Bank-Abgleich vor." />}
+            {z.anzahl === 0 && <EmptyState text="Für diesen Monat liegt noch kein Bank-Abgleich vor – oben auf „Abgleichen“ tippen." />}
             {z.anzahl > 0 && z.fehlt.length === 0 && <EmptyState text="Alles belegt – keine offenen Abbuchungen." />}
             {/* Mobil: Liste, ab sm: Tabelle */}
             {z.fehlt.length > 0 && (
@@ -491,6 +563,7 @@ export default function BuchhaltungPage() {
                       <div className="text-[12px] text-ink-2 mt-0.5 line-clamp-2 [overflow-wrap:anywhere]">{f.zweck}</div>
                       {f.hinweis && <div className="text-[11px] text-warn mt-0.5">{f.hinweis}</div>}
                       <div className="text-[11px] text-ink-3 mt-0.5">{fmtDate(f.datum)}</div>
+                      <OhneBelegKnoepfe onOhne={(merken) => ohneBeleg(f.id, merken)} empfaenger={f.empfaenger} />
                     </div>
                     <div className="text-[13px] font-semibold whitespace-nowrap">{eur(f.betrag)}</div>
                   </Row>
@@ -516,6 +589,7 @@ export default function BuchhaltungPage() {
                         <td className="px-2 py-2.5 text-ink-2">
                           <div className="line-clamp-2 [overflow-wrap:anywhere]">{f.zweck}</div>
                           {f.hinweis && <div className="text-[11px] text-warn mt-0.5">{f.hinweis}</div>}
+                          <OhneBelegKnoepfe onOhne={(merken) => ohneBeleg(f.id, merken)} empfaenger={f.empfaenger} />
                         </td>
                         <td className="px-5 py-2.5 text-right font-semibold whitespace-nowrap">{eur(f.betrag)}</td>
                       </tr>
@@ -534,6 +608,8 @@ export default function BuchhaltungPage() {
               </div>
             )}
           </Card>
+
+          <Konto1590 />
 
           {/* Eingang */}
           <Card>
@@ -740,6 +816,22 @@ export default function BuchhaltungPage() {
           </Card>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Leise Aktionen je fehlender Abbuchung: „Kein Beleg nötig“ (nur diese oder für den Empfänger merken). */
+function OhneBelegKnoepfe({ onOhne, empfaenger }: { onOhne: (merken: boolean) => void; empfaenger: string }) {
+  return (
+    <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1.5 text-[11px]">
+      <button onClick={() => onOhne(false)} className="text-ink-3 hover:text-ink transition-colors">
+        Kein Beleg nötig
+      </button>
+      {empfaenger && (
+        <button onClick={() => onOhne(true)} className="text-ink-3 hover:text-ink transition-colors">
+          Immer bei „{empfaenger.length > 28 ? `${empfaenger.slice(0, 27)}…` : empfaenger}“
+        </button>
+      )}
     </div>
   );
 }
