@@ -193,3 +193,57 @@ export function parseAddressList(input: string | null | undefined): string[] {
 export function replySubject(subject: string): string {
   return /^\s*(re|aw|antw)\s*:/i.test(subject) ? subject : `Re: ${subject}`;
 }
+
+/** "WG: " nur einmal voranstellen (auch Fwd:/FW: zählen als schon weitergeleitet). */
+export function forwardSubject(subject: string): string {
+  return /^\s*(wg|fwd?|fw)\s*:/i.test(subject) ? subject : `WG: ${subject}`;
+}
+
+/** Anhang-Liste aus der Spalte mails.attachments (JSON) – defekte Werte ergeben []. */
+export function parseAttachmentMeta(json: string | null | undefined): AttachmentInfo[] {
+  try {
+    const v = JSON.parse(json || "[]");
+    return Array.isArray(v)
+      ? v.filter((a) => a && typeof a.part === "string" && typeof a.filename === "string").map((a) => ({
+          part: a.part,
+          filename: a.filename,
+          mime: typeof a.mime === "string" ? a.mime : "application/octet-stream",
+          size: Number(a.size) || 0,
+        }))
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+export type ForwardSource = {
+  from_addr: string;
+  to_addr: string;
+  cc_addr?: string | null;
+  date: string;
+  subject: string;
+  body_text: string;
+};
+
+/** Kopf + vollständiger Text der weitergeleiteten Mail (wie in Mail-Programmen üblich). */
+export function forwardBlock(m: ForwardSource): string {
+  const datum = m.date
+    ? new Date(m.date).toLocaleString("de-DE", {
+        timeZone: "Europe/Berlin",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "";
+  const kopf = [
+    "---------- Weitergeleitete Nachricht ----------",
+    `Von: ${m.from_addr}`,
+    datum && `Datum: ${datum}`,
+    `Betreff: ${m.subject}`,
+    `An: ${m.to_addr}`,
+    m.cc_addr ? `Cc: ${m.cc_addr}` : "",
+  ].filter(Boolean);
+  return `${kopf.join("\n")}\n\n${(m.body_text || "").replace(/\r\n/g, "\n")}`;
+}

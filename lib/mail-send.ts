@@ -5,6 +5,7 @@ import type { DB } from "@/lib/db";
 import { decryptSecret } from "@/lib/secret-store";
 import { openImap } from "@/lib/mail-archive";
 import { parseAddressList, sentFolder, smtpFor, type FolderInfo } from "@/lib/mail-parts";
+import { loadForwardAttachments, type LoadedAttachment } from "@/lib/mail-forward";
 
 /**
  * Versand freigegebener Entwürfe über den SMTP-Server des Postfachs.
@@ -26,6 +27,7 @@ type DraftRow = {
   subject: string;
   body_text: string;
   reply_mail_id: number | null;
+  forward_mail_id: number | null;
   in_reply_to: string;
   references_hdr: string;
   status: string;
@@ -95,6 +97,15 @@ export async function sendDraft(d: DB, draftId: number): Promise<SendResult> {
     "SELECT filename, mime, data FROM mail_draft_files WHERE draft_id = ? ORDER BY id",
     [draftId]
   );
+  // Weiterleitung: Anhänge der Originalmail frisch vom Server – fehlen sie, wird nicht gesendet
+  let forwarded: LoadedAttachment[] = [];
+  if (draft.forward_mail_id) {
+    try {
+      forwarded = await loadForwardAttachments(d, Number(draft.forward_mail_id));
+    } catch (e) {
+      return fail(`Anhänge der weitergeleiteten Mail: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
 
   const composer = new MailComposer({
     from: acc.display_name ? { name: acc.display_name, address: fromAddr } : fromAddr,
@@ -106,7 +117,10 @@ export async function sendDraft(d: DB, draftId: number): Promise<SendResult> {
     messageId,
     inReplyTo: draft.in_reply_to || undefined,
     references: draft.references_hdr || undefined,
-    attachments: files.map((f) => ({ filename: f.filename, contentType: f.mime, content: Buffer.from(f.data) })),
+    attachments: [
+      ...files.map((f) => ({ filename: f.filename, contentType: f.mime, content: Buffer.from(f.data) })),
+      ...forwarded.map((f) => ({ filename: f.filename, contentType: f.mime, content: f.content })),
+    ],
   });
   const raw: Buffer = await composer.compile().build();
 
