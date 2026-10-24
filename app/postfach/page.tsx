@@ -40,12 +40,14 @@ type Draft = {
   subject: string;
   body_text: string;
   reply_mail_id: number | null;
+  forward_mail_id: number | null;
   source: string;
   note: string;
   status: string;
   error: string;
   updated_at: string;
   files: { id: number; filename: string }[];
+  forward_files: string[];
 };
 type Account = { id: number; label: string; address: string; active: number; has_password: boolean };
 
@@ -241,6 +243,19 @@ export default function PostfachPage() {
     }
   };
 
+  const forward = async (mail: FullMail) => {
+    try {
+      const res = await api<{ id: number; drafts: Draft[] }>("/api/mail/drafts", {
+        method: "POST",
+        body: JSON.stringify({ forward_mail_id: mail.id, body: "" }),
+      });
+      setDrafts(res.drafts);
+      setEditing(res.drafts.find((d) => d.id === res.id) ?? null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
   const compose = async () => {
     const acc = accounts.find((a) => a.active && a.has_password);
     if (!acc) {
@@ -427,6 +442,12 @@ export default function PostfachPage() {
                       Antworten
                     </span>
                   </Button>
+                  <Button variant="ghost" onClick={() => forward(selected)}>
+                    <span className="inline-flex items-center gap-1.5">
+                      <Icon name="forward" size={16} />
+                      Weiterleiten
+                    </span>
+                  </Button>
                   {selected.html && (
                     <Button variant="ghost" onClick={() => setShowHtml((v) => !v)}>
                       {showHtml ? "Textansicht" : "Originalansicht"}
@@ -594,7 +615,7 @@ function Composer({
       >
         <div className="flex items-center justify-between px-5 pt-4 pb-2">
           <h2 className="text-[15px] font-semibold tracking-tight flex items-center gap-2">
-            {draft.reply_mail_id ? "Antwort" : "Neue Mail"}
+            {draft.forward_mail_id ? "Weiterleitung" : draft.reply_mail_id ? "Antwort" : "Neue Mail"}
             {draft.source === "claude" && <Badge tone="accent">von Claude</Badge>}
             {statusBadge(draft.status)}
           </h2>
@@ -645,12 +666,18 @@ function Composer({
             rows={14}
             className="leading-relaxed min-h-[40dvh]"
           />
-          {draft.files.length > 0 && (
+          {draft.files.length + (draft.forward_files?.length ?? 0) > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {draft.files.map((f) => (
                 <Badge key={f.id}>
                   <Icon name="attach_file" size={13} className="mr-1" />
                   {f.filename}
+                </Badge>
+              ))}
+              {(draft.forward_files ?? []).map((f, i) => (
+                <Badge key={`fwd-${i}`}>
+                  <Icon name="forward" size={13} className="mr-1" />
+                  {f}
                 </Badge>
               ))}
             </div>

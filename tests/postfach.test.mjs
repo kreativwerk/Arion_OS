@@ -7,7 +7,10 @@ import {
   attachmentList,
   bodyParts,
   cleanText,
+  forwardBlock,
+  forwardSubject,
   htmlToText,
+  parseAttachmentMeta,
   parseAddressList,
   replySubject,
   sentFolder,
@@ -192,4 +195,26 @@ test("Brief weiterleiten: Absender nach Firma, Betreff, Anhangname", async () =>
   assert.equal(d.filename, "BARMER – Erinnerung Entgeltbescheinigung.pdf");
   assert.match(d.body, /eingegangen am 22\.10\.2026/);
   assert.match(d.body, /Zeichen: Y199504797/);
+});
+
+test("Weiterleiten: Betreff, Kopf und Anhang-Liste", () => {
+  assert.equal(forwardSubject("Stand Sankt Michael"), "WG: Stand Sankt Michael");
+  assert.equal(forwardSubject("WG: x"), "WG: x");
+  assert.equal(forwardSubject("Fwd: x"), "Fwd: x");
+  assert.equal(forwardSubject("FW: x"), "FW: x");
+  const block = forwardBlock({
+    from_addr: "A <a@b.de>",
+    to_addr: "c@d.de",
+    cc_addr: "",
+    date: "2026-06-10T07:37:13.000Z",
+    subject: "Betreff",
+    body_text: "Zeile 1\r\nZeile 2",
+  });
+  assert.match(block, /^---------- Weitergeleitete Nachricht ----------\nVon: A <a@b\.de>\nDatum: 10\.06\.2026, 09:37\nBetreff: Betreff\nAn: c@d\.de\n\nZeile 1\nZeile 2$/);
+  assert.ok(!block.includes("Cc:"));
+  assert.deepEqual(parseAttachmentMeta('[{"part":"2","filename":"a.pdf","mime":"application/pdf","size":10}]'), [
+    { part: "2", filename: "a.pdf", mime: "application/pdf", size: 10 },
+  ]);
+  assert.deepEqual(parseAttachmentMeta("kaputt"), []);
+  assert.deepEqual(parseAttachmentMeta(null), []);
 });

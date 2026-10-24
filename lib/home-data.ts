@@ -1,4 +1,5 @@
 import type { DB } from "@/lib/db";
+import { forwardFileNames } from "@/lib/mail-forward-names";
 import { parseQontoEingang, parseQontoLastschrift } from "@/lib/home-widgets";
 
 /**
@@ -47,9 +48,10 @@ export function wartetAufDich(d: DB): Promise<WartetItem[]> {
       source: string;
       created_at: string;
       body_text: string;
+      forward_mail_id: number | null;
       von: string | null;
     }>(
-      `SELECT m.id, m.to_addr, m.subject, m.status, m.source, m.created_at, m.body_text,
+      `SELECT m.id, m.to_addr, m.subject, m.status, m.source, m.created_at, m.body_text, m.forward_mail_id,
               COALESCE(NULLIF(a.username, ''), a.address, a.label) AS von
        FROM mail_drafts m LEFT JOIN mail_accounts a ON a.id = m.account_id
        WHERE m.status IN ('entwurf','fehler') ORDER BY m.id DESC LIMIT 8`
@@ -64,6 +66,7 @@ export function wartetAufDich(d: DB): Promise<WartetItem[]> {
           []
         )
       : [];
+    const fwd = await safe(() => forwardFileNames(d, rows), new Map<number, string[]>());
     return rows.map((r) => ({
       id: Number(r.id),
       an: r.to_addr,
@@ -73,7 +76,10 @@ export function wartetAufDich(d: DB): Promise<WartetItem[]> {
       erstellt: r.created_at,
       von: r.von ?? "",
       vorschau: entwurfVorschau(r.body_text ?? ""),
-      anhaenge: files.filter((f) => Number(f.draft_id) === Number(r.id)).map((f) => f.filename),
+      anhaenge: [
+        ...files.filter((f) => Number(f.draft_id) === Number(r.id)).map((f) => f.filename),
+        ...(fwd.get(Number(r.id)) ?? []),
+      ],
     }));
   }, []);
 }
