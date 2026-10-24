@@ -1,5 +1,7 @@
 import { getDb, todayIso, type DB } from "@/lib/db";
 import { driveConfigured } from "@/lib/google-drive";
+import { qontoConfigured } from "@/lib/qonto";
+import { nachbarMonat } from "@/lib/abgleich-regeln";
 
 /** Aggregationen für /buchhaltung und die Dashboard-Karte. */
 
@@ -44,7 +46,7 @@ export async function buildOverview(monatParam: string | null) {
   const d = await getDb();
   const monat = monatParam && MONTH_RE.test(monatParam) ? monatParam : await latestMonth(d);
 
-  const [summary, monateRows, eingang, ablage, fristen, kennzahlen, mails, counts] = await Promise.all([
+  const [summary, monateRows, eingang, ablage, fristen, kennzahlen, mails, counts, proMonat] = await Promise.all([
     monthSummary(d, monat),
     d.all<{ m: string }>(
       "SELECT DISTINCT monat AS m FROM buch_ausgaben WHERE monat IS NOT NULL UNION SELECT DISTINCT monat AS m FROM buch_ablage WHERE monat IS NOT NULL"
@@ -72,21 +74,41 @@ export async function buildOverview(monatParam: string | null) {
               (SELECT COUNT(*) FROM buch_ablage WHERE status IN ('offen','in_arbeit')) AS offen,
               (SELECT COUNT(*) FROM buch_ablage WHERE status = 'fehler') AS fehler`
     ),
+    d.all<{ monat: string; n: number; fehlt: number }>(
+      "SELECT monat, COUNT(*) AS n, SUM(CASE WHEN kategorie = 'FEHLT' THEN 1 ELSE 0 END) AS fehlt FROM buch_ausgaben GROUP BY monat"
+    ),
   ]);
 
-  const monate = Array.from(new Set([...monateRows.map((r) => r.m).filter((m) => MONTH_RE.test(m)), monat, todayIso().slice(0, 7)]))
+  // Immer die letzten 12 Monate anbieten, damit auch ein noch leerer Monat abgeglichen werden kann
+  const heute = todayIso().slice(0, 7);
+  const letzte12 = Array.from({ length: 12 }, (_, i) => nachbarMonat(heute, -i));
+  const monate = Array.from(new Set([...monateRows.map((r) => r.m).filter((m) => MONTH_RE.test(m)), monat, ...letzte12]))
     .sort()
     .reverse();
+  const kz = Object.fromEntries(kennzahlen.map((k) => [k.key, k]));
+  const monate_status = monate.map((m) => {
+    const r = proMonat.find((x) => x.monat === m);
+    return {
+      monat: m,
+      buchungen: Number(r?.n ?? 0),
+      fehlt: r ? Number(r.fehlt ?? 0) : null,
+      abgeglichen: kz[`abgleich_${m}`]?.value ?? null,
+    };
+  });
 
   return {
     monat,
     monate,
     drive_verbunden: await driveConfigured(),
+    qonto_verbunden: qontoConfigured(),
+    monate_status,
     zusammenfassung: summary,
     eingang: eingang.map((e) => ({ ...e, size: Number(e.size ?? 0), auftraege: Number(e.auftraege ?? 0) })),
     ablage: ablage.map((a) => ({ ...a, betrag: a.betrag === null ? null : num(a.betrag) })),
     fristen: fristen.map((f) => ({ ...f, betrag: f.betrag === null ? null : num(f.betrag) })),
-    kennzahlen: Object.fromEntries(kennzahlen.map((k) => [k.key, { value: k.value, updated_at: k.updated_at }])),
+    kennzahlen: Object.fromEntries(
+      kennzahlen.filter((k) => !k.key.startsWith("abgleich_") && k.key !== "ohne_beleg_empfaenger").map((k) => [k.key, { value: k.value, updated_at: k.updated_at }])
+    ),
     mails,
     zaehler: {
       eingang_neu: Number(counts?.neu ?? 0),

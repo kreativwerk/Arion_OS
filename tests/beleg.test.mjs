@@ -124,3 +124,46 @@ test("Mehrere Kennzeichen → je Fahrzeugakte eine Kopie", () => {
     "Archiv/Arion Logistics/02 Fahrzeuge/FÜ-DE 319/Leasing & Miete",
   ]);
 });
+
+test("Abgleich: Betrag aus Dateiname, Zuordnung, Monatsordner, 1590-Schlüssel", async () => {
+  const r = await import("../lib/abgleich-regeln.ts");
+  assert.equal(r.betragAusDateiname("Aral_334,56.pdf"), 334.56);
+  assert.equal(r.betragAusDateiname("Sixt_1.211,42 (9603296267 Jan).pdf"), 1211.42);
+  assert.equal(r.betragAusDateiname("Amazon 120,17 €.pdf"), 120.17);
+  assert.equal(r.betragAusDateiname("Expert_690,00 (RG VR4790109170).pdf"), 690);
+  assert.equal(r.betragAusDateiname("Vertrag.pdf"), null);
+  assert.equal(r.monatsOrdner("2026-09"), "Ausgaben/2026/September");
+  assert.equal(r.nachbarMonat("2026-01", -1), "2025-12");
+  assert.equal(r.monatAusPfad("Ausgaben/2026/März/Rechnungseingang/Belege"), "2026-03");
+
+  const dateien = [
+    { name: "Sixt_1.211,42 (9603296336 Jan).pdf", url: "a", pfad: "1590/2026" },
+    { name: "Sixt_1.211,42 (9603296267 Jan).pdf", url: "b", pfad: "1590/2026" },
+    { name: "Amazon_41,42.pdf", url: "c", pfad: "1590/2026" },
+  ];
+  const m = r.ordneZu(
+    [
+      { key: 1, betrag: 1211.42, text: "Sixt, Beleg fehlt", belegnr: "9603296267" },
+      { key: 2, betrag: 1211.42, text: "Sixt, Beleg fehlt", belegnr: "9603296336" },
+      { key: 3, betrag: 41.42, text: "Amazon, Beleg fehlt" },
+      { key: 4, betrag: 41.42, text: "Amazon, Beleg fehlt" },
+    ],
+    dateien
+  );
+  assert.equal(m.get(1)?.url, "b");
+  assert.equal(m.get(2)?.url, "a");
+  assert.equal(m.get(3)?.url, "c");
+  assert.equal(m.has(4), false); // jede Datei nur einmal
+
+  assert.equal(r.ohneBelegGrund({ operation_type: "qonto_fee" }), "Qonto-Gebühr (Rechnung in Qonto)");
+  assert.equal(r.ohneBelegGrund({ operation_type: "transfer", referenz: "Lohn 09/2026" }), "Lohn/Gehalt");
+  assert.equal(r.ohneBelegGrund({ operation_type: "card", label: "Aral" }), null);
+  assert.equal(r.ohneBelegGrund({ label: "Max Muster", gemerkt: ["max muster"] }), "gemerkt");
+
+  const keys = r.schluessel1590([
+    { datum: "2026-02-15", text: "Amazon, Beleg fehlt", betrag: 41.42, belegnr: "" },
+    { datum: "2026-02-15", text: "Amazon, Beleg fehlt", betrag: 41.42, belegnr: "" },
+  ]);
+  assert.notEqual(keys[0], keys[1]);
+  assert.equal(r.dateiname1590("Sixt, Beleg fehlt", 1211.42, "9603296267", "pdf"), "Sixt_1.211,42 (9603296267).pdf");
+});

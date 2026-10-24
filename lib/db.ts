@@ -561,6 +561,24 @@ function buchhaltungStatements(dialect: "sqlite" | "postgres", ID: string, NOW: 
       quelle TEXT DEFAULT '',
       notiz TEXT DEFAULT ''
     )`,
+    // Konto 1590 (Durchlaufende Posten): Daniels Liste „Beleg fehlt“, je Zeile Status + gefundener Beleg
+    `CREATE TABLE IF NOT EXISTS buch_1590 (
+      ${ID}, ${WS},
+      jahr TEXT NOT NULL,
+      liste TEXT NOT NULL DEFAULT '',
+      schluessel TEXT NOT NULL DEFAULT '',
+      datum TEXT,
+      text TEXT NOT NULL DEFAULT '',
+      betrag ${MONEY} NOT NULL DEFAULT 0,
+      belegnr TEXT DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'offen',
+      datei TEXT DEFAULT '',
+      datei_url TEXT DEFAULT '',
+      notiz TEXT DEFAULT '',
+      created_at TEXT DEFAULT ${NOW},
+      updated_at TEXT DEFAULT ${NOW}
+    )`,
+    `CREATE INDEX IF NOT EXISTS buch_1590_jahr_idx ON buch_1590 (jahr, status)`,
     `CREATE TABLE IF NOT EXISTS buch_kennzahlen (
       ${WS},
       key TEXT NOT NULL,
@@ -572,7 +590,7 @@ function buchhaltungStatements(dialect: "sqlite" | "postgres", ID: string, NOW: 
 }
 
 /** Tabellen des Buchhaltungs-Moduls – auf Supabase per RLS für die öffentliche API gesperrt. */
-const BUCH_TABLES = ["buch_eingang", "buch_eingang_blobs", "buch_ablage", "buch_ausgaben", "buch_fristen", "buch_kennzahlen"];
+const BUCH_TABLES = ["buch_eingang", "buch_eingang_blobs", "buch_ablage", "buch_ausgaben", "buch_fristen", "buch_kennzahlen", "buch_1590"];
 
 /** Spalten, die die Briefpost nachträglich bekommen hat (Upload + KI-Analyse). */
 const LETTER_COLUMNS = ["category", "action", "due_date", "reference", "notes", "mime", "extracted", "firma", "drive_file_id", "analysis_error"];
@@ -602,6 +620,7 @@ async function ensureSchema(d: DB) {
     await addColumn("assistant_messages", "conversation_id", "TEXT DEFAULT ''");
     await addColumn("mail_drafts", "notified_at", "TEXT");
     await addColumn("mail_drafts", "forward_mail_id", "INTEGER");
+    await addColumn("buch_ausgaben", "beleg_url", "TEXT DEFAULT ''");
   } else {
     // Postgres kennt IF NOT EXISTS direkt
     for (const [col, def] of [
@@ -623,6 +642,8 @@ async function ensureSchema(d: DB) {
     await d.run("ALTER TABLE mail_drafts ADD COLUMN IF NOT EXISTS notified_at TEXT");
     // Weiterleiten: Verweis auf die Originalmail, Anhänge kommen beim Versand per IMAP (lib/mail-forward.ts)
     await d.run("ALTER TABLE mail_drafts ADD COLUMN IF NOT EXISTS forward_mail_id INTEGER");
+    // Belegabgleich: Link zum gefundenen Beleg im Drive (lib/beleg-abgleich.ts)
+    await d.run("ALTER TABLE buch_ausgaben ADD COLUMN IF NOT EXISTS beleg_url TEXT DEFAULT ''");
     // Scans sind sensibel: öffentliche Supabase-API sperren (die App selbst
     // verbindet als Tabellen-Owner und ist davon nicht betroffen).
     await d.run("ALTER TABLE letter_blobs ENABLE ROW LEVEL SECURITY");

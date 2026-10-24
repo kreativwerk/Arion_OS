@@ -366,3 +366,31 @@ export async function moveFile(id: string, fromParent: string, toParent: string,
     body: "{}",
   }, opts);
 }
+
+/* ── Belegabgleich (lib/beleg-abgleich.ts, lib/buch-1590.ts) ───────────── */
+
+export type DriveTreeFile = { id: string; name: string; url: string; pfad: string };
+
+/**
+ * Alle Dateien unter einem Pfad (relativ zum Buchhaltungs-Root), bis `maxDepth`
+ * Ordnerebenen tief. Fehlt der Ordner, kommt [] zurück – es wird nichts angelegt.
+ */
+export async function listFilesUnder(path: string, maxDepth = 3, opts: DriveOpts = {}): Promise<DriveTreeFile[]> {
+  const start = await resolveFolderPath(path, false, opts);
+  if (!start) return [];
+  const out: DriveTreeFile[] = [];
+  const queue: { id: string; pfad: string; depth: number }[] = [{ id: start, pfad: path, depth: 0 }];
+  while (queue.length && out.length < 3000) {
+    if (opts.deadline && opts.deadline - Date.now() < 2_000) break;
+    const cur = queue.shift()!;
+    const files = await listChildren(cur.id, `mimeType != '${FOLDER_MIME}'`, opts);
+    for (const f of files) {
+      out.push({ id: f.id, name: f.name, url: f.webViewLink ?? `https://drive.google.com/file/d/${f.id}/view`, pfad: cur.pfad });
+    }
+    if (cur.depth < maxDepth) {
+      const dirs = await listChildren(cur.id, `mimeType = '${FOLDER_MIME}'`, opts);
+      for (const dir of dirs) queue.push({ id: dir.id, pfad: `${cur.pfad}/${dir.name}`, depth: cur.depth + 1 });
+    }
+  }
+  return out;
+}
