@@ -260,13 +260,26 @@ export async function signDraft(d: DB, draftId: number): Promise<{ ok: boolean; 
   }
   try {
     const assets = await loadAssets(d, specs.flatMap((s) => [s.unterschrift.key, ...(s.stempel ? [s.stempel.key] : [])]));
-    const results: { name: string; data: Uint8Array }[] = [];
+    const results: { name: string; data: Uint8Array; replaceId?: number }[] = [];
     for (const s of specs) {
       const src = await loadSource(d, draftId, s.quelle);
-      results.push({ name: s.dateiname, data: await stampDocument(src, s, assets) });
+      // Quelle ist schon ein Anhang dieses Entwurfs → die unterschriebene Fassung ersetzt ihn,
+      // sonst ginge das Dokument einmal ohne und einmal mit Unterschrift raus.
+      const replaceId = "datei_id" in s.quelle ? s.quelle.datei_id : undefined;
+      results.push({ name: s.dateiname, data: await stampDocument(src, s, assets), replaceId });
     }
     // Erst alles erzeugen, dann anhängen – kein halb unterschriebener Entwurf
     for (const r of results) {
+      if (r.replaceId !== undefined) {
+        await d.run("UPDATE mail_draft_files SET filename = ?, mime = ?, data = ? WHERE id = ? AND draft_id = ?", [
+          r.name,
+          "application/pdf",
+          Buffer.from(r.data),
+          r.replaceId,
+          draftId,
+        ]);
+        continue;
+      }
       await d.run("INSERT INTO mail_draft_files (draft_id, filename, mime, data) VALUES (?,?,?,?)", [
         draftId,
         r.name,

@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { PDFDocument } from "pdf-lib";
-import { parseSignSpecs, stampDocument, winAnsiSafe, DEFAULT_SIGNATURE_KEY } from "../lib/draft-sign.ts";
+import { parseSignSpecs, stampDocument, winAnsiSafe, signDraft, DEFAULT_SIGNATURE_KEY } from "../lib/draft-sign.ts";
 import { storableAttachment, missingParts } from "../lib/mail-attachment-store.ts";
 
 // 1×1 Pixel PNG (transparent)
@@ -100,4 +100,33 @@ test("Anhang-Kopie: nur PDFs/Bilder bis 10 MB, fehlende Teile werden erkannt", (
     { part: "4", filename: "c.png", mime: "image/png", size: 5000 },
   ]);
   assert.deepEqual(missingParts(json, new Set(["4"])).map((a) => a.part), ["2"]);
+});
+
+test("Quelle datei_id: unterschriebene Fassung ersetzt den Anhang statt ihn zu verdoppeln", async () => {
+  const src = await twoPagePdf();
+  const files = [{ id: 7, draft_id: 3, filename: "Stammdaten.pdf", mime: "application/pdf", data: src.data }];
+  const draft = { sign_spec: JSON.stringify({ ...spec, quelle: { datei_id: 7 }, dateiname: "Stammdaten_unterschrieben" }), sign_status: "", status: "entwurf" };
+  const d = {
+    async get(sql, params) {
+      if (/FROM mail_drafts/.test(sql)) return draft;
+      if (/FROM mail_draft_files/.test(sql)) return files.find((f) => f.id === params[0] && f.draft_id === params[1]);
+      if (/FROM sign_assets/.test(sql)) return { mime: "image/png", data: PNG };
+      return undefined;
+    },
+    async run(sql, params) {
+      if (/^UPDATE mail_draft_files/.test(sql)) {
+        const f = files.find((x) => x.id === params[3] && x.draft_id === params[4]);
+        Object.assign(f, { filename: params[0], mime: params[1], data: params[2] });
+      } else if (/^INSERT INTO mail_draft_files/.test(sql)) {
+        files.push({ id: files.length + 100, draft_id: params[0], filename: params[1], mime: params[2], data: params[3] });
+      } else if (/^UPDATE mail_drafts/.test(sql)) {
+        draft.sign_status = params[0];
+      }
+    },
+  };
+  const res = await signDraft(d, 3);
+  assert.equal(res.ok, true);
+  assert.equal(files.length, 1, "kein zweiter, unsignierter Anhang");
+  assert.equal(files[0].filename, "Stammdaten_unterschrieben.pdf");
+  assert.equal(draft.sign_status, "fertig");
 });
