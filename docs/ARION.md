@@ -141,6 +141,22 @@ Sprachaufnahmen von deutlich über einer Minute (Opus/AAC).
 
 ---
 
+## Günstige Cloud-Stimme: OpenAI
+
+Ohne Mac und deutlich billiger als ElevenLabs (tts-1: 15 $ pro 1 Mio. Zeichen,
+gpt-4o-mini-tts ≈ 0,015 $ pro Minute). Die OpenAI-API ist selbst der
+OpenAI-kompatible Endpunkt, der Schlüssel geht als Bearer über `ARION_TUNNEL_TOKEN`:
+
+| Variable | Wert |
+|---|---|
+| `ARION_TTS_URL` / `ARION_STT_URL` | `https://api.openai.com` |
+| `ARION_TTS_MODEL` | `gpt-4o-mini-tts` |
+| `ARION_TTS_VOICE` | z. B. `onyx` oder `ash` |
+| `ARION_STT_MODEL` | `gpt-4o-mini-transcribe` |
+| `ARION_TUNNEL_TOKEN` | OpenAI-API-Key (`sk-…`) |
+
+An `api.openai.com` schickt ARION kein `language`-Feld beim Sprechen (das kennt nur VoiceStudio).
+
 ## Stimme vom Büro-Mac: VoiceStudio + Tailscale Funnel
 
 Statt ElevenLabs spricht ARION mit der Butler-Stimme **Alistair** aus
