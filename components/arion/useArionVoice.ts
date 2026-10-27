@@ -25,6 +25,8 @@ type Handlers = {
   onListening: (active: boolean) => void;
   /** Fallback-Aufnahme wird gerade transkribiert. */
   onTranscribing?: () => void;
+  /** Browser-Stimme bleibt stumm: „blocked“ = erst nach Klick erlaubt, „stuck“ = Sprachausgabe hängt. */
+  onSpeechIssue?: (kind: "blocked" | "stuck") => void;
 };
 
 /* ── Minimal-Typen für die Web Speech API (nicht in lib.dom) ── */
@@ -64,16 +66,36 @@ function pickRecorderMime(): string {
   return "";
 }
 
-function germanVoice(): SpeechSynthesisVoice | null {
+/** Wartezeit, bis eine Browser-Stimme loslegen muss – sonst gilt sie als hängend. */
+const SPEECH_START_MS = 2500;
+
+/** Deutsche Stimme wählen; `avoid` = Stimme, die gerade nicht losgelegt hat. */
+function germanVoice(avoid?: string): SpeechSynthesisVoice | null {
   if (typeof speechSynthesis === "undefined") return null;
-  const voices = speechSynthesis.getVoices().filter((v) => v.lang?.toLowerCase().startsWith("de"));
+  const voices = speechSynthesis.getVoices().filter((v) => v.lang?.toLowerCase().startsWith("de") && v.name !== avoid);
   if (!voices.length) return null;
+  // Zweiter Versuch: lieber eine andere Art Stimme (Google-Stimme statt macOS-Stimme und umgekehrt)
+  if (avoid) {
+    const other = voices.find((v) => /google/i.test(v.name) !== /google/i.test(avoid));
+    if (other) return other;
+  }
   const preferred = ["Anna", "Helena", "Petra", "Markus", "Yannick", "Google Deutsch", "Microsoft Katja", "Microsoft Conrad"];
   for (const name of preferred) {
     const v = voices.find((x) => x.name.includes(name));
     if (v) return v;
   }
   return voices.find((v) => v.lang === "de-DE") ?? voices[0];
+}
+
+/**
+ * Stille Äußerung zum Freischalten braucht nur Safari (iPhone und Mac). Chrome
+ * merkt sich den ersten Klick selbst; dort kann die leere Äußerung die
+ * Warteschlange blockieren.
+ */
+function needsSpeechUnlock(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  return isIOS() || (/Safari\//.test(ua) && !/Chrome|Chromium|CriOS|Edg\//.test(ua));
 }
 
 export function speechSupport() {
@@ -111,6 +133,8 @@ export function useArionVoice(handlers: Handlers) {
   const playing = useRef<AudioBufferSourceNode | null>(null);
   const ttsAbort = useRef<AbortController | null>(null);
   const speakDone = useRef<(() => void) | null>(null);
+  /** Laufende Äußerung festhalten – Chrome räumt sie sonst weg und meldet nie „fertig“. */
+  const utterance = useRef<SpeechSynthesisUtterance | null>(null);
 
   /* ── Audio-Grundlage ───────────────────────────────────── */
 
@@ -139,7 +163,7 @@ export function useArionVoice(handlers: Handlers) {
   const unlock = useCallback(() => {
     const ctx = ensureCtx();
     if (ctx && ctx.state !== "running") ctx.resume().catch(() => {});
-    if (typeof speechSynthesis !== "undefined" && !speechSynthesis.speaking) {
+    if (typeof speechSynthesis !== "undefined" && needsSpeechUnlock() && !speechSynthesis.speaking) {
       try {
         const u = new SpeechSynthesisUtterance(" ");
         u.volume = 0;
@@ -392,7 +416,9 @@ export function useArionVoice(handlers: Handlers) {
       /* schon beendet */
     }
     playing.current = null;
-    if (typeof speechSynthesis !== "undefined") speechSynthesis.cancel();
+    utterance.current = null;
+    // Nur abbrechen, wenn wirklich etwas läuft: cancel() direkt vor speak() verschluckt in Chrome die neue Äußerung
+    if (typeof speechSynthesis !== "undefined" && (speechSynthesis.speaking || speechSynthesis.pending)) speechSynthesis.cancel();
     if (active.current === "out" || active.current === "synthetic") active.current = null;
     speakDone.current?.();
     speakDone.current = null;
@@ -401,35 +427,73 @@ export function useArionVoice(handlers: Handlers) {
   const speakBrowser = useCallback((text: string) => {
     return new Promise<void>((resolve) => {
       if (typeof speechSynthesis === "undefined") return resolve();
-      const u = new SpeechSynthesisUtterance(text);
-      u.lang = "de-DE";
-      const v = germanVoice();
-      if (v) u.voice = v;
-      u.rate = 1.04;
-      u.pitch = 1;
       let done = false;
+      let started = false;
+      const timers: ReturnType<typeof setTimeout>[] = [];
       const end = () => {
         if (done) return;
         done = true;
+        timers.forEach(clearTimeout);
+        utterance.current = null;
         if (active.current === "synthetic") active.current = null;
         speakDone.current = null;
         resolve();
       };
       speakDone.current = end;
-      u.onstart = () => {
-        active.current = "synthetic";
-        synthetic.current = 0.4;
+
+      const say = (attempt: number, avoid?: string) => {
+        if (done) return;
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = "de-DE";
+        const v = germanVoice(avoid);
+        if (v) u.voice = v;
+        u.rate = 1.04;
+        u.pitch = 1;
+        u.onstart = () => {
+          started = true;
+          active.current = "synthetic";
+          synthetic.current = 0.4;
+        };
+        u.onboundary = () => {
+          synthetic.current = 0.35 + Math.random() * 0.35;
+        };
+        u.onend = () => {
+          if (utterance.current === u) end();
+        };
+        u.onerror = (e) => {
+          if (utterance.current !== u) return; // alte Äußerung, bewusst abgebrochen
+          if (e.error === "not-allowed") h.current.onSpeechIssue?.("blocked");
+          end();
+        };
+        utterance.current = u;
+        try {
+          speechSynthesis.resume(); // Chrome bleibt sonst manchmal im Pause-Zustand hängen
+          speechSynthesis.speak(u);
+        } catch {
+          return end();
+        }
+        // Wächter: legt die Stimme nicht los, einmal mit einer anderen Stimme versuchen, dann Hinweis
+        timers.push(
+          setTimeout(() => {
+            if (done || started || utterance.current !== u) return;
+            utterance.current = null;
+            speechSynthesis.cancel();
+            if (attempt === 0) timers.push(setTimeout(() => say(1, u.voice?.name), 150));
+            else {
+              h.current.onSpeechIssue?.("stuck");
+              end();
+            }
+          }, SPEECH_START_MS)
+        );
       };
-      u.onboundary = () => {
-        synthetic.current = 0.35 + Math.random() * 0.35;
-      };
-      u.onend = end;
-      u.onerror = end;
+
       active.current = "synthetic";
-      speechSynthesis.cancel();
-      speechSynthesis.speak(u);
+      if (speechSynthesis.speaking || speechSynthesis.pending) {
+        speechSynthesis.cancel();
+        timers.push(setTimeout(() => say(0), 120));
+      } else say(0);
       // Sicherheitsnetz: manche Browser feuern onend nie
-      setTimeout(end, Math.max(6000, text.length * 110));
+      timers.push(setTimeout(end, Math.max(6000, text.length * 110) + 2 * SPEECH_START_MS));
     });
   }, []);
 
