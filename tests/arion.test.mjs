@@ -143,3 +143,10 @@ test("Wartezeit für die Stimme aus der Umgebung, begrenzt auf 5–55 s", async 
   assert.equal(envTimeout("100", 15000), 5000);
   assert.equal(envTimeout("quatsch", 15000), 15000);
 });
+
+test("OpenAI-API erkennen (dort kein language-Feld mitschicken)", async () => {
+  const { isOpenAiHost } = await import("../lib/arion-tts.ts");
+  assert.equal(isOpenAiHost("https://api.openai.com/v1/audio/speech"), true);
+  assert.equal(isOpenAiHost("https://macbook.tail.ts.net/v1/audio/speech"), false);
+  assert.equal(isOpenAiHost("kaputt"), false);
+});

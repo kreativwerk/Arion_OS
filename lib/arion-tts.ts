@@ -54,6 +54,15 @@ export function elevenLabsUrl(voiceId: string): string | null {
   return `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream?output_format=mp3_44100_128`;
 }
 
+/** Echte OpenAI-API (statt eines eigenen, OpenAI-kompatiblen Servers)? */
+export function isOpenAiHost(url: string): boolean {
+  try {
+    return new URL(url).hostname === "api.openai.com";
+  } catch {
+    return false;
+  }
+}
+
 export function ttsUrl(): string | null {
   return resolveOpenAiUrl(process.env.ARION_TTS_URL, "audio/speech");
 }
@@ -95,8 +104,8 @@ export async function synthesize(text: string): Promise<Response> {
       input: ttsInput(text),
       voice: process.env.ARION_TTS_VOICE || "alloy",
       response_format: "mp3",
-      // VoiceStudio-Erweiterung: Sprache vorgeben statt erraten lassen (OpenAI ignoriert das Feld)
-      language: "de",
+      // VoiceStudio-Erweiterung: Sprache vorgeben statt erraten lassen. OpenAI selbst kennt das Feld nicht.
+      ...(isOpenAiHost(url) ? {} : { language: "de" }),
     }),
     signal: AbortSignal.timeout(TTS_TIMEOUT_MS),
     cache: "no-store",
