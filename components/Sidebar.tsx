@@ -14,6 +14,7 @@ const NAV: { href: string; label: string; icon: string }[] = [
   { href: "/post", label: "Briefpost", icon: "markunread_mailbox" },
   { href: "/wissen", label: "Wissen", icon: "school" },
   { href: "/buchhaltung", label: "Buchhaltung", icon: "account_balance" },
+  { href: "/bescheinigungen", label: "Bescheinigungen", icon: "assignment_ind" },
   { href: "/vertraege", label: "Verträge", icon: "contract" },
   { href: "/clipboard", label: "Clipboard", icon: "content_paste" },
   { href: "/watcher", label: "Portale", icon: "travel_explore" },
