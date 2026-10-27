@@ -56,3 +56,22 @@ test("Entwurf: Vorschau und Push-Text", async () => {
   assert.equal(p.url, "/?entwurf=7");
   assert.equal(draftPushPayload({ id: 1, to_addr: "", subject: "", dateien: 1 }).body.startsWith("(ohne Betreff) · 1 Anhang"), true);
 });
+
+test("Fälle: Zeile „SD Worx: …“ wird zum Status", async () => {
+  const { sdworxAusStand } = await import("../lib/home-data.ts");
+  const a = sdworxAusStand("SD Worx: weitergeleitet 22.10.\nBrief der BA, Frist 21.10.");
+  assert.equal(a.sdworx.status, "weitergeleitet");
+  assert.equal(a.stand, "Brief der BA, Frist 21.10.");
+  assert.equal(sdworxAusStand("Text\nSD Worx: nicht weitergeleitet").sdworx.status, "offen");
+  assert.equal(sdworxAusStand("SD Worx: wartet auf unsere Wochenstunden").sdworx.status, "wartet");
+  assert.equal(sdworxAusStand("ohne Bezug").sdworx, null);
+});
+
+test("Fälle: Zeile „Frist: …“ wird zur Frist", async () => {
+  const { fristAusStand } = await import("../lib/home-data.ts");
+  const a = fristAusStand("Frist: 03.11.2026\nBA mahnt.");
+  assert.equal(a.frist, "2026-11-03");
+  assert.equal(a.stand, "BA mahnt.");
+  assert.equal(fristAusStand("Frist: 9.11.", 2026).frist, "2026-11-09");
+  assert.equal(fristAusStand("keine").frist, null);
+});
