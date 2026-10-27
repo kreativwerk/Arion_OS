@@ -88,18 +88,25 @@ export function erkenneAnforderung(l: {
   if (/nebeneinkommen/.test(low)) art = "nebeneinkommen";
   else if (/arbeitsbescheinigung/.test(low)) art = "arbeitsbescheinigung";
   else if (/entgeltbescheinigung/.test(low) && /(krankengeld|entgeltersatz|verletztengeld|arbeitsunfähig)/.test(low)) art = "entgeltbescheinigung";
-  else if (/(deüv|anmeldung zur sozialversicherung|abmeldung|jahresmeldung|entgeltmeldung)/.test(low) && /(fehlend|erinner|noch nicht|bitte)/.test(low))
+  else if (
+    /(deüv|anmeldung zur sozialversicherung|abmeldung|jahresmeldung|entgeltmeldung)/.test(low) &&
+    /(fehlend|fehlt|erinner|noch nicht|nicht vor)/.test(low) &&
+    !/(herzlich willkommen|arbeitgeberkonto)/.test(low)
+  )
     art = "deuev";
   if (!art) return null;
 
   const name = first(text, [
-    /Name:\s*([^,\n]+),\s*Vorname:\s*([^,\n]+)/, // BKK-Liste – Sonderfall unten
+    /Versicherte(?:\(r\)|r)?:\s*([^\n]+)/,
     /(?:Arbeitsbescheinigung|Nebeneinkommen|Bescheinigung\/en)\s+für\s+(?:Herrn\s+|Frau\s+)?([A-ZÄÖÜ][^\n(]+?)\s*(?:\(|\n|$)/,
     /(?:Versicherten|Mitglied|Mitarbeiter(?:in)?)\s*\n+\s*([A-ZÄÖÜ][^\n]+?)\s*\n/,
     /für\s+(?:Herrn\s+|Frau\s+)?([A-ZÄÖÜ][a-zäöüß]+(?:[ -][A-ZÄÖÜ][a-zäöüß]+)+)/,
   ]);
   const bkk = text.match(/Name:\s*([^,\n]+),\s*Vorname:\s*([^,\n]+)/);
-  const person = bkk ? `${bkk[2].trim()} ${bkk[1].trim()}` : name.replace(/\s*\(.*$/, "");
+  const kandidat = name.replace(/\s*\(.*$/, "");
+  // Floskeln wie „für Ihre Bemühungen“ sind keine Namen
+  const floskel = /^(ihre?n?|sie|unser\w*|den|die|das|diese\w*)\b/i.test(kandidat);
+  const person = bkk ? `${bkk[2].trim()} ${bkk[1].trim()}` : floskel ? "" : kandidat;
 
   const geb = deDatum(
     first(all, [
@@ -132,6 +139,9 @@ export function erkenneAnforderung(l: {
       von = b[1];
       bis = b[2];
     }
+  }
+  if (!bis && art === "deuev") {
+    bis = first(all, [/(?:Abmeldung|Anmeldung)[^\n.]{0,60}?zum\s+(\d{2}\.\d{2}\.\d{4})/]);
   }
   if (!von && art === "entgeltbescheinigung") {
     von = deDatum(first(all, [/Arbeitsunfähigkeit ab:?\s*(\d{2}\.\d{2}\.\d{4})/, /AU ab\s*(\d{2}\.\d{2}\.\d{4})/]));
