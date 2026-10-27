@@ -90,6 +90,50 @@ export function entwurfVorschau(text: string, max = 220): string {
   return flat.length > max ? `${flat.slice(0, max - 1).trimEnd()}…` : flat;
 }
 
+/* ── Fälle mit Claude ───────────────────────────────────── */
+
+/**
+ * Fälle, die Albert mit Claude bespricht, landen als Aufgabe mit
+ * source = 'claude' in der Tabelle tasks (ohne Fälligkeit, damit sie
+ * „Aufgaben heute“ nicht füllen). notes trägt den aktuellen Stand,
+ * project den Bereich (Arion, Wohnwerk, …).
+ */
+export type FallItem = { id: number; titel: string; stand: string; bereich: string; erstellt: string; erledigtAm: string | null; prio: number };
+export type Faelle = { offen: FallItem[]; erledigt: FallItem[] };
+
+/** Erledigte Fälle bleiben so viele Tage sichtbar (zum Nachschauen/Zurückholen). */
+export const FAELLE_ERLEDIGT_TAGE = 14;
+
+export function faelle(d: DB, today: string): Promise<Faelle> {
+  return safe(async () => {
+    const seit = iso(new Date(new Date(`${today}T12:00:00Z`).getTime() - FAELLE_ERLEDIGT_TAGE * DAY));
+    const [offen, erledigt] = await Promise.all([
+      d.all<FallRow>(
+        "SELECT id, title, notes, project, created_at, completed_at, priority FROM tasks WHERE source = 'claude' AND accepted = 1 AND done = 0 ORDER BY priority ASC, id DESC LIMIT 40"
+      ),
+      d.all<FallRow>(
+        "SELECT id, title, notes, project, created_at, completed_at, priority FROM tasks WHERE source = 'claude' AND accepted = 1 AND done = 1 AND completed_at >= ? ORDER BY completed_at DESC LIMIT 20",
+        [seit]
+      ),
+    ]);
+    return { offen: offen.map(fallItem), erledigt: erledigt.map(fallItem) };
+  }, { offen: [], erledigt: [] });
+}
+
+type FallRow = { id: number; title: string; notes: string | null; project: string | null; created_at: string | null; completed_at: string | null; priority: number | null };
+
+function fallItem(r: FallRow): FallItem {
+  return {
+    id: Number(r.id),
+    titel: r.title,
+    stand: (r.notes ?? "").trim(),
+    bereich: (r.project ?? "").trim(),
+    erstellt: (r.created_at ?? "").slice(0, 10),
+    erledigtAm: r.completed_at ? r.completed_at.slice(0, 10) : null,
+    prio: Number(r.priority ?? 2),
+  };
+}
+
 /* ── Fristen-Ampel ──────────────────────────────────────── */
 
 export type Frist = { titel: string; datum: string; tage: number; art: "buchhaltung" | "aufgabe" | "vertrag" | "termin"; href: string };

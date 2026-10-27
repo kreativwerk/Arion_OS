@@ -8,6 +8,7 @@
 export type WidgetId =
   | "posteingaenge"
   | "wartet"
+  | "faelle"
   | "fristen"
   | "aufgaben"
   | "termine"
@@ -25,6 +26,7 @@ export type WidgetDef = { id: WidgetId; label: string; icon: string; beschreibun
 export const WIDGETS: WidgetDef[] = [
   { id: "posteingaenge", label: "Posteingänge", icon: "inbox", beschreibung: "Slack, Mail, Post, Portale – ungelesen", standardBreit: true },
   { id: "wartet", label: "Wartet auf dich", icon: "pending_actions", beschreibung: "Mail-Entwürfe, die nur noch auf Senden warten", standardBreit: false },
+  { id: "faelle", label: "Fälle mit Claude", icon: "checklist", beschreibung: "Was mit Claude besprochen wurde – offen und erledigt abhaken", standardBreit: false },
   { id: "fristen", label: "Fristen-Ampel", icon: "timer", beschreibung: "Alle Termine mit Datum: Buchhaltung, Aufgaben, Verträge", standardBreit: false },
   { id: "aufgaben", label: "Aufgaben heute", icon: "task_alt", beschreibung: "Heute fällig, mit täglichen Checks", standardBreit: false },
   { id: "termine", label: "Nächste Termine", icon: "calendar_month", beschreibung: "Kalender der nächsten Tage", standardBreit: false },
@@ -44,6 +46,7 @@ export type LayoutItem = { id: WidgetId; an: boolean; breit: boolean };
 export const STANDARD_LAYOUT: LayoutItem[] = [
   "posteingaenge",
   "wartet",
+  "faelle",
   "fristen",
   "aufgaben",
   "termine",
@@ -63,8 +66,10 @@ export const STANDARD_LAYOUT: LayoutItem[] = [
 const IDS = new Set<string>(WIDGETS.map((w) => w.id));
 
 /**
- * Gespeichertes Layout bereinigen: unbekannte und doppelte Einträge raus,
- * neue Widgets (die es beim Speichern noch nicht gab) hinten anhängen.
+ * Gespeichertes Layout bereinigen: unbekannte und doppelte Einträge raus.
+ * Neue Widgets (die es beim Speichern noch nicht gab) landen hinter ihrem
+ * Vorgänger aus dem Standard-Layout – so erscheint ein neues Widget dort,
+ * wo es hingehört, statt ganz unten.
  */
 export function normalizeLayout(raw: unknown): LayoutItem[] {
   let list: unknown = raw;
@@ -86,7 +91,21 @@ export function normalizeLayout(raw: unknown): LayoutItem[] {
     const breit = (item as { breit?: unknown }).breit;
     out.push({ id: def.id, an: (item as { an?: unknown }).an !== false, breit: typeof breit === "boolean" ? breit : def.standardBreit });
   }
-  for (const def of STANDARD_LAYOUT) if (!seen.has(def.id)) out.push({ ...def });
+  STANDARD_LAYOUT.forEach((def, i) => {
+    if (seen.has(def.id)) return;
+    seen.add(def.id);
+    // Nächsten Vorgänger aus dem Standard-Layout suchen, der im Layout steht;
+    // gibt es keinen, kommt das Widget ans Ende.
+    let pos = out.length;
+    for (let k = i - 1; k >= 0; k--) {
+      const j = out.findIndex((x) => x.id === STANDARD_LAYOUT[k].id);
+      if (j >= 0) {
+        pos = j + 1;
+        break;
+      }
+    }
+    out.splice(pos, 0, { ...def });
+  });
   return out;
 }
 

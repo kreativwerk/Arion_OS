@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Badge, Button, Card, CardHeader, EmptyState, Icon, Row } from "@/components/ui";
+import { Badge, Button, Card, CardHeader, CheckCircle, EmptyState, Icon, Row } from "@/components/ui";
 import { fmtDate } from "@/lib/client";
-import type { WartetItem } from "@/lib/home-data";
+import type { Faelle, FallItem, WartetItem } from "@/lib/home-data";
 
 /* Neue Startseiten-Widgets. Daten kommen fertig aus /api/dashboard (lib/home-data.ts). */
 
@@ -12,7 +12,7 @@ const eur = (n: number) => n.toLocaleString("de-DE", { style: "currency", curren
 const tageText = (t: number) => (t < 0 ? `seit ${-t} T` : t === 0 ? "heute" : t === 1 ? "morgen" : `in ${t} T`);
 const tageTon = (t: number): "bad" | "warn" | "neutral" => (t <= 1 ? "bad" : t <= 7 ? "warn" : "neutral");
 
-export type { WartetItem };
+export type { WartetItem, Faelle };
 export type Frist = { titel: string; datum: string; tage: number; art: string; href: string };
 export type Konto = { saldo: number | null; stand: string | null; lastschriften: { an: string; datum: string; betrag: number | null; tage: number }[]; summe7: number };
 export type Wohnwerk = { monat: string; summe: number; anzahl: number; eingaenge: { von: string; betrag: number; datum: string }[] };
@@ -167,6 +167,111 @@ export function WartetWidget({ items, onChanged }: { items: WartetItem[]; onChan
           </div>
         );
       })}
+    </Card>
+  );
+}
+
+/**
+ * Fälle mit Claude: alles, was Albert im Chat angestoßen hat. Claude legt
+ * die Fälle an und schreibt den Stand dazu; abgehakt wird hier. Erledigte
+ * bleiben 14 Tage sichtbar und lassen sich zurückholen.
+ */
+export function FaelleWidget({ faelle, onChanged }: { faelle: Faelle; onChanged?: () => void }) {
+  const [offen, setOffen] = useState<number | null>(null);
+  const [zeigeErledigt, setZeigeErledigt] = useState(false);
+  const [fehler, setFehler] = useState("");
+
+  const setzen = async (id: number, undo: boolean) => {
+    setFehler("");
+    try {
+      const res = await fetch("/api/tasks/complete", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id, undo }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        setFehler(data?.error ?? `Server-Fehler ${res.status}`);
+        return;
+      }
+      setOffen(null);
+      onChanged?.();
+    } catch (e) {
+      setFehler(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const zeile = (f: FallItem, erledigt: boolean) => {
+    const auf = offen === f.id;
+    return (
+      <div key={f.id} className={auf ? "bg-inset/40" : ""}>
+        <Row>
+          {erledigt ? (
+            <button
+              type="button"
+              onClick={() => setzen(f.id, true)}
+              className="w-[22px] h-[22px] rounded-full bg-accent border-accent text-on-accent flex items-center justify-center shrink-0"
+              aria-label="Wieder öffnen"
+              title="Wieder öffnen"
+            >
+              <Icon name="check" size={15} />
+            </button>
+          ) : (
+            <CheckCircle size={22} onComplete={() => setzen(f.id, false)} />
+          )}
+          <button
+            type="button"
+            onClick={() => setOffen(auf ? null : f.id)}
+            aria-expanded={auf}
+            className="flex-1 min-w-0 text-left"
+          >
+            <div className={`text-[13px] font-medium ${auf ? "" : "truncate"} ${erledigt ? "line-through text-ink-3" : ""}`}>{f.titel}</div>
+            {!auf && f.stand && <div className="text-[11px] text-ink-3 truncate">{f.stand}</div>}
+          </button>
+          {f.bereich && <Badge>{f.bereich}</Badge>}
+          {!erledigt && f.prio === 1 && <Badge tone="bad">dringend</Badge>}
+        </Row>
+        {auf && (
+          <div className="px-5 pb-3 -mt-1 pl-[54px] space-y-1">
+            {f.stand && <p className="text-[13px] text-ink-2 leading-relaxed whitespace-pre-line">{f.stand}</p>}
+            <p className="text-[11px] text-ink-3">
+              angelegt {f.erstellt ? fmtDate(f.erstellt) : "–"}
+              {f.erledigtAm ? ` · erledigt ${fmtDate(f.erledigtAm)}` : ""}
+            </p>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <Card>
+      <CardHeader
+        title="Fälle mit Claude"
+        subtitle={faelle.offen.length ? `${faelle.offen.length} offen` : "Alles erledigt"}
+        action={
+          <Link href="/aufgaben" className="text-[12px] text-accent">
+            Aufgaben →
+          </Link>
+        }
+      />
+      {fehler && <p className="px-5 pb-2 text-[12px] text-bad">{fehler}</p>}
+      {faelle.offen.length === 0 && <EmptyState text="Kein offener Fall – alles abgehakt." />}
+      <div className="max-h-[420px] overflow-y-auto">{faelle.offen.map((f) => zeile(f, false))}</div>
+      {faelle.erledigt.length > 0 && (
+        <>
+          <button
+            type="button"
+            onClick={() => setZeigeErledigt(!zeigeErledigt)}
+            className="w-full flex items-center gap-1.5 px-5 py-2.5 text-[12px] text-ink-3 hover:text-ink-2 border-t border-line"
+            aria-expanded={zeigeErledigt}
+          >
+            <Icon name={zeigeErledigt ? "expand_less" : "expand_more"} size={16} />
+            Erledigt ({faelle.erledigt.length}) · letzte 14 Tage
+          </button>
+          {zeigeErledigt && faelle.erledigt.map((f) => zeile(f, true))}
+        </>
+      )}
     </Card>
   );
 }
