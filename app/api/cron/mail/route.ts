@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { withApi } from "@/lib/api-error";
 import { getDb } from "@/lib/db";
 import { notifyNewDrafts } from "@/lib/draft-notify";
+import { signPendingDrafts } from "@/lib/draft-sign";
 import { runMailFetch } from "@/lib/mail-fetch";
 
 export const dynamic = "force-dynamic";
@@ -27,9 +28,12 @@ export const GET = withApi(async (req: NextRequest) => {
   }
   // maxDuration 60 s: 50 s Budget, Rest als Puffer für den Abschluss
   // Neue Claude-Entwürfe zuerst melden – das dauert Sekunden, der Abruf nimmt den Rest
-  const entwuerfe = await notifyNewDrafts(await getDb()).catch(() => ({ gemeldet: 0 }));
+  const d = await getDb();
+  // Unterschrifts-Aufträge vor der Meldung erledigen, damit der Push den fertigen Anhang zählt
+  const sign = await signPendingDrafts(d, Date.now() + 12_000).catch((e) => ({ unterschrieben: 0, fehler: [String(e)] }));
+  const entwuerfe = await notifyNewDrafts(d).catch(() => ({ gemeldet: 0 }));
   const res = await runMailFetch({ push: true, deadline: Date.now() + 45_000 });
-  return NextResponse.json({ ...res, entwuerfe_gemeldet: entwuerfe.gemeldet });
+  return NextResponse.json({ ...res, entwuerfe_gemeldet: entwuerfe.gemeldet, unterschrieben: sign.unterschrieben, unterschrift_fehler: sign.fehler });
 });
 
 /** pg_cron (net.http_post) ruft per POST auf – gleiche Logik. */
