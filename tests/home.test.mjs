@@ -75,3 +75,19 @@ test("Fälle: Zeile „Frist: …“ wird zur Frist", async () => {
   assert.equal(fristAusStand("Frist: 9.11.", 2026).frist, "2026-11-09");
   assert.equal(fristAusStand("keine").frist, null);
 });
+
+test("Fall: Dokument-Zeilen werden zu Öffnen-/Download-Links", async () => {
+  const { dokumenteAusStand } = await import("../lib/home-data.ts");
+  const a = dokumenteAusStand("Frist: 02.11.2026\nDokument: brief 37 – Zahlungserinnerung\nDokument: mail 24224/2\nBis 02.11. zahlen.");
+  assert.equal(a.stand, "Frist: 02.11.2026\nBis 02.11. zahlen.");
+  assert.equal(a.dokumente.length, 2);
+  assert.deepEqual(a.dokumente[0], { art: "brief", name: "Zahlungserinnerung", oeffnen: "/api/letters/37", download: "/api/letters/37?download=1" });
+  assert.equal(a.dokumente[1].art, "mail");
+  assert.equal(a.dokumente[1].name, "");
+  assert.equal(a.dokumente[1].oeffnen, "/api/mail/attachment?id=24224&part=2&inline=1");
+  assert.equal(a.dokumente[1].download, "/api/mail/attachment?id=24224&part=2");
+  // Mail ohne Anhang-Teil ist kein Dokument, Text bleibt unverändert
+  const b = dokumenteAusStand("Dokument: mail 403\nText");
+  assert.equal(b.dokumente.length, 0);
+  assert.equal(dokumenteAusStand("ohne Dokument").stand, "ohne Dokument");
+});

@@ -76,15 +76,21 @@ export function CardHeader({
   title,
   subtitle,
   action,
+  badge,
 }: {
   title: string;
   subtitle?: string;
   action?: ReactNode;
+  /** Kleine Pill direkt neben dem Titel (z. B. „Claude“). */
+  badge?: ReactNode;
 }) {
   return (
     <div className="flex items-start justify-between px-5 pt-4 pb-2">
       <div>
-        <h2 className="text-[15px] font-semibold tracking-tight">{title}</h2>
+        <h2 className="text-[15px] font-semibold tracking-tight flex items-center gap-2">
+          {title}
+          {badge}
+        </h2>
         {subtitle && <p className="text-[12px] text-ink-2 mt-0.5">{subtitle}</p>}
       </div>
       {action}

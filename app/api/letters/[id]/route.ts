@@ -8,8 +8,8 @@ export const maxDuration = 300;
 
 type Ctx = { params: Promise<{ id: string }> };
 
-/** Original-Scan im Browser öffnen. */
-export const GET = withApi(async (_req: NextRequest, ctx: Ctx) => {
+/** Original-Scan im Browser öffnen (`?download=1` lädt ihn herunter). */
+export const GET = withApi(async (req: NextRequest, ctx: Ctx) => {
   const { id } = await ctx.params;
   const d = await getDb();
   const meta = await d.get<{ file_ref: string; mime: string }>("SELECT file_ref, mime FROM letters WHERE id = ?", [id]);
@@ -17,10 +17,11 @@ export const GET = withApi(async (_req: NextRequest, ctx: Ctx) => {
   if (!meta || !blob) return NextResponse.json({ error: "Scan nicht gefunden" }, { status: 404 });
 
   const body = Buffer.isBuffer(blob.data) ? blob.data : Buffer.from(blob.data);
+  const art = req.nextUrl.searchParams.get("download") === "1" ? "attachment" : "inline";
   return new NextResponse(new Uint8Array(body), {
     headers: {
       "Content-Type": meta.mime || "application/octet-stream",
-      "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(meta.file_ref || `brief-${id}`)}`,
+      "Content-Disposition": `${art}; filename*=UTF-8''${encodeURIComponent(meta.file_ref || `brief-${id}`)}`,
       "Content-Length": String(body.length),
       "Cache-Control": "private, max-age=0",
     },
