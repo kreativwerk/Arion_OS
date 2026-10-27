@@ -88,6 +88,8 @@ export async function synthesize(text: string): Promise<Response> {
       input: ttsInput(text),
       voice: process.env.ARION_TTS_VOICE || "alloy",
       response_format: "mp3",
+      // VoiceStudio-Erweiterung: Sprache vorgeben statt erraten lassen (OpenAI ignoriert das Feld)
+      language: "de",
     }),
     signal: AbortSignal.timeout(TTS_TIMEOUT_MS),
     cache: "no-store",
