@@ -184,9 +184,10 @@ function FristBadge({ iso }: { iso: string }) {
 }
 
 /**
- * Fälle mit Claude: alles, was Albert im Chat angestoßen hat. Claude legt
- * die Fälle an und schreibt den Stand dazu; abgehakt wird hier. Erledigte
- * bleiben 14 Tage sichtbar und lassen sich zurückholen.
+ * Offene Fälle (mit Claude): alles, was Albert im Chat angestoßen hat. Claude
+ * legt die Fälle an und schreibt den Stand dazu; abgehakt wird hier. Dokumente
+ * (Brief-Scan, Mail-Anhang) lassen sich im aufgeklappten Fall öffnen und
+ * herunterladen. Erledigte bleiben 14 Tage sichtbar und lassen sich zurückholen.
  */
 export function FaelleWidget({ faelle, onChanged }: { faelle: Faelle; onChanged?: () => void }) {
   const [offen, setOffen] = useState<number | null>(null);
@@ -240,6 +241,11 @@ export function FaelleWidget({ faelle, onChanged }: { faelle: Faelle; onChanged?
             <div className={`text-[13px] font-medium ${auf ? "" : "truncate"} ${erledigt ? "line-through text-ink-3" : ""}`}>{f.titel}</div>
             {!auf && f.stand && <div className="text-[11px] text-ink-3 truncate">{f.stand}</div>}
           </button>
+          {f.dokumente.length > 0 && (
+            <span title={f.dokumente.length === 1 ? "1 Dokument" : `${f.dokumente.length} Dokumente`} className="shrink-0">
+              <Icon name="attach_file" size={16} className="text-ink-3" />
+            </span>
+          )}
           {f.sdworx && (
             <Badge tone={f.sdworx.status === "weitergeleitet" ? "good" : "warn"}>
               {f.sdworx.status === "weitergeleitet" ? "bei SD Worx" : f.sdworx.status === "wartet" ? "SD Worx wartet" : "nicht an SD Worx"}
@@ -253,6 +259,34 @@ export function FaelleWidget({ faelle, onChanged }: { faelle: Faelle; onChanged?
           <div className="px-5 pb-3 -mt-1 pl-[54px] space-y-1">
             {f.sdworx && <p className="text-[12px] text-ink-2">SD Worx: {f.sdworx.text}</p>}
             {f.stand && <p className="text-[13px] text-ink-2 leading-relaxed whitespace-pre-line">{f.stand}</p>}
+            {f.dokumente.length > 0 && (
+              <div className="pt-1 space-y-1.5">
+                {f.dokumente.map((dok) => (
+                  <div key={dok.oeffnen} className="flex items-center gap-2 rounded-[10px] bg-inset px-3 py-2">
+                    <Icon name={dok.art === "brief" ? "description" : "attach_file"} size={16} className="text-ink-3 shrink-0" />
+                    <span className="flex-1 min-w-0 truncate text-[12px]">{dok.name}</span>
+                    <a
+                      href={dok.oeffnen}
+                      target="_blank"
+                      rel="noopener"
+                      className="inline-flex items-center gap-1 px-3 h-8 rounded-full text-[12px] font-medium text-accent hover:bg-accent-soft"
+                    >
+                      <Icon name="open_in_new" size={15} />
+                      Öffnen
+                    </a>
+                    <a
+                      href={dok.download}
+                      download
+                      className="inline-flex items-center justify-center w-8 h-8 rounded-full text-ink-2 hover:bg-accent-soft hover:text-accent"
+                      aria-label={`${dok.name} herunterladen`}
+                      title="Herunterladen"
+                    >
+                      <Icon name="download" size={17} />
+                    </a>
+                  </div>
+                ))}
+              </div>
+            )}
             <p className="text-[11px] text-ink-3">
               angelegt {f.erstellt ? fmtDate(f.erstellt) : "–"}
               {f.erledigtAm ? ` · erledigt ${fmtDate(f.erledigtAm)}` : ""}
@@ -266,7 +300,8 @@ export function FaelleWidget({ faelle, onChanged }: { faelle: Faelle; onChanged?
   return (
     <Card>
       <CardHeader
-        title="Fälle mit Claude"
+        title="Offene Fälle"
+        badge={<Badge tone="accent">Claude</Badge>}
         subtitle={faelle.offen.length ? `${faelle.offen.length} offen` : "Alles erledigt"}
         action={
           <Link href="/aufgaben" className="text-[12px] text-accent">

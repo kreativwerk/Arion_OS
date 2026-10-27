@@ -90,7 +90,7 @@ export function entwurfVorschau(text: string, max = 220): string {
   return flat.length > max ? `${flat.slice(0, max - 1).trimEnd()}…` : flat;
 }
 
-/* ── Fälle mit Claude ───────────────────────────────────── */
+/* ── Offene Fälle (mit Claude) ──────────────────────────── */
 
 /**
  * Fälle, die Albert mit Claude bespricht, landen als Aufgabe mit
@@ -110,7 +110,12 @@ export type FallItem = {
   sdworx: SdWorxStand | null;
   /** Frist aus der Zeile „Frist: TT.MM.JJJJ“ im Stand (YYYY-MM-DD), sonst null. */
   frist: string | null;
+  /** Dokumente aus den Zeilen „Dokument: brief 37“ / „Dokument: mail 403/2“. */
+  dokumente: FallDokument[];
 };
+
+/** Ein Dokument zum Fall: gescannter Brief oder Mail-Anhang, zum Öffnen und Herunterladen. */
+export type FallDokument = { art: "brief" | "mail"; name: string; oeffnen: string; download: string };
 
 /** weitergeleitet = liegt bei SD Worx · wartet = SD Worx wartet auf uns · offen = noch nicht weitergeleitet */
 export type SdWorxStand = { status: "weitergeleitet" | "wartet" | "offen"; text: string };
@@ -131,8 +136,68 @@ export function faelle(d: DB, today: string): Promise<Faelle> {
         [seit]
       ),
     ]);
-    return { offen: offen.map(fallItem), erledigt: erledigt.map(fallItem) };
+    const result = { offen: offen.map(fallItem), erledigt: erledigt.map(fallItem) };
+    await safe(() => dokumentNamen(d, [...result.offen, ...result.erledigt]), undefined);
+    return result;
   }, { offen: [], erledigt: [] });
+}
+
+/** Fehlende Dokumentnamen aus Betreff des Briefs bzw. Dateiname des Anhangs ergänzen. */
+async function dokumentNamen(d: DB, items: FallItem[]): Promise<void> {
+  const offen = items.flatMap((f) => f.dokumente).filter((x) => x.name === "");
+  if (!offen.length) return;
+  const briefIds = [...new Set(offen.filter((x) => x.art === "brief").map((x) => dokRef(x.oeffnen).id))];
+  const mailIds = [...new Set(offen.filter((x) => x.art === "mail").map((x) => dokRef(x.oeffnen).id))];
+  const [briefe, anhaenge] = await Promise.all([
+    briefIds.length
+      ? d.all<{ id: number; subject: string | null; file_ref: string | null }>(
+          `SELECT id, subject, file_ref FROM letters WHERE id IN (${briefIds.map(() => "?").join(",")})`,
+          briefIds
+        )
+      : [],
+    mailIds.length
+      ? d.all<{ mail_id: number; part: string; filename: string | null }>(
+          `SELECT mail_id, part, filename FROM mail_attachment_blobs WHERE mail_id IN (${mailIds.map(() => "?").join(",")})`,
+          mailIds
+        )
+      : [],
+  ]);
+  for (const x of offen) {
+    const r = dokRef(x.oeffnen);
+    if (x.art === "brief") {
+      const b = briefe.find((b) => Number(b.id) === r.id);
+      x.name = (b?.subject || b?.file_ref || "").trim() || `Brief ${r.id}`;
+    } else {
+      const a = anhaenge.find((a) => Number(a.mail_id) === r.id && a.part === r.part);
+      x.name = (a?.filename ?? "").trim() || "Mail-Anhang";
+    }
+  }
+}
+
+function dokRef(url: string): { id: number; part: string } {
+  const m = url.match(/(?:letters\/|id=)(\d+)(?:&part=([0-9.]+))?/);
+  return { id: Number(m?.[1] ?? 0), part: m?.[2] ?? "" };
+}
+
+/**
+ * Zeilen „Dokument: brief 37“ oder „Dokument: mail 403/2“ (Mail-ID/Anhang-Teil),
+ * optional mit Namen: „Dokument: brief 37 – Zahlungserinnerung“. Mehrere Zeilen
+ * erlaubt; sie verschwinden aus dem Stand.
+ */
+export function dokumenteAusStand(notes: string): { stand: string; dokumente: FallDokument[] } {
+  const re = /^[ \t]*Dokument:[ \t]*(brief|mail)[ \t]+(\d+)(?:\/([0-9.]+))?(?:[ \t]+[–-][ \t]+(.+?))?[ \t]*$\r?\n?/gim;
+  const dokumente: FallDokument[] = [];
+  const stand = notes.replace(re, (_z, art: string, id: string, part: string | undefined, name: string | undefined) => {
+    const a = art.toLowerCase();
+    if (a === "brief") {
+      dokumente.push({ art: "brief", name: name ?? "", oeffnen: `/api/letters/${id}`, download: `/api/letters/${id}?download=1` });
+    } else if (part) {
+      const q = `id=${id}&part=${part}`;
+      dokumente.push({ art: "mail", name: name ?? "", oeffnen: `/api/mail/attachment?${q}&inline=1`, download: `/api/mail/attachment?${q}` });
+    }
+    return "";
+  });
+  return { stand: dokumente.length ? stand.replace(/\n{3,}/g, "\n\n").trim() : notes, dokumente };
 }
 
 type FallRow = { id: number; title: string; notes: string | null; project: string | null; created_at: string | null; completed_at: string | null; priority: number | null };
@@ -167,7 +232,8 @@ export function fristAusStand(notes: string, jahr = new Date().getFullYear()): {
 }
 
 function fallItem(r: FallRow): FallItem {
-  const f = fristAusStand(r.notes ?? "");
+  const dok = dokumenteAusStand(r.notes ?? "");
+  const f = fristAusStand(dok.stand);
   const { stand, sdworx } = sdworxAusStand(f.stand);
   return {
     id: Number(r.id),
@@ -175,6 +241,7 @@ function fallItem(r: FallRow): FallItem {
     stand,
     sdworx,
     frist: f.frist,
+    dokumente: dok.dokumente,
     bereich: (r.project ?? "").trim(),
     erstellt: (r.created_at ?? "").slice(0, 10),
     erledigtAm: r.completed_at ? r.completed_at.slice(0, 10) : null,

@@ -26,7 +26,7 @@ export type WidgetDef = { id: WidgetId; label: string; icon: string; beschreibun
 export const WIDGETS: WidgetDef[] = [
   { id: "posteingaenge", label: "Posteingänge", icon: "inbox", beschreibung: "Slack, Mail, Post, Portale – ungelesen", standardBreit: true },
   { id: "wartet", label: "Wartet auf dich", icon: "pending_actions", beschreibung: "Mail-Entwürfe, die nur noch auf Senden warten", standardBreit: false },
-  { id: "faelle", label: "Fälle mit Claude", icon: "checklist", beschreibung: "Was mit Claude besprochen wurde – offen und erledigt abhaken", standardBreit: false },
+  { id: "faelle", label: "Offene Fälle", icon: "checklist", beschreibung: "Was mit Claude besprochen wurde – mit Dokumenten, offen und erledigt abhaken", standardBreit: false },
   { id: "fristen", label: "Fristen-Ampel", icon: "timer", beschreibung: "Alle Termine mit Datum: Buchhaltung, Aufgaben, Verträge", standardBreit: false },
   { id: "aufgaben", label: "Aufgaben heute", icon: "task_alt", beschreibung: "Heute fällig, mit täglichen Checks", standardBreit: false },
   { id: "termine", label: "Nächste Termine", icon: "calendar_month", beschreibung: "Kalender der nächsten Tage", standardBreit: false },
