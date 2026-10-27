@@ -19,8 +19,15 @@
  * an den Tunnel geschickt – der Mac-Server muss ihn prüfen.
  */
 
-export const TTS_TIMEOUT_MS = 15_000;
-export const STT_TIMEOUT_MS = 30_000;
+/** Wartezeit in ms aus der Umgebung (z. B. ARION_TTS_TIMEOUT_MS), begrenzt auf 5–55 s. */
+export function envTimeout(raw: string | undefined, fallback: number): number {
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? Math.min(55_000, Math.max(5_000, Math.round(n))) : fallback;
+}
+
+/** Standard 15 s; ein lokales Modell auf dem Mac (VoxCPM2) braucht länger → ARION_TTS_TIMEOUT_MS. */
+export const TTS_TIMEOUT_MS = envTimeout(process.env.ARION_TTS_TIMEOUT_MS, 15_000);
+export const STT_TIMEOUT_MS = envTimeout(process.env.ARION_STT_TIMEOUT_MS, 30_000);
 export const TTS_MAX_CHARS = 1500;
 
 /** Basis-URL oder vollständige URL zu einem OpenAI-kompatiblen Pfad auflösen. */

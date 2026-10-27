@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { synthesize, ttsConfigured } from "@/lib/arion-tts";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 /**
  * POST /api/arion/tts  { text } → audio/mpeg (gestreamt vom TTS-Server)
