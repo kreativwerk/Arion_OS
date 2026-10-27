@@ -53,7 +53,8 @@ export const GET = withApi(async () => {
   ] = await Promise.all([
     getConfig(),
     d.all(
-      "SELECT * FROM tasks WHERE done = 0 AND accepted = 1 AND due_date IS NOT NULL AND due_date <= ? ORDER BY priority ASC, due_date ASC",
+      // Fälle mit Claude haben ihr eigenes Widget (inkl. Frist) – hier nicht doppelt
+      "SELECT * FROM tasks WHERE done = 0 AND accepted = 1 AND due_date IS NOT NULL AND due_date <= ? AND source <> 'claude' ORDER BY priority ASC, due_date ASC",
       [today]
     ),
     d.get<{ n: number }>("SELECT COUNT(*) AS n FROM tasks WHERE done = 0 AND accepted = 0"),

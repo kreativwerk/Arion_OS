@@ -94,11 +94,23 @@ export function entwurfVorschau(text: string, max = 220): string {
 
 /**
  * Fälle, die Albert mit Claude bespricht, landen als Aufgabe mit
- * source = 'claude' in der Tabelle tasks (ohne Fälligkeit, damit sie
- * „Aufgaben heute“ nicht füllen). notes trägt den aktuellen Stand,
- * project den Bereich (Arion, Wohnwerk, …).
+ * source = 'claude' in der Tabelle tasks. notes trägt den aktuellen Stand,
+ * project den Bereich (Arion, Wohnwerk, …), due_date die Frist (falls es
+ * eine gibt). Fälle mit Frist stehen oben, die nächste zuerst; sie
+ * erscheinen auch in der Fristen-Ampel, aber nicht unter „Aufgaben heute“.
  */
-export type FallItem = { id: number; titel: string; stand: string; bereich: string; erstellt: string; erledigtAm: string | null; prio: number };
+export type FallItem = {
+  id: number;
+  titel: string;
+  stand: string;
+  bereich: string;
+  erstellt: string;
+  erledigtAm: string | null;
+  prio: number;
+  /** Frist (ISO-Datum) und Tage bis dahin – negativ = überfällig */
+  frist: string | null;
+  tage: number | null;
+};
 export type Faelle = { offen: FallItem[]; erledigt: FallItem[] };
 
 /** Erledigte Fälle bleiben so viele Tage sichtbar (zum Nachschauen/Zurückholen). */
@@ -109,20 +121,43 @@ export function faelle(d: DB, today: string): Promise<Faelle> {
     const seit = iso(new Date(new Date(`${today}T12:00:00Z`).getTime() - FAELLE_ERLEDIGT_TAGE * DAY));
     const [offen, erledigt] = await Promise.all([
       d.all<FallRow>(
-        "SELECT id, title, notes, project, created_at, completed_at, priority FROM tasks WHERE source = 'claude' AND accepted = 1 AND done = 0 ORDER BY priority ASC, id DESC LIMIT 40"
+        "SELECT id, title, notes, project, created_at, completed_at, priority, due_date FROM tasks WHERE source = 'claude' AND accepted = 1 AND done = 0 ORDER BY id DESC LIMIT 40"
       ),
       d.all<FallRow>(
-        "SELECT id, title, notes, project, created_at, completed_at, priority FROM tasks WHERE source = 'claude' AND accepted = 1 AND done = 1 AND completed_at >= ? ORDER BY completed_at DESC LIMIT 20",
+        "SELECT id, title, notes, project, created_at, completed_at, priority, due_date FROM tasks WHERE source = 'claude' AND accepted = 1 AND done = 1 AND completed_at >= ? ORDER BY completed_at DESC LIMIT 20",
         [seit]
       ),
     ]);
-    return { offen: offen.map(fallItem), erledigt: erledigt.map(fallItem) };
+    return {
+      offen: sortiereFaelle(offen.map((r) => fallItem(r, today))),
+      erledigt: erledigt.map((r) => fallItem(r, today)),
+    };
   }, { offen: [], erledigt: [] });
 }
 
-type FallRow = { id: number; title: string; notes: string | null; project: string | null; created_at: string | null; completed_at: string | null; priority: number | null };
+type FallRow = {
+  id: number;
+  title: string;
+  notes: string | null;
+  project: string | null;
+  created_at: string | null;
+  completed_at: string | null;
+  priority: number | null;
+  due_date: string | null;
+};
 
-function fallItem(r: FallRow): FallItem {
+/** Reihenfolge offener Fälle: mit Frist zuerst (nächste oben), dann dringend, dann neueste. */
+export function sortiereFaelle(items: FallItem[]): FallItem[] {
+  return items.slice().sort((a, b) => {
+    if (a.frist && b.frist) return a.frist.localeCompare(b.frist) || b.id - a.id;
+    if (a.frist) return -1;
+    if (b.frist) return 1;
+    return a.prio - b.prio || b.id - a.id;
+  });
+}
+
+export function fallItem(r: FallRow, today: string): FallItem {
+  const frist = r.due_date ? r.due_date.slice(0, 10) : null;
   return {
     id: Number(r.id),
     titel: r.title,
@@ -131,6 +166,8 @@ function fallItem(r: FallRow): FallItem {
     erstellt: (r.created_at ?? "").slice(0, 10),
     erledigtAm: r.completed_at ? r.completed_at.slice(0, 10) : null,
     prio: Number(r.priority ?? 2),
+    frist,
+    tage: frist ? diffDays(frist, today) : null,
   };
 }
 

@@ -228,12 +228,28 @@ export function FaelleWidget({ faelle, onChanged }: { faelle: Faelle; onChanged?
             <div className={`text-[13px] font-medium ${auf ? "" : "truncate"} ${erledigt ? "line-through text-ink-3" : ""}`}>{f.titel}</div>
             {!auf && f.stand && <div className="text-[11px] text-ink-3 truncate">{f.stand}</div>}
           </button>
-          {f.bereich && <Badge>{f.bereich}</Badge>}
-          {!erledigt && f.prio === 1 && <Badge tone="bad">dringend</Badge>}
+          {f.bereich && <span className="hidden sm:inline-flex"><Badge>{f.bereich}</Badge></span>}
+          {!erledigt && f.prio === 1 && !f.frist && <Badge tone="bad">dringend</Badge>}
+          {!erledigt && f.frist && f.tage !== null && (
+            <Badge tone={tageTon(f.tage)}>
+              <Icon name="timer" size={13} className="mr-1" />
+              {f.tage < 0 ? `überfällig ${-f.tage} T` : tageText(f.tage)}
+            </Badge>
+          )}
         </Row>
         {auf && (
           <div className="px-5 pb-3 -mt-1 pl-[54px] space-y-1">
             {f.stand && <p className="text-[13px] text-ink-2 leading-relaxed whitespace-pre-line">{f.stand}</p>}
+            {f.frist && (
+              <p className={`text-[12px] font-medium ${!erledigt && f.tage !== null && f.tage <= 1 ? "text-bad" : "text-ink-2"}`}>
+                Frist {fmtDate(f.frist)}
+              </p>
+            )}
+            {f.bereich && (
+              <div className="sm:hidden">
+                <Badge>{f.bereich}</Badge>
+              </div>
+            )}
             <p className="text-[11px] text-ink-3">
               angelegt {f.erstellt ? fmtDate(f.erstellt) : "–"}
               {f.erledigtAm ? ` · erledigt ${fmtDate(f.erledigtAm)}` : ""}
@@ -248,7 +264,7 @@ export function FaelleWidget({ faelle, onChanged }: { faelle: Faelle; onChanged?
     <Card>
       <CardHeader
         title="Fälle mit Claude"
-        subtitle={faelle.offen.length ? `${faelle.offen.length} offen` : "Alles erledigt"}
+        subtitle={faelleUntertitel(faelle)}
         action={
           <Link href="/aufgaben" className="text-[12px] text-accent">
             Aufgaben →
@@ -274,6 +290,17 @@ export function FaelleWidget({ faelle, onChanged }: { faelle: Faelle; onChanged?
       )}
     </Card>
   );
+}
+
+/** „4 offen · 1 überfällig · 2 Fristen diese Woche“ */
+export function faelleUntertitel(faelle: Faelle): string {
+  if (!faelle.offen.length) return "Alles erledigt";
+  const teile = [`${faelle.offen.length} offen`];
+  const ueber = faelle.offen.filter((f) => f.tage !== null && f.tage < 0).length;
+  const woche = faelle.offen.filter((f) => f.tage !== null && f.tage >= 0 && f.tage <= 7).length;
+  if (ueber) teile.push(`${ueber} überfällig`);
+  if (woche) teile.push(`${woche} ${woche === 1 ? "Frist" : "Fristen"} diese Woche`);
+  return teile.join(" · ");
 }
 
 export function FristenWidget({ items }: { items: Frist[] }) {

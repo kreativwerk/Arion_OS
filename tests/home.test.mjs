@@ -56,3 +56,12 @@ test("Entwurf: Vorschau und Push-Text", async () => {
   assert.equal(p.url, "/?entwurf=7");
   assert.equal(draftPushPayload({ id: 1, to_addr: "", subject: "", dateien: 1 }).body.startsWith("(ohne Betreff) · 1 Anhang"), true);
 });
+
+test("Fälle: Frist zuerst, dann dringend, dann neueste; Tage bis zur Frist", async () => {
+  const { fallItem, sortiereFaelle } = await import("../lib/home-data.ts");
+  const row = (id, due, prio = 2) => ({ id, title: `F${id}`, notes: "", project: "", created_at: "2026-10-01", completed_at: null, priority: prio, due_date: due });
+  const items = [row(1, null), row(2, "2026-11-05"), row(3, null, 1), row(4, "2026-10-25"), row(5, null)].map((r) => fallItem(r, "2026-10-27"));
+  assert.deepEqual(sortiereFaelle(items).map((f) => f.id), [4, 2, 3, 5, 1]);
+  assert.equal(items.find((f) => f.id === 4).tage, -2);
+  assert.equal(items.find((f) => f.id === 1).tage, null);
+});
