@@ -195,11 +195,33 @@ export default function ArionPage() {
         setState("thinking");
         setTranscript("Transkribiere …");
       },
+      onSpeechIssue: (kind: "blocked" | "stuck") =>
+        setError(
+          kind === "blocked"
+            ? "Der Browser lässt ARION erst nach einem Klick sprechen. Einmal auf die Seite klicken, dann klappt es."
+            : "Die Sprachausgabe des Browsers hängt. Chrome ganz beenden (⌘Q) und neu öffnen – in Safari klappt es sofort."
+        ),
     }),
     [setState]
   );
 
   const { unlock, frame, startListening, stopListening, setListenMode, speak, stopSpeaking } = useArionVoice(handlers);
+
+  // Erster Klick oder Tastendruck irgendwo auf der Seite schaltet Audio und Stimme frei –
+  // sonst bleibt ARION beim Weckruf ohne vorherige Geste stumm.
+  useEffect(() => {
+    const once = () => {
+      unlock();
+      window.removeEventListener("pointerdown", once, true);
+      window.removeEventListener("keydown", once, true);
+    };
+    window.addEventListener("pointerdown", once, true);
+    window.addEventListener("keydown", once, true);
+    return () => {
+      window.removeEventListener("pointerdown", once, true);
+      window.removeEventListener("keydown", once, true);
+    };
+  }, [unlock]);
 
   /* ── Fragen ───────────────────────────────────────────── */
 
