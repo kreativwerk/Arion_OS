@@ -171,6 +171,18 @@ export function WartetWidget({ items, onChanged }: { items: WartetItem[]; onChan
   );
 }
 
+/** Frist eines Falls: Datum + Resttage, rot bei ≤ 1 Tag, gelb bei ≤ 7 Tagen. */
+function FristBadge({ iso }: { iso: string }) {
+  const heute = new Date();
+  heute.setHours(0, 0, 0, 0);
+  const t = Math.round((new Date(`${iso}T00:00:00`).getTime() - heute.getTime()) / 86400000);
+  return (
+    <Badge tone={tageTon(t)}>
+      {fmtDate(iso)} · {tageText(t)}
+    </Badge>
+  );
+}
+
 /**
  * Fälle mit Claude: alles, was Albert im Chat angestoßen hat. Claude legt
  * die Fälle an und schreibt den Stand dazu; abgehakt wird hier. Erledigte
@@ -228,11 +240,18 @@ export function FaelleWidget({ faelle, onChanged }: { faelle: Faelle; onChanged?
             <div className={`text-[13px] font-medium ${auf ? "" : "truncate"} ${erledigt ? "line-through text-ink-3" : ""}`}>{f.titel}</div>
             {!auf && f.stand && <div className="text-[11px] text-ink-3 truncate">{f.stand}</div>}
           </button>
+          {f.sdworx && (
+            <Badge tone={f.sdworx.status === "weitergeleitet" ? "good" : "warn"}>
+              {f.sdworx.status === "weitergeleitet" ? "bei SD Worx" : f.sdworx.status === "wartet" ? "SD Worx wartet" : "nicht an SD Worx"}
+            </Badge>
+          )}
           {f.bereich && <Badge>{f.bereich}</Badge>}
           {!erledigt && f.prio === 1 && <Badge tone="bad">dringend</Badge>}
+          {!erledigt && f.frist && <FristBadge iso={f.frist} />}
         </Row>
         {auf && (
           <div className="px-5 pb-3 -mt-1 pl-[54px] space-y-1">
+            {f.sdworx && <p className="text-[12px] text-ink-2">SD Worx: {f.sdworx.text}</p>}
             {f.stand && <p className="text-[13px] text-ink-2 leading-relaxed whitespace-pre-line">{f.stand}</p>}
             <p className="text-[11px] text-ink-3">
               angelegt {f.erstellt ? fmtDate(f.erstellt) : "–"}

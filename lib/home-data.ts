@@ -98,7 +98,22 @@ export function entwurfVorschau(text: string, max = 220): string {
  * „Aufgaben heute“ nicht füllen). notes trägt den aktuellen Stand,
  * project den Bereich (Arion, Wohnwerk, …).
  */
-export type FallItem = { id: number; titel: string; stand: string; bereich: string; erstellt: string; erledigtAm: string | null; prio: number };
+export type FallItem = {
+  id: number;
+  titel: string;
+  stand: string;
+  bereich: string;
+  erstellt: string;
+  erledigtAm: string | null;
+  prio: number;
+  /** Stand beim Lohnbüro, aus der Zeile „SD Worx: …“ im Stand (null = betrifft SD Worx nicht). */
+  sdworx: SdWorxStand | null;
+  /** Frist aus der Zeile „Frist: TT.MM.JJJJ“ im Stand (YYYY-MM-DD), sonst null. */
+  frist: string | null;
+};
+
+/** weitergeleitet = liegt bei SD Worx · wartet = SD Worx wartet auf uns · offen = noch nicht weitergeleitet */
+export type SdWorxStand = { status: "weitergeleitet" | "wartet" | "offen"; text: string };
 export type Faelle = { offen: FallItem[]; erledigt: FallItem[] };
 
 /** Erledigte Fälle bleiben so viele Tage sichtbar (zum Nachschauen/Zurückholen). */
@@ -122,11 +137,44 @@ export function faelle(d: DB, today: string): Promise<Faelle> {
 
 type FallRow = { id: number; title: string; notes: string | null; project: string | null; created_at: string | null; completed_at: string | null; priority: number | null };
 
+/**
+ * Zeile „SD Worx: …“ im Stand eines Falls lesen, z. B.
+ * „SD Worx: weitergeleitet 22.10.“, „SD Worx: wartet auf Wochenstunden“,
+ * „SD Worx: nicht weitergeleitet“. Die Zeile verschwindet aus dem Stand.
+ */
+export function sdworxAusStand(notes: string): { stand: string; sdworx: SdWorxStand | null } {
+  const m = notes.match(/^[ \t]*SD Worx:[ \t]*(.+?)[ \t]*$/im);
+  if (!m) return { stand: notes.trim(), sdworx: null };
+  const text = m[1];
+  const low = text.toLowerCase();
+  const status: SdWorxStand["status"] = /nicht|offen|noch nicht/.test(low)
+    ? "offen"
+    : /wartet|braucht|fehlt/.test(low)
+      ? "wartet"
+      : "weitergeleitet";
+  return { stand: notes.replace(m[0], "").replace(/\n{3,}/g, "\n\n").trim(), sdworx: { status, text } };
+}
+
+/**
+ * Zeile „Frist: TT.MM.JJJJ“ (auch „Frist: TT.MM.“ = laufendes Jahr) im Stand lesen.
+ * Die Zeile verschwindet aus dem Stand; die Frist steht als Badge neben „dringend“.
+ */
+export function fristAusStand(notes: string, jahr = new Date().getFullYear()): { stand: string; frist: string | null } {
+  const m = notes.match(/^[ \t]*Frist:[ \t]*(\d{1,2})\.(\d{1,2})\.(\d{4})?[ \t]*$/im);
+  if (!m) return { stand: notes, frist: null };
+  const frist = `${m[3] ?? jahr}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+  return { stand: notes.replace(m[0], "").replace(/\n{3,}/g, "\n\n").trim(), frist };
+}
+
 function fallItem(r: FallRow): FallItem {
+  const f = fristAusStand(r.notes ?? "");
+  const { stand, sdworx } = sdworxAusStand(f.stand);
   return {
     id: Number(r.id),
     titel: r.title,
-    stand: (r.notes ?? "").trim(),
+    stand,
+    sdworx,
+    frist: f.frist,
     bereich: (r.project ?? "").trim(),
     erstellt: (r.created_at ?? "").slice(0, 10),
     erledigtAm: r.completed_at ? r.completed_at.slice(0, 10) : null,
