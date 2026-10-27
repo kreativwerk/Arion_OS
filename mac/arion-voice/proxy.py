@@ -81,7 +81,7 @@ class Handler(BaseHTTPRequestHandler):
         body = self.rfile.read(length)
 
         headers = {"Content-Type": self.headers.get("Content-Type", "application/octet-stream"), "Content-Length": str(length)}
-        conn = http.client.HTTPConnection(UPSTREAM_HOST, UPSTREAM_PORT, timeout=120)
+        conn = http.client.HTTPConnection(UPSTREAM_HOST, UPSTREAM_PORT, timeout=1500)  # erster Aufruf lädt das Modell
         try:
             conn.request(self.command, path, body=body, headers=headers)
             resp = conn.getresponse()

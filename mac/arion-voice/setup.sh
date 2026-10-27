@@ -16,6 +16,7 @@ AGENT_PLIST="$HOME/Library/LaunchAgents/$AGENT_ID.plist"
 VS_URL="http://127.0.0.1:3900"
 PROXY_PORT=3901
 VOICE_NAME="Alistair"
+TTS_MODEL="voxcpm2"   # Apache 2.0, geschäftlich erlaubt (OmniVoice ist nur nicht-kommerziell)
 
 schritt() { printf '\n\033[1m== %s\033[0m\n' "$1"; }
 ok() { printf '   ✓ %s\n' "$1"; }
@@ -54,6 +55,12 @@ ok "VoiceStudio läuft (Port 3900, nur lokal)"
 osascript -e 'tell application "System Events" to if not (exists login item "VoiceStudio") then make login item at end with properties {path:"/Applications/VoiceStudio.app", hidden:true}' >/dev/null 2>&1 \
   && ok "VoiceStudio startet beim Anmelden automatisch" \
   || hinweis "Autostart bitte selbst setzen: Systemeinstellungen → Allgemein → Anmeldeobjekte → VoiceStudio"
+
+# ── 1b. Sprach-Engine VoxCPM2 ───────────────────────────────────────
+schritt "Sprach-Engine $TTS_MODEL"
+hinweis "In VoiceStudio: Modellkatalog → TTS → VoxCPM2 → installieren und Lizenz (Apache 2.0) akzeptieren."
+hinweis "Die OmniVoice-Lizenz NICHT akzeptieren – sie erlaubt keine geschäftliche Nutzung."
+read -r -p "   VoxCPM2 installiert und Lizenz akzeptiert? [Enter] " _
 
 # ── 2. Alistair-Stimme ───────────────────────────────────────────────
 schritt "Stimme $VOICE_NAME"
@@ -153,14 +160,14 @@ done
 curl -fsS -m 10 "https://$HOST/health" >/dev/null 2>&1 && ok "Von außen getestet" || hinweis "Die Adresse braucht manchmal ein paar Minuten, bis sie erreichbar ist."
 
 # ── 5. Kurztest Sprechen ─────────────────────────────────────────────
-schritt "Probe: Alistair spricht"
-if curl -fsS -m 120 -H "X-Arion-Token: $TOKEN" -H "content-type: application/json" \
-  -d "{\"model\":\"tts-1\",\"voice\":\"$VOICE_NAME\",\"language\":\"de\",\"input\":\"Guten Tag, Sir. Die Stimme von ARION läuft jetzt auf Ihrem Mac.\",\"response_format\":\"mp3\"}" \
+schritt "Probe: Alistair spricht (beim ersten Mal lädt VoxCPM2, das kann einige Minuten dauern)"
+if curl -fsS -m 1500 -H "X-Arion-Token: $TOKEN" -H "content-type: application/json" \
+  -d "{\"model\":\"$TTS_MODEL\",\"voice\":\"$VOICE_NAME\",\"language\":\"de\",\"input\":\"Guten Tag, Sir. Die Stimme von ARION läuft jetzt auf Ihrem Mac.\",\"response_format\":\"mp3\"}" \
   -o "$APP_DIR/probe.mp3" "http://127.0.0.1:$PROXY_PORT/v1/audio/speech"; then
   afplay "$APP_DIR/probe.mp3" || true
   ok "Stimme klingt? Dann passt alles."
 else
-  hinweis "Sprechen hat nicht geklappt – in VoiceStudio prüfen, ob das Profil $VOICE_NAME da ist."
+  hinweis "Sprechen hat nicht geklappt – in VoiceStudio prüfen: VoxCPM2 installiert und Lizenz akzeptiert, Profil $VOICE_NAME vorhanden."
 fi
 
 # ── 6. Werte für Vercel ─────────────────────────────────────────────
@@ -168,8 +175,10 @@ schritt "In Vercel eintragen (Arion OS → Settings → Environment Variables), 
 WERTE="ARION_TTS_URL=https://$HOST
 ARION_STT_URL=https://$HOST
 ARION_TTS_VOICE=$VOICE_NAME
+ARION_TTS_MODEL=$TTS_MODEL
+ARION_TTS_TIMEOUT_MS=45000
 ARION_TUNNEL_TOKEN=$TOKEN"
 printf '%s\n' "$WERTE"
-printf '%s\n' "$WERTE" | pbcopy && hinweis "Die vier Zeilen liegen auch in der Zwischenablage. Vercel nimmt sie per Einfügen in das erste Feld."
+printf '%s\n' "$WERTE" | pbcopy && hinweis "Die Zeilen liegen auch in der Zwischenablage. Vercel nimmt sie per Einfügen in das erste Feld."
 hinweis "Den Token niemandem schicken und nicht in Mails oder Chats einfügen."
 printf '\nFertig. Der Mac sollte nicht in den Ruhezustand gehen (Systemeinstellungen → Energie).\n'

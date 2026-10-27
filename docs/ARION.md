@@ -126,7 +126,8 @@ Alle optional – ohne sie läuft ARION mit Browser-Spracherkennung und Browser-
 | `ELEVENLABS_MODEL` | Modell (Standard `eleven_multilingual_v2`, spricht Deutsch) | `eleven_multilingual_v2` |
 | `ARION_TTS_URL` | OpenAI-kompatibler TTS-Endpunkt (Basis-URL oder voller Pfad `/v1/audio/speech`) | `https://voice.example.com` |
 | `ARION_TTS_VOICE` | Stimmenname, wie ihn der TTS-Server erwartet (Standard `alloy`) | `arion` |
-| `ARION_TTS_MODEL` | Modellname für den TTS-Server (Standard `tts-1`) | `tts-1` |
+| `ARION_TTS_MODEL` | Modellname für den TTS-Server (Standard `tts-1`) | `voxcpm2` |
+| `ARION_TTS_TIMEOUT_MS` | Wartezeit auf die Stimme in ms (Standard 15000, max. 55000) | `45000` |
 | `ARION_STT_URL` | OpenAI-kompatibler STT-Endpunkt (Basis-URL oder `/v1/audio/transcriptions`) | `https://voice.example.com` |
 | `ARION_STT_MODEL` | Modellname für Whisper (Standard `whisper-1`) | `whisper-1` |
 | `ARION_TUNNEL_TOKEN` | Geheimnis für den Tunnel – wird als `X-Arion-Token` **und** `Authorization: Bearer …` mitgeschickt | (langer Zufallswert) |
@@ -143,8 +144,10 @@ Sprachaufnahmen von deutlich über einer Minute (Opus/AAC).
 ## Stimme vom Büro-Mac: VoiceStudio + Tailscale Funnel
 
 Statt ElevenLabs spricht ARION mit der Butler-Stimme **Alistair** aus
-[VoiceStudio](https://github.com/debpalash/VoiceStudio) auf dem Büro-Mac
-(Apple-Chip, macOS 13.3+). VoiceStudio liefert beides OpenAI-kompatibel:
+[VoiceStudio](https://github.com/debpalash/VoiceStudio) auf dem Büro-Mac, Engine **VoxCPM2**
+(Apache 2.0, geschäftlich erlaubt, Deutsch, Klonen). Die Standard-Engine OmniVoice ist
+CC-BY-NC und darf für Arion nicht genutzt werden – ihre Lizenz in VoiceStudio nicht akzeptieren.
+Voraussetzung: Apple-Chip, macOS 13.3+. VoiceStudio liefert beides OpenAI-kompatibel:
 `/v1/audio/speech` (Sprechen) und `/v1/audio/transcriptions` (Zuhören, damit
 klappt die Spracherkennung auch auf dem iPhone).
 
@@ -159,6 +162,7 @@ die Datei auf dem Mac einmal im Terminal starten. Sie
 4. veröffentlicht den Torwächter per `tailscale funnel` unter `https://<mac>.ts.net`,
 5. spielt eine Probe ab und gibt die vier Werte für Vercel aus:
    `ARION_TTS_URL`, `ARION_STT_URL` (beide die ts.net-Adresse), `ARION_TTS_VOICE=Alistair`,
+   `ARION_TTS_MODEL=voxcpm2`, `ARION_TTS_TIMEOUT_MS=45000` (lokales Modell braucht länger als 15 s),
    `ARION_TUNNEL_TOKEN`.
 
 **Warum der Torwächter nötig ist:** Funnel leitet an `localhost` weiter, VoiceStudio

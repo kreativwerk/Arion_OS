@@ -134,3 +134,12 @@ test("Weckruf: „Hey ARION“ und Varianten, aber nicht mitten im Satz", async 
   assert.equal(greetingClip(13), "guten-tag");
   assert.equal(greetingClip(20), "guten-abend");
 });
+
+test("Wartezeit für die Stimme aus der Umgebung, begrenzt auf 5–55 s", async () => {
+  const { envTimeout } = await import("../lib/arion-tts.ts");
+  assert.equal(envTimeout(undefined, 15000), 15000);
+  assert.equal(envTimeout("45000", 15000), 45000);
+  assert.equal(envTimeout("999999", 15000), 55000);
+  assert.equal(envTimeout("100", 15000), 5000);
+  assert.equal(envTimeout("quatsch", 15000), 15000);
+});
