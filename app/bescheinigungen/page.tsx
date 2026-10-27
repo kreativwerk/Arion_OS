@@ -342,7 +342,7 @@ export default function BescheinigungenPage() {
                 <span className="flex flex-wrap gap-1.5 mt-1.5">
                   <Badge tone={r.status === "offen" ? "accent" : r.status === "erledigt" ? "neutral" : "good"}>{STATUS_LABEL[r.status]}</Badge>
                   <FristBadge frist={r.frist} status={r.status} />
-                  {r.status !== "erledigt" && r.fehlend > 0 && <Badge tone="warn">{r.fehlend} Angaben fehlen</Badge>}
+                  {r.status !== "erledigt" && r.fehlend > 0 && <Badge tone="warn">{r.fehlend === 1 ? "1 Angabe fehlt" : `${r.fehlend} Angaben fehlen`}</Badge>}
                   {r.status !== "erledigt" && r.warnungen > 0 && <Badge tone="warn">{r.warnungen} prüfen</Badge>}
                   {r.status !== "erledigt" && r.zettel === 0 && <Badge tone="bad">keine Abrechnung</Badge>}
                 </span>

@@ -203,7 +203,7 @@ export async function overview(d: DB) {
     out.push({ ...r, fehlend: vorlage?.fehlend.length ?? 0, warnungen: vorlage?.warnungen.length ?? 0, zettel });
   }
   const lohn = await d.get<{ dateien: number; von: string; bis: string }>(
-    "SELECT COUNT(*) AS dateien, MIN(monat) AS von, MAX(monat) AS bis FROM lohn_importe WHERE fehler = ''"
+    "SELECT COUNT(*) AS dateien, MIN(monat) AS von, MAX(monat) AS bis FROM lohn_importe WHERE fehler = '' AND monat <> ''"
   );
   return { vorgaenge: out, lohn: { dateien: Number(lohn?.dateien ?? 0), von: lohn?.von ?? "", bis: lohn?.bis ?? "" } };
 }
