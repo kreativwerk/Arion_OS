@@ -30,6 +30,7 @@ export async function notifyNewDrafts(d: DB): Promise<{ gemeldet: number }> {
   const rows = await d.all<{ id: number; to_addr: string; subject: string }>(
     `SELECT id, to_addr, subject FROM mail_drafts
      WHERE status = 'entwurf' AND source = 'claude' AND (notified_at IS NULL OR notified_at = '')
+       AND NOT (sign_spec IS NOT NULL AND sign_spec <> '' AND (sign_status IS NULL OR sign_status = ''))
      ORDER BY id LIMIT 10`
   );
   let gemeldet = 0;

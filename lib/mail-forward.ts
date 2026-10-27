@@ -25,6 +25,16 @@ export async function loadForwardAttachments(d: DB, mailId: number): Promise<Loa
     throw new Error("Anhänge der Originalmail sind zusammen größer als 20 MB.");
   }
 
+  // Alle Anhänge schon als Kopie in der Datenbank? Dann ohne IMAP-Abruf.
+  const blobs = await d.all<{ part: string; data: Buffer | Uint8Array }>(
+    "SELECT part, data FROM mail_attachment_blobs WHERE mail_id = ?",
+    [mailId]
+  );
+  const byPart = new Map(blobs.map((b) => [b.part, Buffer.from(b.data)]));
+  if (metas.every((a) => byPart.has(a.part))) {
+    return metas.map((a) => ({ filename: a.filename, mime: a.mime, content: byPart.get(a.part)! }));
+  }
+
   const hints: string[] = [];
   const acc = [...(await accountsFromDb(d, hints)), ...accountsFromEnv()].find((a) => a.label === mail.account);
   if (!acc) throw new Error(`Postfach „${mail.account}“ ist nicht (mehr) verbunden.`);

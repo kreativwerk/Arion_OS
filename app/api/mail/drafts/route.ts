@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
  */
 
 const COLS = `d.id, d.account_id, a.label AS account, a.username AS from_addr, d.to_addr, d.cc_addr, d.bcc_addr, d.subject,
-  d.body_text, d.reply_mail_id, d.forward_mail_id, d.source, d.note, d.status, d.error, d.created_at, d.updated_at, d.sent_at`;
+  d.body_text, d.reply_mail_id, d.forward_mail_id, d.sign_status, d.sign_error, d.source, d.note, d.status, d.error, d.created_at, d.updated_at, d.sent_at`;
 
 async function list(status: string | null) {
   const d = await getDb();

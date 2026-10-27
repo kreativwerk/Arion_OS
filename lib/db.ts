@@ -473,11 +473,30 @@ function postfachStatements(dialect: "sqlite" | "postgres", ID: string, NOW: str
       mime TEXT DEFAULT 'application/octet-stream',
       data ${BLOB} NOT NULL
     )`,
+    // Kopie der Mail-Anhänge (PDF/Bilder), vom Mail-Cron nachgeladen – so sind
+    // Anhänge ohne Live-IMAP-Abruf verfügbar (lib/mail-attachment-store.ts).
+    `CREATE TABLE IF NOT EXISTS mail_attachment_blobs (
+      mail_id INTEGER NOT NULL,
+      part TEXT NOT NULL,
+      filename TEXT NOT NULL DEFAULT '',
+      mime TEXT DEFAULT 'application/octet-stream',
+      size INTEGER NOT NULL DEFAULT 0,
+      data ${BLOB} NOT NULL,
+      created_at TEXT DEFAULT ${NOW},
+      PRIMARY KEY (mail_id, part)
+    )`,
+    // Unterschrift/Stempel für serverseitiges Unterschreiben (lib/draft-sign.ts)
+    `CREATE TABLE IF NOT EXISTS sign_assets (
+      key TEXT PRIMARY KEY,
+      mime TEXT NOT NULL DEFAULT 'image/png',
+      data ${BLOB} NOT NULL,
+      updated_at TEXT DEFAULT ${NOW}
+    )`,
   ];
 }
 
 /** Postfach-Tabellen – Mailinhalte sind sensibel, öffentliche Supabase-API sperren. */
-const POSTFACH_TABLES = ["mails", "mail_html", "mail_sync", "mail_drafts", "mail_draft_files"];
+const POSTFACH_TABLES = ["mails", "mail_html", "mail_sync", "mail_drafts", "mail_draft_files", "mail_attachment_blobs", "sign_assets"];
 
 /**
  * Buchhaltungs-Modul (siehe docs/BUCHHALTUNG.md):
@@ -592,6 +611,9 @@ function buchhaltungStatements(dialect: "sqlite" | "postgres", ID: string, NOW: 
 /** Tabellen des Buchhaltungs-Moduls – auf Supabase per RLS für die öffentliche API gesperrt. */
 const BUCH_TABLES = ["buch_eingang", "buch_eingang_blobs", "buch_ablage", "buch_ausgaben", "buch_fristen", "buch_kennzahlen", "buch_1590"];
 
+/** Spalten für das Unterschreiben von Entwurfs-Anhängen auf dem Server (lib/draft-sign.ts). */
+const DRAFT_SIGN_COLUMNS = ["sign_spec", "sign_status", "sign_error"];
+
 /** Spalten, die die Briefpost nachträglich bekommen hat (Upload + KI-Analyse). */
 const LETTER_COLUMNS = ["category", "action", "due_date", "reference", "notes", "mime", "extracted", "firma", "drive_file_id", "analysis_error"];
 
@@ -620,6 +642,7 @@ async function ensureSchema(d: DB) {
     await addColumn("assistant_messages", "conversation_id", "TEXT DEFAULT ''");
     await addColumn("mail_drafts", "notified_at", "TEXT");
     await addColumn("mail_drafts", "forward_mail_id", "INTEGER");
+    for (const col of DRAFT_SIGN_COLUMNS) await addColumn("mail_drafts", col, "TEXT DEFAULT ''");
     await addColumn("buch_ausgaben", "beleg_url", "TEXT DEFAULT ''");
   } else {
     // Postgres kennt IF NOT EXISTS direkt
@@ -642,6 +665,8 @@ async function ensureSchema(d: DB) {
     await d.run("ALTER TABLE mail_drafts ADD COLUMN IF NOT EXISTS notified_at TEXT");
     // Weiterleiten: Verweis auf die Originalmail, Anhänge kommen beim Versand per IMAP (lib/mail-forward.ts)
     await d.run("ALTER TABLE mail_drafts ADD COLUMN IF NOT EXISTS forward_mail_id INTEGER");
+    // Unterschreiben auf dem Server: Auftrag (JSON) + Status/Fehler (lib/draft-sign.ts)
+    for (const col of DRAFT_SIGN_COLUMNS) await d.run(`ALTER TABLE mail_drafts ADD COLUMN IF NOT EXISTS ${col} TEXT DEFAULT ''`);
     // Belegabgleich: Link zum gefundenen Beleg im Drive (lib/beleg-abgleich.ts)
     await d.run("ALTER TABLE buch_ausgaben ADD COLUMN IF NOT EXISTS beleg_url TEXT DEFAULT ''");
     // Scans sind sensibel: öffentliche Supabase-API sperren (die App selbst

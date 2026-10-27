@@ -1,6 +1,7 @@
 import { ImapFlow, type FetchMessageObject, type FetchQueryObject } from "imapflow";
 import type { DB } from "@/lib/db";
 import type { MailAccountEnv } from "@/lib/mail-fetch";
+import { storeAttachmentBlobs } from "@/lib/mail-attachment-store";
 import {
   BODY_PART_MAX_BYTES,
   archiveFolders,
@@ -380,6 +381,14 @@ export async function runMailArchive(d: DB, accounts: MailAccountEnv[], deadline
           if (fixed) hints.push(`${acc.label}: ${fixed} eingebettete Anhänge nachgetragen`);
         } catch (e) {
           hints.push(`${acc.label} / Anhänge nachtragen: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
+      // PDFs/Bilder als Kopie in die Datenbank (für Unterschreiben/Weiterleiten ohne Live-Abruf)
+      if (deadline - Date.now() > 6_000) {
+        try {
+          await storeAttachmentBlobs(client, d, acc.label, deadline);
+        } catch (e) {
+          hints.push(`${acc.label} / Anhänge speichern: ${e instanceof Error ? e.message : String(e)}`);
         }
       }
       await client.logout();

@@ -6,6 +6,7 @@ import { decryptSecret } from "@/lib/secret-store";
 import { openImap } from "@/lib/mail-archive";
 import { parseAddressList, sentFolder, smtpFor, type FolderInfo } from "@/lib/mail-parts";
 import { loadForwardAttachments, type LoadedAttachment } from "@/lib/mail-forward";
+import { signDraft } from "@/lib/draft-sign";
 
 /**
  * Versand freigegebener Entwürfe über den SMTP-Server des Postfachs.
@@ -28,6 +29,8 @@ type DraftRow = {
   body_text: string;
   reply_mail_id: number | null;
   forward_mail_id: number | null;
+  sign_spec: string | null;
+  sign_status: string | null;
   in_reply_to: string;
   references_hdr: string;
   status: string;
@@ -69,6 +72,11 @@ export async function sendDraft(d: DB, draftId: number): Promise<SendResult> {
 
   const draft = await d.get<DraftRow>("SELECT * FROM mail_drafts WHERE id = ?", [draftId]);
   if (!draft) return fail("Entwurf nicht gefunden.");
+  // Unterschrifts-Auftrag noch offen? Dann jetzt – ohne fertige Unterschrift wird nicht gesendet.
+  if (draft.sign_spec && draft.sign_status !== "fertig") {
+    const signed = await signDraft(d, draftId);
+    if (!signed.ok) return fail(`Unterschrift: ${signed.error}`);
+  }
   const acc = await d.get<AccountRow>("SELECT * FROM mail_accounts WHERE id = ?", [draft.account_id]);
   if (!acc || !acc.password_enc) return fail("Absender-Postfach fehlt oder hat kein Passwort.");
 
