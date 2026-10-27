@@ -142,9 +142,13 @@ export async function importiereLohnPdf(d: DB, quelleId: string, name: string, d
 /** Neue Sammel-PDFs aus dem Drive lesen – neueste zuerst, so viele die Zeit erlaubt. */
 export async function runLohnImport(d: DB, deadline: number): Promise<{ dateien: number; zettel: number; offen: number; hinweis?: string }> {
   if (!(await driveConfigured())) return { dateien: 0, zettel: 0, offen: 0, hinweis: "Google Drive ist nicht verbunden." };
-  const known = new Set((await d.all<{ quelle_id: string }>("SELECT quelle_id FROM lohn_importe")).map((r) => r.quelle_id));
+  const importe = await d.all<{ quelle_id: string; name: string }>("SELECT quelle_id, name FROM lohn_importe");
+  const known = new Set(importe.map((r) => r.quelle_id));
+  // Dieselbe Datei liegt oft mehrfach im Drive (Monatsordner + Kopie) – gleicher Name = gleiche Abrechnung
+  const namen = new Set(importe.map((r) => r.name));
   const files = (await searchPdfsByName(LOHN_PDF_FRAGMENT, { deadline }))
     .filter((f) => !/duplikat/i.test(f.name) && /^\d{4}_\d{2}_Verdienstabrechnung/.test(f.name) && !known.has(f.id))
+    .filter((f) => (namen.has(f.name) ? false : (namen.add(f.name), true)))
     .sort((a, b) => b.name.localeCompare(a.name));
   let dateien = 0;
   let zettel = 0;
