@@ -140,10 +140,41 @@ Sprachaufnahmen von deutlich über einer Minute (Opus/AAC).
 
 ---
 
+## Stimme vom Büro-Mac: VoiceStudio + Tailscale Funnel
+
+Statt ElevenLabs spricht ARION mit der Butler-Stimme **Alistair** aus
+[VoiceStudio](https://github.com/debpalash/VoiceStudio) auf dem Büro-Mac
+(Apple-Chip, macOS 13.3+). VoiceStudio liefert beides OpenAI-kompatibel:
+`/v1/audio/speech` (Sprechen) und `/v1/audio/transcriptions` (Zuhören, damit
+klappt die Spracherkennung auch auf dem iPhone).
+
+Einrichtung: `mac/arion-voice/build.sh` baut `dist/arion-stimme-einrichten.command`,
+die Datei auf dem Mac einmal im Terminal starten. Sie
+
+1. installiert VoiceStudio (offizielles Installationsskript) und startet es beim Anmelden,
+2. schneidet aus den Alistair-Sätzen (`CLIP_URLS`) eine Probe und legt das Stimmprofil „Alistair“ an,
+3. startet den **Torwächter** `proxy.py` (127.0.0.1:3901, LaunchAgent): nur
+   `POST /v1/audio/speech` und `POST /v1/audio/transcriptions`, nur mit `X-Arion-Token`
+   (Vergleich in konstanter Zeit), max. 10 MB, alles andere 401/404,
+4. veröffentlicht den Torwächter per `tailscale funnel` unter `https://<mac>.ts.net`,
+5. spielt eine Probe ab und gibt die vier Werte für Vercel aus:
+   `ARION_TTS_URL`, `ARION_STT_URL` (beide die ts.net-Adresse), `ARION_TTS_VOICE=Alistair`,
+   `ARION_TUNNEL_TOKEN`.
+
+**Warum der Torwächter nötig ist:** Funnel leitet an `localhost` weiter, VoiceStudio
+behandelt Anfragen von `localhost` als vertrauenswürdig und verlangt dann keinen
+Schlüssel. Ohne Torwächter wäre die ganze VoiceStudio-API (auch Verwaltung und
+Stimmen-Klonen) öffentlich. VoiceStudio selbst rät von Funnel ab – deshalb hängt nur
+der Torwächter am Funnel, nie Port 3900.
+
+`ELEVENLABS_*` nicht setzen, sonst hat ElevenLabs Vorrang. Ist der Mac aus, fällt
+ARION still auf Browser-Stimme und -Erkennung zurück.
+
 ## Der Mac-Teil (später)
 
 Ziel: „Hey ARION“ am Mac, Antworten mit der eigenen VoiceStudio-Stimme, lokales
-Whisper – ohne Cloud-Kosten. Der Web-Teil ist darauf vorbereitet:
+Whisper – ohne Cloud-Kosten. Stimme und Erkennung sind oben gelöst; offen ist der
+Weckruf ohne offene Seite. Der Web-Teil ist darauf vorbereitet:
 
 1. **VoiceStudio** stellt einen OpenAI-kompatiblen Endpunkt
    `POST /v1/audio/speech` bereit (Antwort `audio/mpeg`).
