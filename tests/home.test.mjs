@@ -3,15 +3,28 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { STANDARD_LAYOUT, moveItem, normalizeLayout, parseEuro, parseQontoEingang, parseQontoLastschrift } from "../lib/home-widgets.ts";
 
-test("Layout: leer → Standard, Unbekanntes raus, Neues hinten dran", () => {
+test("Layout: leer → Standard, Unbekanntes raus, Fehlendes ergänzt", () => {
   assert.equal(normalizeLayout(null).length, STANDARD_LAYOUT.length);
   const l = normalizeLayout('[{"id":"konto","an":false},{"id":"quatsch"},{"id":"konto"},{"id":"aufgaben","breit":true}]');
-  assert.deepEqual(l.slice(0, 2), [
-    { id: "konto", an: false, breit: false },
-    { id: "aufgaben", an: true, breit: true },
-  ]);
+  // Gespeicherte Einträge behalten Einstellungen und Reihenfolge
+  assert.deepEqual(l[0], { id: "konto", an: false, breit: false });
+  const aufgaben = l.find((x) => x.id === "aufgaben");
+  assert.deepEqual(aufgaben, { id: "aufgaben", an: true, breit: true });
+  assert.ok(l.indexOf(aufgaben) > 0);
   assert.equal(l.length, STANDARD_LAYOUT.length);
   assert.equal(new Set(l.map((x) => x.id)).size, l.length);
+});
+
+test("Neues Widget landet hinter seinem Vorgänger statt ganz unten", () => {
+  // Gespeichertes Layout von vor „Fälle mit Claude“: faelle fehlt
+  const alt = STANDARD_LAYOUT.filter((x) => x.id !== "faelle").reverse();
+  const l = normalizeLayout(JSON.stringify(alt));
+  const iWartet = l.findIndex((x) => x.id === "wartet");
+  assert.equal(l[iWartet + 1].id, "faelle");
+  assert.equal(l.length, STANDARD_LAYOUT.length);
+  // Ohne Vorgänger im Layout: ans Ende
+  const ohne = normalizeLayout('[{"id":"konto"}]');
+  assert.equal(ohne[0].id, "konto");
 });
 
 test("Verschieben an den Rändern bleibt stabil", () => {

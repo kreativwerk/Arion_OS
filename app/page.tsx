@@ -7,12 +7,14 @@ import { fmtDate, todayIso } from "@/lib/client";
 import TaskQuickSheet from "@/components/TaskQuickSheet";
 import NutritionTracker from "@/components/NutritionTracker";
 import {
+  FaelleWidget,
   FlotteWidget,
   FristenWidget,
   KontoWidget,
   StationWidget,
   WartetWidget,
   WohnwerkWidget,
+  type Faelle,
   type Flotte,
   type Frist,
   type Konto,
@@ -46,6 +48,7 @@ type Dash = {
   wohnwerk?: Wohnwerk;
   station?: Station;
   flotte?: Flotte;
+  faelle?: Faelle;
 };
 
 const eur = (n: number) => n.toLocaleString("de-DE", { style: "currency", currency: "EUR" });
@@ -345,6 +348,8 @@ export default function TodayPage() {
         ) : null;
       case "wartet":
         return <WartetWidget items={data.wartet ?? []} onChanged={reload} />;
+      case "faelle":
+        return <FaelleWidget faelle={data.faelle ?? { offen: [], erledigt: [] }} onChanged={reload} />;
       case "fristen":
         return <FristenWidget items={data.fristen ?? []} />;
       case "konto":

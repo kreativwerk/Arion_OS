@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { withApi } from "@/lib/api-error";
 import { getDb, getConfig, todayIso } from "@/lib/db";
 import { dashboardBuchhaltung } from "@/lib/buch-overview";
-import { flotte, fristen, konto, station, wartetAufDich, wohnwerk } from "@/lib/home-data";
+import { faelle, flotte, fristen, konto, station, wartetAufDich, wohnwerk } from "@/lib/home-data";
 import { normalizeLayout } from "@/lib/home-widgets";
 
 export const dynamic = "force-dynamic";
@@ -49,6 +49,7 @@ export const GET = withApi(async () => {
     wohnwerkDaten,
     stationDaten,
     flotteDaten,
+    faelleDaten,
   ] = await Promise.all([
     getConfig(),
     d.all(
@@ -78,6 +79,7 @@ export const GET = withApi(async () => {
     wohnwerk(d, today),
     station(d, today),
     flotte(d),
+    faelle(d, today),
   ]);
 
   return NextResponse.json({
@@ -107,5 +109,6 @@ export const GET = withApi(async () => {
     wohnwerk: wohnwerkDaten,
     station: stationDaten,
     flotte: flotteDaten,
+    faelle: faelleDaten,
   });
 });
