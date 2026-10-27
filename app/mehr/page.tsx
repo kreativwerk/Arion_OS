@@ -11,6 +11,7 @@ const MODULES = [
   { href: "/mail", label: "Mail-Digest", icon: "mail", desc: "Wichtige Mails, gefiltert" },
   { href: "/post", label: "Briefpost", icon: "markunread_mailbox", desc: "Digital zugestellte Scans" },
   { href: "/buchhaltung", label: "Buchhaltung", icon: "account_balance", desc: "Belege, Abgleich, Fristen" },
+  { href: "/bescheinigungen", label: "Bescheinigungen", icon: "assignment_ind", desc: "Arbeitsagentur & Kassen, SV-Meldeportal" },
   { href: "/vertraege", label: "Verträge", icon: "contract", desc: "Fristen & Kosten" },
   { href: "/clipboard", label: "Clipboard", icon: "content_paste", desc: "Textbausteine & Nummern" },
   { href: "/watcher", label: "Portale", icon: "travel_explore", desc: "Watcher & Meldungen" },

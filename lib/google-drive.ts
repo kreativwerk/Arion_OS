@@ -394,3 +394,30 @@ export async function listFilesUnder(path: string, maxDepth = 3, opts: DriveOpts
   }
   return out;
 }
+
+/* ── Bescheinigungen (lib/bescheinigung.ts) ────────────────────────────── */
+
+export type DriveFoundFile = { id: string; name: string; modifiedTime: string; size: number };
+
+/** PDFs, deren Name `fragment` enthält – im ganzen Drive (nicht im Papierkorb). */
+export async function searchPdfsByName(fragment: string, opts: DriveOpts = {}): Promise<DriveFoundFile[]> {
+  const out: DriveFoundFile[] = [];
+  let pageToken = "";
+  do {
+    const params = new URLSearchParams({
+      q: `name contains '${q(fragment)}' and mimeType = 'application/pdf' and trashed = false`,
+      fields: "nextPageToken, files(id, name, modifiedTime, size)",
+      pageSize: "200",
+      corpora: "allDrives",
+    });
+    if (pageToken) params.set("pageToken", pageToken);
+    const { data } = await driveFetch<{ files: (Omit<DriveFoundFile, "size"> & { size?: string })[]; nextPageToken?: string }>(
+      `${DRIVE}/files?${params}&${ALL_DRIVES}`,
+      {},
+      opts
+    );
+    out.push(...(data.files ?? []).map((f) => ({ ...f, size: Number(f.size ?? 0) })));
+    pageToken = data.nextPageToken ?? "";
+  } while (pageToken && out.length < 1000);
+  return out;
+}

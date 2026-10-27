@@ -69,6 +69,7 @@ cp .env.example .env.local
 - [`docs/BUCHHALTUNG.md`](docs/BUCHHALTUNG.md) – Belegpipeline: Mail-Abruf, Google-Drive-Ablage, Cron, SQL-Vertrag für die Claude-Routine
 - [`docs/ARION.md`](docs/ARION.md) – Sprachassistent: Architektur, Umgebungsvariablen, Wake-Hook, Mac-Anbindung, Sicherheit
 - [`docs/UNTERSCHRIFT.md`](docs/UNTERSCHRIFT.md) – Mail-Anhänge als Kopie, Unterschrift/Stempel serverseitig in Entwurfs-Anhänge setzen
+- [`docs/BESCHEINIGUNGEN.md`](docs/BESCHEINIGUNGEN.md) – Arbeits-/Entgelt-/Nebeneinkommensbescheinigungen und DEÜV aus Briefpost + SD-Worx-Abrechnungen für das SV-Meldeportal vorbereiten
 - [`docs/CODRIVER.md`](docs/CODRIVER.md) – API für die Mitarbeiter-App (Aufgaben-Eingang)
 - [`docs/SAAS.md`](docs/SAAS.md) – Verkaufsfähigkeit: White-Label heute, Multi-Tenant-Fahrplan
 

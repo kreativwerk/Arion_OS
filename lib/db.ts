@@ -371,6 +371,74 @@ function schemaStatements(dialect: "sqlite" | "postgres"): string[] {
     ...buchhaltungStatements(dialect, ID, NOW, WS),
     ...postfachStatements(dialect, ID, NOW, WS),
     ...codriverStatements(),
+    ...bescheinigungStatements(dialect, ID, NOW, WS),
+  ];
+}
+
+/**
+ * Bescheinigungen (siehe docs/BESCHEINIGUNGEN.md): Anforderungen aus der
+ * Briefpost (Arbeits-/Nebeneinkommens-/Entgeltbescheinigung, DEÜV) und die
+ * gelesenen SD-Worx-Verdienstabrechnungen, aus denen die Ausfüllvorlagen für das
+ * SV-Meldeportal entstehen. Beträge in Cent.
+ */
+function bescheinigungStatements(dialect: "sqlite" | "postgres", ID: string, NOW: string, WS: string): string[] {
+  const CT = dialect === "sqlite" ? "INTEGER" : "bigint";
+  return [
+    `CREATE TABLE IF NOT EXISTS bescheinigungen (
+      ${ID}, ${WS},
+      art TEXT NOT NULL DEFAULT 'sonstiges',
+      person TEXT NOT NULL DEFAULT '',
+      geb TEXT DEFAULT '',
+      rvnr TEXT DEFAULT '',
+      stelle TEXT DEFAULT '',
+      zeichen TEXT DEFAULT '',
+      von TEXT DEFAULT '',
+      bis TEXT DEFAULT '',
+      frist TEXT DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'offen',
+      letter_ids TEXT DEFAULT '',
+      angaben TEXT DEFAULT '{}',
+      notiz TEXT DEFAULT '',
+      gesendet_am TEXT DEFAULT '',
+      created_at TEXT DEFAULT ${NOW},
+      updated_at TEXT DEFAULT ${NOW}
+    )`,
+    `CREATE INDEX IF NOT EXISTS bescheinigungen_status_idx ON bescheinigungen (status, frist)`,
+    `CREATE TABLE IF NOT EXISTS lohn_zettel (
+      ${ID}, ${WS},
+      quelle_id TEXT NOT NULL,
+      nr INTEGER NOT NULL,
+      pn TEXT NOT NULL DEFAULT '',
+      monat TEXT NOT NULL DEFAULT '',
+      lauf TEXT DEFAULT '',
+      art TEXT DEFAULT '',
+      name TEXT DEFAULT '',
+      geb TEXT DEFAULT '',
+      rvnr TEXT DEFAULT '',
+      eintritt TEXT DEFAULT '',
+      austritt TEXT DEFAULT '',
+      kk TEXT DEFAULT '',
+      bgrs TEXT DEFAULT '',
+      pgr TEXT DEFAULT '',
+      sv_tage INTEGER DEFAULT 0,
+      brutto_ct ${CT} DEFAULT 0,
+      sv_lfd_ct ${CT} DEFAULT 0,
+      sv_eb_ct ${CT} DEFAULT 0,
+      netto_ct ${CT} DEFAULT 0,
+      auszahlung_ct ${CT} DEFAULT 0,
+      lohnarten TEXT DEFAULT '[]',
+      UNIQUE (quelle_id, nr)
+    )`,
+    `CREATE INDEX IF NOT EXISTS lohn_zettel_rvnr_idx ON lohn_zettel (rvnr, monat)`,
+    `CREATE INDEX IF NOT EXISTS lohn_zettel_pn_idx ON lohn_zettel (pn, monat)`,
+    `CREATE TABLE IF NOT EXISTS lohn_importe (
+      quelle_id TEXT PRIMARY KEY,
+      name TEXT DEFAULT '',
+      monat TEXT DEFAULT '',
+      zettel INTEGER DEFAULT 0,
+      fehler TEXT DEFAULT '',
+      created_at TEXT DEFAULT ${NOW}
+    )`,
   ];
 }
 
@@ -609,6 +677,9 @@ function buchhaltungStatements(dialect: "sqlite" | "postgres", ID: string, NOW: 
 }
 
 /** Tabellen des Buchhaltungs-Moduls – auf Supabase per RLS für die öffentliche API gesperrt. */
+/** Personaldaten (Entgelte, RV-Nummern) – auf Supabase per RLS für die öffentliche API gesperrt. */
+const PERSONAL_TABLES = ["bescheinigungen", "lohn_zettel", "lohn_importe"];
+
 const BUCH_TABLES = ["buch_eingang", "buch_eingang_blobs", "buch_ablage", "buch_ausgaben", "buch_fristen", "buch_kennzahlen", "buch_1590"];
 
 /** Spalten für das Unterschreiben von Entwurfs-Anhängen auf dem Server (lib/draft-sign.ts). */
@@ -675,6 +746,7 @@ async function ensureSchema(d: DB) {
     // Belege + Bankdaten ebenso (Liste ist fest im Code, keine Eingabe)
     for (const t of BUCH_TABLES) await d.run(`ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`);
     for (const t of POSTFACH_TABLES) await d.run(`ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`);
+    for (const t of PERSONAL_TABLES) await d.run(`ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`);
     await d.run("ALTER TABLE codriver_docs ENABLE ROW LEVEL SECURITY");
   }
 

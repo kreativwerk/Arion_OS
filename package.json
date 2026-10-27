@@ -9,12 +9,13 @@
     "lint": "eslint",
     "test:buchhaltung": "node --experimental-strip-types --no-warnings --import ./tests/ts-resolve.mjs --test tests/buchhaltung.test.mjs",
     "test:arion": "node --experimental-strip-types --no-warnings --import ./tests/ts-resolve.mjs --test tests/arion.test.mjs",
-    "test": "node --experimental-strip-types --no-warnings --import ./tests/ts-resolve.mjs --test tests/buchhaltung.test.mjs tests/arion.test.mjs tests/postfach.test.mjs tests/beleg.test.mjs tests/home.test.mjs tests/codriver.test.mjs tests/sign.test.mjs",
+    "test": "node --experimental-strip-types --no-warnings --import ./tests/ts-resolve.mjs --test tests/buchhaltung.test.mjs tests/arion.test.mjs tests/postfach.test.mjs tests/beleg.test.mjs tests/home.test.mjs tests/codriver.test.mjs tests/sign.test.mjs tests/bescheinigung.test.mjs",
     "test:postfach": "node --experimental-strip-types --no-warnings --import ./tests/ts-resolve.mjs --test tests/postfach.test.mjs",
     "test:beleg": "node --experimental-strip-types --no-warnings --import ./tests/ts-resolve.mjs --test tests/beleg.test.mjs",
     "test:home": "node --experimental-strip-types --no-warnings --import ./tests/ts-resolve.mjs --test tests/home.test.mjs",
     "test:codriver": "node --experimental-strip-types --no-warnings --import ./tests/ts-resolve.mjs --test tests/codriver.test.mjs",
-    "test:sign": "node --experimental-strip-types --no-warnings --import ./tests/ts-resolve.mjs --test tests/sign.test.mjs"
+    "test:sign": "node --experimental-strip-types --no-warnings --import ./tests/ts-resolve.mjs --test tests/sign.test.mjs",
+    "test:bescheinigung": "node --experimental-strip-types --no-warnings --import ./tests/ts-resolve.mjs --test tests/bescheinigung.test.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
@@ -28,6 +29,7 @@
     "postgres": "^3.4.9",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "unpdf": "1.8.1",
     "web-push": "^3.6.7"
   },
   "devDependencies": {
