@@ -141,6 +141,21 @@ test("erkennt Entgeltbescheinigung Krankengeld und DEÜV-Liste", () => {
   assert.equal(d.bis, "31.12.2025");
 
   assert.equal(erkenneAnforderung({ subject: "Rechnung", summary: "Strom", extracted: "" }), null);
+
+  const ab = erkenneAnforderung({
+    subject: "Fehlende DEÜV-Abmeldung",
+    sender: "BARMER",
+    summary: "",
+    extracted: JSON.stringify({ text: "Fehlende DEÜV-Abmeldung\nVersicherte(r): Max Mustermann\nGeburtsdatum: 01.01.1990\nBitte übermitteln Sie die Abmeldung zur Sozialversicherung zum 15.06.2026. Bisher liegt uns keine Abmeldung vor.\nWir danken Ihnen für Ihre Bemühungen." }),
+  });
+  assert.equal(ab.person, "Max Mustermann");
+  assert.equal(ab.bis, "15.06.2026");
+
+  // Begrüßung einer neuen Kasse ist keine fehlende Meldung
+  assert.equal(
+    erkenneAnforderung({ subject: "Willkommen", summary: "", extracted: JSON.stringify({ text: "Herzlich willkommen. Für Ihr Unternehmen haben wir ein Arbeitgeberkonto eröffnet. Anmeldung bitte per DEÜV-Datensatz DSAK, falls noch nicht geschehen." }) }),
+    null
+  );
 });
 
 test("gleicherVorgang / normName", () => {
