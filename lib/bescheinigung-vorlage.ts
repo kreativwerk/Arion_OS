@@ -200,7 +200,7 @@ export function baueVorlage(v: Vorgang, zettel: Zettel[], a: Angaben): Vorlage {
     const ua = zettel.flatMap((z) => (z.lohnarten ?? []).filter((l) => l.nr === "481").map((l) => ({ m: z.monat, b: l.werte[l.werte.length - 1] })));
     abschnitte.push({
       titel: "Arbeitsentgelt (abgerechnete Monate, max. 12)",
-      felder: ua.length ? [f("Urlaubsabgeltung", ua.map((u) => `${monatDe(u.m)}: ${u.b.toLocaleString("de-DE", { minimumFractionDigits: 2 })} €`).join(", "))] : [f("Urlaubsabgeltung", "keine", { hinweis: "keine" })],
+      felder: ua.length ? [f("Urlaubsabgeltung", ua.map((u) => `${monatDe(u.m)}: ${u.b.toLocaleString("de-DE", { minimumFractionDigits: 2 })} €`).join(", "))] : [f("Urlaubsabgeltung", "keine")],
       tabelle: {
         kopf: ["Zeitraum", "Beitragspfl. Entgelt", "Einmalzahlung", "Stunden", "Inhalt"],
         zeilen: letzte.map((w) => [
