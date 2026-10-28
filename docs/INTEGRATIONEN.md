@@ -131,6 +131,24 @@ select cron.schedule(
 
 Die Seite /postfach aktualisiert sich zusätzlich jede Minute selbst, solange sie offen ist.
 
+### Tagesbericht um 9 Uhr (Push + Mail)
+
+`lib/tagesbericht.ts` läuft im Mail-Cron (pg_cron alle 10 Minuten) und schickt ab 9:00 Uhr Berliner
+Zeit einmal pro Tag einen Bericht – als Push aufs Handy und als Mail an info@arion-logistics.de
+(gesendet über dasselbe Postfach, Entwurf mit `source = 'tagesbericht'`).
+
+Inhalt:
+- **Fristen:** überfällig und in den nächsten 7 Tagen (Aufgaben, Claude-Fälle mit „Frist:“-Zeile,
+  Buchhaltung, Verträge, Termine – dieselbe Quelle wie die Fristen-Ampel der Startseite).
+- **SD Worx:** neue Posts, Erwähnungen und gelöste Fälle aus den Benachrichtigungs-Mails des
+  Kundenportals seit dem letzten Bericht, Mails von SD-Worx-Mitarbeitern und die letzte Übersicht aus
+  dem Buddy-Aufgabenzentrum. Den „To Dos“-Zähler im Portal sieht Arion OS nicht (nur mit Login).
+- **Wartet auf dich:** offene Mail-Entwürfe.
+
+Doppelversand verhindert `app_config.tagesbericht_tag` (atomares Upsert), das Fenster für SD Worx
+steht in `app_config.tagesbericht_seit`. Abschalten: `ARION_TAGESBERICHT=aus`; anderer Empfänger:
+`ARION_TAGESBERICHT_AN`.
+
 ## 3. Briefpost-Scans vom Mitarbeiter
 
 Heute: Im Post-Modul werden beliebig viele Scans (PDF, JPG, PNG, GIF, WebP, HEIC – je max.
