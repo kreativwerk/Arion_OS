@@ -4,6 +4,7 @@ import { getDb } from "@/lib/db";
 import { notifyNewDrafts } from "@/lib/draft-notify";
 import { signPendingDrafts } from "@/lib/draft-sign";
 import { runMailFetch } from "@/lib/mail-fetch";
+import { tagesberichtFaellig } from "@/lib/tagesbericht";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -32,8 +33,16 @@ export const GET = withApi(async (req: NextRequest) => {
   // Unterschrifts-Aufträge vor der Meldung erledigen, damit der Push den fertigen Anhang zählt
   const sign = await signPendingDrafts(d, Date.now() + 12_000).catch((e) => ({ unterschrieben: 0, fehler: [String(e)] }));
   const entwuerfe = await notifyNewDrafts(d).catch(() => ({ gemeldet: 0 }));
-  const res = await runMailFetch({ push: true, deadline: Date.now() + 45_000 });
-  return NextResponse.json({ ...res, entwuerfe_gemeldet: entwuerfe.gemeldet, unterschrieben: sign.unterschrieben, unterschrift_fehler: sign.fehler });
+  // Tagesbericht ab 9 Uhr (Berlin), einmal pro Tag – Push + Mail (lib/tagesbericht.ts)
+  const bericht = await tagesberichtFaellig(d).catch((e) => ({ gesendet: false, grund: e instanceof Error ? e.message : String(e) }));
+  const res = await runMailFetch({ push: true, deadline: Date.now() + 40_000 });
+  return NextResponse.json({
+    ...res,
+    entwuerfe_gemeldet: entwuerfe.gemeldet,
+    unterschrieben: sign.unterschrieben,
+    unterschrift_fehler: sign.fehler,
+    tagesbericht: bericht,
+  });
 });
 
 /** pg_cron (net.http_post) ruft per POST auf – gleiche Logik. */
