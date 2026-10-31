@@ -285,9 +285,11 @@ async function neueBriefe(d: DB, seit: string): Promise<BriefNeu[]> {
     firma: string;
     due_date: string;
   }>(
+    // created_at ist Text („2026-10-30 11:16:11+00“ bzw. ISO mit „T“) – beide Seiten auf Leerzeichen bringen,
+    // sonst sortiert „ “ vor „T“ und Briefe vom selben Tag fallen heraus
     `SELECT id, sender, subject, summary, action, firma, due_date FROM letters
-     WHERE created_at > ? ORDER BY id LIMIT 30`,
-    [seit]
+     WHERE REPLACE(created_at, 'T', ' ') > ? ORDER BY id LIMIT 30`,
+    [seit.replace("T", " ").replace(/Z$/, "")]
   );
   return rows.map((r) => ({
     id: Number(r.id),
