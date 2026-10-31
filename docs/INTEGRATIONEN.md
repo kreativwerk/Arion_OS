@@ -143,7 +143,17 @@ Inhalt:
 - **SD Worx:** neue Posts, Erwähnungen und gelöste Fälle aus den Benachrichtigungs-Mails des
   Kundenportals seit dem letzten Bericht, Mails von SD-Worx-Mitarbeitern und die letzte Übersicht aus
   dem Buddy-Aufgabenzentrum. Den „To Dos“-Zähler im Portal sieht Arion OS nicht (nur mit Login).
+- **Neue Briefe:** was seit dem letzten Bericht über scan@ bzw. den Briefkasten im Post-Modul
+  gelandet ist – Absender, Betreff, Kurzbeschreibung, To-do und Frist.
+- **Codriver – Fälligkeiten (nächste 30 Tage, Überfälliges bis 60 Tage zurück):** TÜV/HU und andere
+  Fahrzeugdokumente, Zulassung, Miet-/Leasingende, Vertragsende aktiver Fahrer, ablaufende
+  Führerscheine und Ausweise/Aufenthaltstitel (`lib/codriver-faelligkeiten.ts`, Quelle `codriver_docs`
+  inkl. `vehicle_documents`). Ohne verbundenes Codriver steht dort ein Hinweis.
 - **Wartet auf dich:** offene Mail-Entwürfe.
+
+Die Mail kommt als HTML im Arion-OS-Look (Karten mit Abstand, Ampelfarben, `lib/tagesbericht-html.ts`)
+mit Text-Fassung als Alternative. Vorschau im Browser: `GET /api/tagesbericht` (mit Login),
+Test-Mail: `POST /api/tagesbericht` – beides ändert nichts am täglichen Versand.
 
 Doppelversand verhindert `app_config.tagesbericht_tag` (atomares Upsert), das Fenster für SD Worx
 steht in `app_config.tagesbericht_seit`. Abschalten: `ARION_TAGESBERICHT=aus`; anderer Empfänger:

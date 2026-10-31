@@ -2,10 +2,16 @@ import type { DB } from "@/lib/db";
 import { fristAusStand, fristen, type Frist } from "@/lib/home-data";
 import { pushConfigured, sendPushToAll } from "@/lib/push";
 import { sendDraft } from "@/lib/mail-send";
+import { codriverStand, type CodriverStand } from "@/lib/codriver-faelligkeiten";
+import { APP_URL, berichtHtml, deDatum, kurzDatum, wannText } from "@/lib/tagesbericht-html";
+
+export { APP_URL, deDatum, kurzDatum, wannText };
 
 /**
- * Tagesbericht um 9 Uhr: Fristen (überfällig und nächste 7 Tage), Neues von
- * SD Worx und was in Arion OS auf Albert wartet – als Push und als Mail.
+ * Tagesbericht um 9 Uhr: Fristen (überfällig und nächste 7 Tage), neue Briefe
+ * aus dem Scanner, Fälligkeiten aus Codriver (TÜV, Verträge, Führerscheine),
+ * Neues von SD Worx und was in Arion OS auf Albert wartet – als Push und als
+ * Mail (HTML mit Text-Alternative, Layout in lib/tagesbericht-html.ts).
  *
  * Läuft im Mail-Cron (pg_cron alle 10 Minuten). Ab 9:00 Uhr Berliner Zeit
  * wird einmal pro Tag gesendet; ein atomares Upsert in app_config verhindert
@@ -24,7 +30,6 @@ const DAY = 86_400_000;
 const STUNDE = 9;
 const FENSTER_TAGE = 7;
 const STANDARD_AN = "info@arion-logistics.de";
-const APP_URL = "https://arion-os.vercel.app/";
 
 /* ── Zeit in Berlin ─────────────────────────────────────── */
 
@@ -36,11 +41,6 @@ export function berlinJetzt(now = new Date()): { tag: string; stunde: number; wo
   return { tag, stunde: stunde === 24 ? 0 : stunde, wochentag };
 }
 
-const deDatum = (isoTag: string) => {
-  const [y, m, d] = isoTag.split("-");
-  return `${d}.${m}.${y}`;
-};
-const kurzDatum = (isoTag: string) => deDatum(isoTag).slice(0, 6);
 
 /* ── SD Worx: Benachrichtigungs-Mails auswerten ─────────── */
 
@@ -127,17 +127,26 @@ export type BerichtDaten = {
   /** Fallnummer → Titel des passenden Falls in Arion OS */
   fallTitel: Record<string, string>;
   entwuerfe: number;
+  /** Neue Briefe aus Scanner/Briefkasten seit dem letzten Bericht */
+  briefe?: BriefNeu[];
+  /** Fälligkeiten aus Codriver (Spiegel codriver_docs) */
+  codriver?: CodriverStand;
 };
 
-function fristZeile(f: Frist): string {
-  const wann =
-    f.tage < 0
-      ? `überfällig seit ${-f.tage} ${f.tage === -1 ? "Tag" : "Tagen"} (${kurzDatum(f.datum)})`
-      : f.tage === 0
-        ? "heute"
-        : f.tage === 1
-          ? `morgen (${kurzDatum(f.datum)})`
-          : `in ${f.tage} Tagen (${kurzDatum(f.datum)})`;
+export type BriefNeu = {
+  id: number;
+  absender: string;
+  betreff: string;
+  kurz: string;
+  aufgabe: string;
+  firma: string;
+  frist: string;
+};
+
+
+
+function fristZeile(f: { tage: number; datum: string; titel: string }): string {
+  const wann = f.tage === 0 ? "heute" : `${wannText(f.tage)} (${kurzDatum(f.datum)})`;
   return `- ${wann}: ${f.titel}`;
 }
 
@@ -150,6 +159,24 @@ export function berichtText(b: BerichtDaten): { betreff: string; text: string; p
   if (!b.fristen.length) zeilen.push(`- In den nächsten ${FENSTER_TAGE} Tagen läuft nichts ab.`);
   for (const f of [...ueber, ...bald]) zeilen.push(fristZeile(f));
   zeilen.push(``);
+
+  const briefe = b.briefe ?? [];
+  if (briefe.length) {
+    zeilen.push(`NEUE BRIEFE`);
+    for (const br of briefe) {
+      zeilen.push(`- ${br.absender}: ${br.betreff}${br.frist ? ` (Frist ${deDatum(br.frist)})` : ""}`);
+      if (br.kurz) zeilen.push(`  ${br.kurz}`);
+    }
+    zeilen.push(``);
+  }
+
+  if (b.codriver) {
+    zeilen.push(`CODRIVER – FÄLLIGKEITEN`);
+    if (!b.codriver.verbunden) zeilen.push(`- Codriver ist noch nicht verbunden.`);
+    else if (!b.codriver.fristen.length) zeilen.push(`- In den nächsten 30 Tagen läuft nichts ab.`);
+    for (const f of b.codriver.fristen) zeilen.push(fristZeile(f));
+    zeilen.push(``);
+  }
 
   zeilen.push(`SD WORX – NEU SEIT DEM LETZTEN BERICHT`);
   const s = b.sdworx;
@@ -178,6 +205,9 @@ export function berichtText(b: BerichtDaten): { betreff: string; text: string; p
   const woche = bald.length;
   teile.push(woche ? `${woche} ${woche === 1 ? "Frist" : "Fristen"} in ${FENSTER_TAGE} Tagen` : "keine Frist in 7 Tagen");
   const sdN = s.posts.length + s.direkt.length;
+  if (briefe.length) teile.push(`${briefe.length} ${briefe.length === 1 ? "neuer Brief" : "neue Briefe"}`);
+  const cdN = b.codriver?.fristen.filter((f) => f.tage <= FENSTER_TAGE).length ?? 0;
+  if (cdN) teile.push(`${cdN} Codriver`);
   if (sdN) teile.push(`${sdN} neu von SD Worx`);
   if (b.entwuerfe) teile.push(`${b.entwuerfe} ${b.entwuerfe === 1 ? "Entwurf wartet" : "Entwürfe warten"}`);
 
@@ -240,13 +270,40 @@ export async function berichtDaten(d: DB, now: Date, seit: string): Promise<Beri
     sdworx.posts.map((p) => p.fall)
   );
   const e = await d.get<{ n: number }>("SELECT COUNT(*) AS n FROM mail_drafts WHERE status = 'entwurf'");
-  return { tag, wochentag, fristen: fr, sdworx, fallTitel: titel, entwuerfe: Number(e?.n ?? 0) };
+  const briefe = await neueBriefe(d, seit).catch(() => []);
+  const codriver = await codriverStand(d, tag);
+  return { tag, wochentag, fristen: fr, sdworx, fallTitel: titel, entwuerfe: Number(e?.n ?? 0), briefe, codriver };
+}
+
+async function neueBriefe(d: DB, seit: string): Promise<BriefNeu[]> {
+  const rows = await d.all<{
+    id: number;
+    sender: string;
+    subject: string;
+    summary: string;
+    action: string;
+    firma: string;
+    due_date: string;
+  }>(
+    `SELECT id, sender, subject, summary, action, firma, due_date FROM letters
+     WHERE created_at > ? ORDER BY id LIMIT 30`,
+    [seit]
+  );
+  return rows.map((r) => ({
+    id: Number(r.id),
+    absender: (r.sender || "Unbekannt").trim(),
+    betreff: (r.subject || "").trim(),
+    kurz: (r.summary || "").trim(),
+    aufgabe: (r.action || "").trim(),
+    firma: (r.firma || "").trim(),
+    frist: /^\d{4}-\d{2}-\d{2}$/.test(r.due_date || "") ? r.due_date : "",
+  }));
 }
 
 /* ── Senden ─────────────────────────────────────────────── */
 
-async function mailSenden(d: DB, betreff: string, text: string): Promise<string> {
-  const an = (process.env.ARION_TAGESBERICHT_AN || STANDARD_AN).trim();
+export async function mailSenden(d: DB, betreff: string, text: string, html?: string, an = ""): Promise<string> {
+  an = (an || process.env.ARION_TAGESBERICHT_AN || STANDARD_AN).trim();
   const acc = await d.get<{ id: number }>(
     "SELECT id FROM mail_accounts WHERE LOWER(address) = LOWER(?) OR LOWER(username) = LOWER(?) ORDER BY id LIMIT 1",
     [STANDARD_AN, STANDARD_AN]
@@ -258,7 +315,7 @@ async function mailSenden(d: DB, betreff: string, text: string): Promise<string>
     [acc.id, an, betreff, text, new Date().toISOString()]
   );
   if (!row) return "Entwurf nicht angelegt";
-  const res = await sendDraft(d, Number(row.id));
+  const res = await sendDraft(d, Number(row.id), { html });
   return res.ok ? "gesendet" : res.error || res.status;
 }
 
@@ -292,6 +349,6 @@ export async function tagesberichtFaellig(d: DB, now = new Date()): Promise<Tage
   if (pushConfigured()) {
     push = (await sendPushToAll({ ...b.push, url: "/" }).catch(() => ({ sent: 0 }))).sent;
   }
-  const mail = await mailSenden(d, b.betreff, b.text).catch((e) => (e instanceof Error ? e.message : String(e)));
+  const mail = await mailSenden(d, b.betreff, b.text, berichtHtml(daten, b.betreff)).catch((e) => (e instanceof Error ? e.message : String(e)));
   return { gesendet: true, push, mail };
 }
