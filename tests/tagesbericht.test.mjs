@@ -98,3 +98,100 @@ test("Berliner Zeit: 9 Uhr im Winter = 8 Uhr UTC, im Sommer = 7 Uhr UTC", () => 
   assert.equal(berlinJetzt(new Date("2026-10-28T23:30:00Z")).tag, "2026-10-29");
   assert.equal(berlinJetzt(new Date("2026-10-28T08:05:00Z")).wochentag, "Mittwoch");
 });
+
+/* ── Codriver-Fälligkeiten, Briefe, HTML ─────────────────── */
+import { codriverFaelligkeiten, isoTag } from "../lib/codriver-faelligkeiten.ts";
+import { berichtHtml } from "../lib/tagesbericht-html.ts";
+
+test("isoTag versteht Codriver-Formate", () => {
+  assert.equal(isoTag("03/08/2031"), "2031-08-03");
+  assert.equal(isoTag("3.8.2031"), "2031-08-03");
+  assert.equal(isoTag("2026-11-01"), "2026-11-01");
+  assert.equal(isoTag("2026-10-31T23:00:00.000Z"), "2026-11-01");
+  assert.equal(isoTag(""), "");
+  assert.equal(isoTag(42), "");
+});
+
+test("Codriver: TÜV, Vertragsende, Führerschein – nur im Fenster, nur aktive", () => {
+  const vehicles = [
+    { plateNumber: "MAZ6416", brand: "Mercedes-Benz", model: "Sprinter", status: "OPERATIONAL", cortex: { stationCode: "DBY5", ownershipType: "AMAZON_LEASED", ownershipEnd: "2029-11-18" } },
+    { plateNumber: "MTA3963", status: "DEFLEETED" },
+    { plateNumber: "BULEZ20", brand: "Fiat", model: "Ducato", status: "ACTIVE", cortex: { stationCode: "DBZ4", ownershipType: "SELF_SOURCED_RENTAL", ownershipEnd: "2026-11-10" } },
+  ];
+  const vehicleDocuments = [
+    { plateNumber: "MAZ6416", documentType: "HU_TUV_CERTIFICATE", expiryDate: "2024-11-01" },
+    { plateNumber: "MAZ6416", documentType: "HU_TUV_CERTIFICATE", expiryDate: "2026-11-01" },
+    { plateNumber: "MAZ6416", documentType: "FAHRZEUGSCHEIN", expiryDate: "" },
+    { plateNumber: "MTA3963", documentType: "HU_TUV_CERTIFICATE", expiryDate: "2026-10-01" },
+  ];
+  const drivers = [
+    { driverName: "Anna Aktiv", employeeNumber: "12", station: "DBY5", employmentPeriods: [{ start: "2025-11-15", end: "2026-11-15" }], onboarding: { licenseExpiry: "20/11/2026", idDocExpiry: "01/01/2030" } },
+    { driverName: "Bernd Weg", employmentPeriods: [{ start: "2025-01-01", end: "2026-09-30" }], onboarding: { licenseExpiry: "01/11/2026" } },
+  ];
+  const r = codriverFaelligkeiten({ vehicles, vehicleDocuments, drivers }, "2026-10-31");
+  assert.deepEqual(
+    r.map((x) => [x.titel, x.datum, x.tage]),
+    [
+      ["MAZ6416 – TÜV/HU", "2026-11-01", 1],
+      ["BULEZ20 – Mietende", "2026-11-10", 10],
+      ["Anna Aktiv – Vertrag endet", "2026-11-15", 15],
+      ["Anna Aktiv – Führerschein läuft ab", "2026-11-20", 20],
+    ]
+  );
+  assert.equal(r[0].detail, "Mercedes-Benz Sprinter · DBY5");
+  assert.equal(r[2].detail, "MA 12 · DBY5");
+});
+
+const basis = {
+  tag: "2026-10-31",
+  wochentag: "Samstag",
+  fristen: [
+    { titel: "VIACTIV – Beitragsrückstand", datum: "2026-10-29", tage: -2, art: "aufgabe", href: "/aufgaben" },
+    { titel: "Cüneyt <Kaplan>", datum: "2026-11-01", tage: 1, art: "aufgabe", href: "/aufgaben" },
+  ],
+  sdworx: sdworxAuswerten(mails),
+  fallTitel: { 16391071: "Darago – Nebeneinkommensbescheinigung" },
+  entwuerfe: 2,
+  briefe: [{ id: 87, absender: "TÜV NORD", betreff: "Mahnung", kurz: "Letzte Mahnung über 1.288,30 EUR.", aufgabe: "Bis 06.11. zahlen.", firma: "Arion", frist: "2026-11-06" }],
+  codriver: { verbunden: false, letzterSync: "", fristen: [] },
+};
+
+test("Text: neue Briefe und Codriver-Abschnitt, Betreff zählt Briefe", () => {
+  const b = berichtText(basis);
+  assert.match(b.text, /NEUE BRIEFE\n- TÜV NORD: Mahnung \(Frist 06\.11\.2026\)\n  Letzte Mahnung/);
+  assert.match(b.text, /CODRIVER – FÄLLIGKEITEN\n- Codriver ist noch nicht verbunden\./);
+  assert.match(b.betreff, /1 überfällig · 1 Frist in 7 Tagen · 1 neuer Brief · 2 neu von SD Worx · 2 Entwürfe warten/);
+});
+
+test("HTML: Abschnitte, Abstände, Escaping, Hinweis ohne Codriver", () => {
+  const html = berichtHtml(basis, "Tagesbericht 31.10.2026: Test");
+  assert.match(html, /^<!doctype html>/);
+  for (const t of ["Überfällig", "Fristen – nächste 7 Tage", "Neue Briefe", "Codriver – Fälligkeiten", "SD Worx – neu seit dem letzten Bericht", "Wartet auf dich"]) {
+    assert.ok(html.includes(t), t);
+  }
+  assert.ok(html.includes("Cüneyt &lt;Kaplan&gt;"));
+  assert.ok(!html.includes("<Kaplan>"));
+  assert.ok(html.includes("überfällig seit 2 Tagen"));
+  assert.ok(html.includes("Frist 06.11."));
+  assert.ok(html.includes("To-do"));
+  assert.ok(html.includes("noch nicht mit Arion OS verbunden"));
+  assert.ok(html.includes("Darago – Nebeneinkommensbescheinigung"));
+  assert.ok(html.includes("padding:0 0 10px 0"), "Abstand zwischen den Karten");
+});
+
+test("HTML mit Codriver-Fristen gruppiert nach Fahrzeugen und Fahrern", () => {
+  const html = berichtHtml({
+    ...basis,
+    codriver: {
+      verbunden: true,
+      letzterSync: "",
+      fristen: [
+        { bereich: "fahrzeug", titel: "MAZ6416 – TÜV/HU", detail: "Sprinter · DBY5", datum: "2026-11-01", tage: 1 },
+        { bereich: "fahrer", titel: "Anna – Vertrag endet", detail: "MA 12", datum: "2026-11-15", tage: 15 },
+      ],
+    },
+  });
+  assert.ok(html.indexOf("Fahrzeuge") < html.indexOf("MAZ6416 – TÜV/HU"));
+  assert.ok(html.indexOf("MAZ6416 – TÜV/HU") < html.indexOf(">Fahrer<"));
+  assert.ok(html.includes("Anna – Vertrag endet"));
+});

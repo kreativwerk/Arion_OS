@@ -81,8 +81,9 @@ Arion OS spiegelt die Arion-Daten aus Codriver alle 15 Minuten nach `codriver_do
 3. Supabase pg_cron: `/api/cron/codriver` alle 15 Minuten (gleiches `arion_cron_secret`).
 
 **Was gespiegelt wird** (änderbar über `app_config.codriver_collections`, kommagetrennt):
-`drivers, vehicles, fleet_vehicle_extras, fleet_events, calendar_events, absence_requests,
-incident_reports, shift_plans, reports, scores`.
+`drivers, vehicles, vehicle_documents, fleet_vehicle_extras, fleet_events, calendar_events, absence_requests,
+incident_reports, shift_plans, reports, scores`. `vehicle_documents` ist der Unterordner
+`vehicles/{id}/documents` (TÜV/HU usw.); `doc_id` = `{Kennzeichen}/{Dokument-ID}`.
 
 **Datenschutz:** rekursive Schwärzung wie im Codriver-MCP (`lib/codriver-redact.ts`):
 Bank/IBAN, Steuer-ID, Sozialversicherung, Ausweis-/Passnummern, Diagnosen, Unterschriften,

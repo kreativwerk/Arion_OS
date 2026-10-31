@@ -51,7 +51,8 @@ type AccountRow = {
 
 export type SendResult = { ok: boolean; status: string; messageId?: string; hinweis?: string; error?: string };
 
-export async function sendDraft(d: DB, draftId: number): Promise<SendResult> {
+/** `html`: optionale HTML-Fassung (z. B. Tagesbericht); der Text bleibt als Alternative dabei. */
+export async function sendDraft(d: DB, draftId: number, opts: { html?: string } = {}): Promise<SendResult> {
   const claimed = await d.all<{ id: number }>(
     "UPDATE mail_drafts SET status = 'sendet', error = '', updated_at = ? WHERE id = ? AND status IN ('entwurf','fehler') RETURNING id",
     [new Date().toISOString(), draftId]
@@ -122,6 +123,7 @@ export async function sendDraft(d: DB, draftId: number): Promise<SendResult> {
     bcc: bcc.length ? bcc : undefined,
     subject: draft.subject,
     text: draft.body_text,
+    html: opts.html || undefined,
     messageId,
     inReplyTo: draft.in_reply_to || undefined,
     references: draft.references_hdr || undefined,

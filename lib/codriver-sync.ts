@@ -24,6 +24,8 @@ const DEFAULT_PROJECT = "codriver-eu";
 export const DEFAULT_COLLECTIONS = [
   "drivers",
   "vehicles",
+  // Unterordner vehicles/{id}/documents (TÜV/HU usw.) – braucht „vehicles“ davor
+  "vehicle_documents",
   "fleet_vehicle_extras",
   "fleet_events",
   "calendar_events",
@@ -124,6 +126,80 @@ async function collections(d: DB): Promise<string[]> {
   return list.length ? list : DEFAULT_COLLECTIONS;
 }
 
+/** Seite von Firestore-Dokumenten upserten; gibt die Zahl geänderter Dokumente zurück. */
+async function speichern(d: DB, col: string, docs: FsDoc[], idOf: (doc: FsDoc) => string, now: string): Promise<number> {
+  if (!docs.length) return 0;
+  const ids = docs.map(idOf);
+  const known = new Map(
+    (
+      await d.all<{ doc_id: string; update_time: string }>(
+        `SELECT doc_id, update_time FROM codriver_docs WHERE collection = ? AND doc_id IN (${ids.map(() => "?").join(",")})`,
+        [col, ...ids]
+      )
+    ).map((r) => [r.doc_id, r.update_time])
+  );
+  let n = 0;
+  for (let k = 0; k < docs.length; k++) {
+    const doc = docs[k];
+    if (known.get(ids[k]) === (doc.updateTime || "")) continue;
+    await d.run(
+      `INSERT INTO codriver_docs (collection, doc_id, data, update_time, synced_at, removed_at) VALUES (?,?,?,?,?,NULL)
+       ON CONFLICT (collection, doc_id) DO UPDATE SET data = excluded.data, update_time = excluded.update_time,
+         synced_at = excluded.synced_at, removed_at = NULL`,
+      [col, ids[k], JSON.stringify(decodeFields(doc.fields ?? {})), doc.updateTime || "", now]
+    );
+    n++;
+  }
+  await d.run(
+    `UPDATE codriver_docs SET synced_at = ?, removed_at = NULL WHERE collection = ? AND doc_id IN (${ids.map(() => "?").join(",")})`,
+    [now, col, ...ids]
+  );
+  return n;
+}
+
+export const VEHICLE_DOCUMENTS = "vehicle_documents";
+
+/**
+ * Fahrzeugdokumente (vehicles/{id}/documents) Fahrzeug für Fahrzeug spiegeln.
+ * Der Fortschritt steht in `st.pageToken` (Index in der Fahrzeugliste), damit ein
+ * Lauf nach Zeitablauf beim nächsten Cron weitermacht. Gibt true zurück, wenn
+ * alle Fahrzeuge durch sind.
+ */
+async function fahrzeugDokumente(d: DB, dsp: string, st: State, deadline: number, res: CodriverResult): Promise<boolean> {
+  const fahrzeuge = await d.all<{ doc_id: string }>(
+    "SELECT doc_id FROM codriver_docs WHERE collection = 'vehicles' AND removed_at IS NULL ORDER BY doc_id"
+  );
+  let i = Number(st.pageToken) || 0;
+  while (i < fahrzeuge.length && Date.now() < deadline - 8_000) {
+    const id = fahrzeuge[i].doc_id;
+    const now = new Date().toISOString();
+    const s = await signIn(deadline);
+    try {
+      const page = await jsonFetch<{ documents?: FsDoc[] }>(
+        `${docsBase()}/users/${dsp}/vehicles/${encodeURIComponent(id)}/documents?pageSize=${PAGE_SIZE}`,
+        { headers: { authorization: `Bearer ${s.idToken}` } },
+        deadline
+      );
+      const docs = page.documents ?? [];
+      res.geladen += docs.length;
+      res.geaendert += await speichern(d, VEHICLE_DOCUMENTS, docs, (x) => `${id}/${x.name.split("/").pop() || ""}`, now);
+    } catch (e) {
+      // ein Fahrzeug ohne Leserecht bremst den Rest nicht aus
+      if (res.hinweise.length < 5) res.hinweise.push(`${VEHICLE_DOCUMENTS} ${id}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    i++;
+    st.pageToken = String(i);
+  }
+  if (i < fahrzeuge.length) return false;
+  const r = await d.all<{ doc_id: string }>(
+    `UPDATE codriver_docs SET removed_at = ${nowExpr(d)} WHERE collection = ? AND removed_at IS NULL AND synced_at < ? RETURNING doc_id`,
+    [VEHICLE_DOCUMENTS, st.passStart]
+  );
+  res.entfernt += r.length;
+  res.fertig.push(VEHICLE_DOCUMENTS);
+  return true;
+}
+
 export type CodriverResult = {
   configured: boolean;
   dsp?: string;
@@ -154,6 +230,16 @@ export async function runCodriverSync(opts: { deadline?: number } = {}): Promise
     const col = cols[st.i];
     const now = new Date().toISOString();
     if (!st.pageToken) st.passStart = now;
+    if (col === VEHICLE_DOCUMENTS) {
+      const fertig = await fahrzeugDokumente(d, dsp, st, deadline, res);
+      if (fertig) {
+        st.pageToken = "";
+        st.i = (st.i + 1) % cols.length;
+      }
+      await setConfig(d, "codriver_sync", JSON.stringify(st));
+      if (!fertig || res.fertig.length >= cols.length) break;
+      continue;
+    }
     const q = new URLSearchParams({ pageSize: String(PAGE_SIZE) });
     if (st.pageToken) q.set("pageToken", st.pageToken);
     const s = await signIn(deadline);
@@ -169,32 +255,7 @@ export async function runCodriverSync(opts: { deadline?: number } = {}): Promise
     }
     const docs = page.documents ?? [];
     res.geladen += docs.length;
-    if (docs.length) {
-      const ids = docs.map((x) => x.name.split("/").pop() || "");
-      const known = new Map(
-        (
-          await d.all<{ doc_id: string; update_time: string }>(
-            `SELECT doc_id, update_time FROM codriver_docs WHERE collection = ? AND doc_id IN (${ids.map(() => "?").join(",")})`,
-            [col, ...ids]
-          )
-        ).map((r) => [r.doc_id, r.update_time])
-      );
-      for (let k = 0; k < docs.length; k++) {
-        const doc = docs[k];
-        if (known.get(ids[k]) === (doc.updateTime || "")) continue;
-        await d.run(
-          `INSERT INTO codriver_docs (collection, doc_id, data, update_time, synced_at, removed_at) VALUES (?,?,?,?,?,NULL)
-           ON CONFLICT (collection, doc_id) DO UPDATE SET data = excluded.data, update_time = excluded.update_time,
-             synced_at = excluded.synced_at, removed_at = NULL`,
-          [col, ids[k], JSON.stringify(decodeFields(doc.fields ?? {})), doc.updateTime || "", now]
-        );
-        res.geaendert++;
-      }
-      await d.run(
-        `UPDATE codriver_docs SET synced_at = ?, removed_at = NULL WHERE collection = ? AND doc_id IN (${ids.map(() => "?").join(",")})`,
-        [now, col, ...ids]
-      );
-    }
+    res.geaendert += await speichern(d, col, docs, (x) => x.name.split("/").pop() || "", now);
     if (page.nextPageToken) {
       st.pageToken = page.nextPageToken;
     } else {
