@@ -1,4 +1,4 @@
-import type { BerichtDaten, BriefNeu } from "@/lib/tagesbericht";
+import type { BerichtDaten, BriefNeu, ToDo } from "@/lib/tagesbericht";
 import type { CodriverFrist } from "@/lib/codriver-faelligkeiten";
 import type { Frist } from "@/lib/home-data";
 
@@ -112,6 +112,16 @@ function briefKarte(b: BriefNeu): string {
   return karte(`${kopfzeile}${absender}<div style="margin-top:2px;">${titelZeile(b.betreff || "Ohne Betreff", `${APP_URL}post`)}</div>${kurz}${todo}`);
 }
 
+function todoKarte(t: ToDo): string {
+  const pills = [t.dringend ? pill("dringend", "bad") : "", t.projekt ? pill(t.projekt, "neutral") : "", t.frist ? pill(`Frist ${kurzDatum(t.frist)}`, "neutral") : ""]
+    .filter(Boolean)
+    .join("&nbsp;");
+  // Titel zuerst in voller Breite, Pills in einer eigenen Zeile darunter
+  const pillZeile = pills ? `<div style="margin-top:8px;">${pills}</div>` : "";
+  const stand = t.stand ? `<div style="font-size:13px;line-height:19px;color:${C.ink2};margin-top:6px;">${esc(t.stand)}</div>` : "";
+  return karte(`${titelZeile(t.titel, `${APP_URL}aufgaben`)}${stand}${pillZeile}`, t.dringend ? C.bad : "");
+}
+
 function zahlKachel(zahl: number, label: string, ton: "bad" | "warn" | "neutral" | "good"): string {
   const farbe = zahl === 0 ? C.ink3 : ton === "bad" ? C.bad : ton === "warn" ? C.warn : C.ink;
   return `<td width="25%" valign="top" style="padding:0 4px;">
@@ -152,6 +162,21 @@ ${zahlKachel(bald.length, "diese Woche", "warn")}
 ${zahlKachel(briefe.length, "neue Briefe", "neutral")}
 ${zahlKachel(sdN, "SD Worx neu", "neutral")}
 </tr></table></td></tr>`);
+
+  // To-dos für dich – direkt unter den Kennzahlen, damit nichts untergeht
+  const todos = b.todos ?? [];
+  if (todos.length || b.entwuerfe > 0) {
+    zeilen.push(kopf("To-dos für dich", todos.length + (b.entwuerfe > 0 ? 1 : 0), "Offene Aufgaben, die nicht schon unter den Fristen stehen"));
+    if (b.entwuerfe > 0) {
+      zeilen.push(
+        karte(
+          `${titelZeile(`${b.entwuerfe} Mail-${b.entwuerfe === 1 ? "Entwurf" : "Entwürfe"} zum Prüfen und Senden`, `${APP_URL}postfach`)}${meta("In Arion OS freigeben – nichts geht ohne dich raus.")}`,
+          C.accent
+        )
+      );
+    }
+    for (const t of todos) zeilen.push(todoKarte(t));
+  }
 
   // Fristen
   if (ueber.length) {
@@ -215,17 +240,6 @@ ${zahlKachel(sdN, "SD Worx neu", "neutral")}
     zeilen.push(
       karte(
         `<div style="font-size:13px;line-height:18px;font-weight:600;color:${C.ink3};margin-bottom:6px;">Buddy-Aufgabenzentrum offen</div><table role="presentation" cellpadding="0" cellspacing="0" border="0">${liste}</table>`
-      )
-    );
-  }
-
-  // Wartet auf dich
-  if (b.entwuerfe > 0) {
-    zeilen.push(kopf("Wartet auf dich"));
-    zeilen.push(
-      karte(
-        `${titelZeile(`${b.entwuerfe} Mail-${b.entwuerfe === 1 ? "Entwurf" : "Entwürfe"} zum Prüfen und Senden`, `${APP_URL}postfach`)}${meta("In Arion OS freigeben – nichts geht ohne dich raus.")}`,
-        C.accent
       )
     );
   }
