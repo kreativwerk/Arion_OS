@@ -216,45 +216,50 @@ export function FaelleWidget({ faelle, onChanged }: { faelle: Faelle; onChanged?
 
   const zeile = (f: FallItem, erledigt: boolean) => {
     const auf = offen === f.id;
+    const hatPills = f.dokumente.length > 0 || f.sdworx || f.bereich || (!erledigt && (f.prio === 1 || f.frist));
     return (
       <div key={f.id} className={auf ? "bg-inset/40" : ""}>
-        <Row>
-          {erledigt ? (
-            <button
-              type="button"
-              onClick={() => setzen(f.id, true)}
-              className="w-[22px] h-[22px] rounded-full bg-accent border-accent text-on-accent flex items-center justify-center shrink-0"
-              aria-label="Wieder öffnen"
-              title="Wieder öffnen"
-            >
-              <Icon name="check" size={15} />
+        {/* Titel und Stand bekommen die volle Breite, die Pills stehen in einer eigenen Zeile darunter */}
+        <div className="flex items-start gap-3 px-5 py-3 border-t border-line first:border-t-0">
+          <div className="shrink-0 pt-px">
+            {erledigt ? (
+              <button
+                type="button"
+                onClick={() => setzen(f.id, true)}
+                className="w-[22px] h-[22px] rounded-full bg-accent border-accent text-on-accent flex items-center justify-center"
+                aria-label="Wieder öffnen"
+                title="Wieder öffnen"
+              >
+                <Icon name="check" size={15} />
+              </button>
+            ) : (
+              <CheckCircle size={22} onComplete={() => setzen(f.id, false)} />
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <button type="button" onClick={() => setOffen(auf ? null : f.id)} aria-expanded={auf} className="block w-full text-left">
+              <div className={`text-[13px] font-medium ${auf ? "" : "line-clamp-2"} ${erledigt ? "line-through text-ink-3" : ""}`}>{f.titel}</div>
+              {!auf && f.stand && <div className="text-[11px] text-ink-3 line-clamp-2">{f.stand}</div>}
             </button>
-          ) : (
-            <CheckCircle size={22} onComplete={() => setzen(f.id, false)} />
-          )}
-          <button
-            type="button"
-            onClick={() => setOffen(auf ? null : f.id)}
-            aria-expanded={auf}
-            className="flex-1 min-w-0 text-left"
-          >
-            <div className={`text-[13px] font-medium ${auf ? "" : "truncate"} ${erledigt ? "line-through text-ink-3" : ""}`}>{f.titel}</div>
-            {!auf && f.stand && <div className="text-[11px] text-ink-3 truncate">{f.stand}</div>}
-          </button>
-          {f.dokumente.length > 0 && (
-            <span title={f.dokumente.length === 1 ? "1 Dokument" : `${f.dokumente.length} Dokumente`} className="shrink-0">
-              <Icon name="attach_file" size={16} className="text-ink-3" />
-            </span>
-          )}
-          {f.sdworx && (
-            <Badge tone={f.sdworx.status === "weitergeleitet" ? "good" : "warn"}>
-              {f.sdworx.status === "weitergeleitet" ? "bei SD Worx" : f.sdworx.status === "wartet" ? "SD Worx wartet" : "nicht an SD Worx"}
-            </Badge>
-          )}
-          {f.bereich && <Badge>{f.bereich}</Badge>}
-          {!erledigt && f.prio === 1 && <Badge tone="bad">dringend</Badge>}
-          {!erledigt && f.frist && <FristBadge iso={f.frist} />}
-        </Row>
+            {hatPills && (
+              <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                {f.dokumente.length > 0 && (
+                  <span title={f.dokumente.length === 1 ? "1 Dokument" : `${f.dokumente.length} Dokumente`} className="inline-flex">
+                    <Icon name="attach_file" size={16} className="text-ink-3" />
+                  </span>
+                )}
+                {f.sdworx && (
+                  <Badge tone={f.sdworx.status === "weitergeleitet" ? "good" : "warn"}>
+                    {f.sdworx.status === "weitergeleitet" ? "bei SD Worx" : f.sdworx.status === "wartet" ? "SD Worx wartet" : "nicht an SD Worx"}
+                  </Badge>
+                )}
+                {f.bereich && <Badge>{f.bereich}</Badge>}
+                {!erledigt && f.prio === 1 && <Badge tone="bad">dringend</Badge>}
+                {!erledigt && f.frist && <FristBadge iso={f.frist} />}
+              </div>
+            )}
+          </div>
+        </div>
         {auf && (
           <div className="px-5 pb-3 -mt-1 pl-[54px] space-y-1">
             {f.sdworx && <p className="text-[12px] text-ink-2">SD Worx: {f.sdworx.text}</p>}
