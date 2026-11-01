@@ -131,7 +131,22 @@ export type BerichtDaten = {
   briefe?: BriefNeu[];
   /** Fälligkeiten aus Codriver (Spiegel codriver_docs) */
   codriver?: CodriverStand;
+  /** Offene Aufgaben, die nicht schon unter „Fristen“ stehen */
+  todos?: ToDo[];
 };
+
+export type ToDo = {
+  titel: string;
+  projekt: string;
+  /** ISO-Tag oder "" */
+  frist: string;
+  dringend: boolean;
+  /** letzter Stand aus den Notizen (eine Zeile, gekürzt) */
+  stand: string;
+};
+
+/** So viele To-dos stehen höchstens im Bericht */
+const MAX_TODOS = 15;
 
 export type BriefNeu = {
   id: number;
@@ -159,6 +174,18 @@ export function berichtText(b: BerichtDaten): { betreff: string; text: string; p
   if (!b.fristen.length) zeilen.push(`- In den nächsten ${FENSTER_TAGE} Tagen läuft nichts ab.`);
   for (const f of [...ueber, ...bald]) zeilen.push(fristZeile(f));
   zeilen.push(``);
+
+  const todos = b.todos ?? [];
+  if (todos.length || b.entwuerfe > 0) {
+    zeilen.push(`TO-DOS FÜR DICH`);
+    if (b.entwuerfe > 0) zeilen.push(`- ${b.entwuerfe} Mail-${b.entwuerfe === 1 ? "Entwurf" : "Entwürfe"} zum Prüfen und Senden`);
+    for (const t of todos) {
+      const extra = [t.projekt, t.frist ? `Frist ${deDatum(t.frist)}` : ""].filter(Boolean).join(", ");
+      zeilen.push(`- ${t.dringend ? "[dringend] " : ""}${t.titel}${extra ? ` (${extra})` : ""}`);
+      if (t.stand) zeilen.push(`  ${t.stand}`);
+    }
+    zeilen.push(``);
+  }
 
   const briefe = b.briefe ?? [];
   if (briefe.length) {
@@ -192,12 +219,6 @@ export function berichtText(b: BerichtDaten): { betreff: string; text: string; p
     zeilen.push(`- Buddy-Aufgabenzentrum offen: ${s.buddy.map((x) => `${x.anzahl} × ${x.text}`).join(", ")}`);
   }
   zeilen.push(``);
-
-  if (b.entwuerfe > 0) {
-    zeilen.push(`WARTET AUF DICH`);
-    zeilen.push(`- ${b.entwuerfe} Mail-${b.entwuerfe === 1 ? "Entwurf" : "Entwürfe"} zum Prüfen und Senden`);
-    zeilen.push(``);
-  }
   zeilen.push(`Arion OS: ${APP_URL}`);
 
   const teile: string[] = [];
@@ -209,6 +230,7 @@ export function berichtText(b: BerichtDaten): { betreff: string; text: string; p
   const cdN = b.codriver?.fristen.filter((f) => f.tage <= FENSTER_TAGE).length ?? 0;
   if (cdN) teile.push(`${cdN} Codriver`);
   if (sdN) teile.push(`${sdN} neu von SD Worx`);
+  if (todos.length) teile.push(`${todos.length} ${todos.length === 1 ? "To-do" : "To-dos"}`);
   if (b.entwuerfe) teile.push(`${b.entwuerfe} ${b.entwuerfe === 1 ? "Entwurf wartet" : "Entwürfe warten"}`);
 
   return {
@@ -272,7 +294,49 @@ export async function berichtDaten(d: DB, now: Date, seit: string): Promise<Beri
   const e = await d.get<{ n: number }>("SELECT COUNT(*) AS n FROM mail_drafts WHERE status = 'entwurf'");
   const briefe = await neueBriefe(d, seit).catch(() => []);
   const codriver = await codriverStand(d, tag);
-  return { tag, wochentag, fristen: fr, sdworx, fallTitel: titel, entwuerfe: Number(e?.n ?? 0), briefe, codriver };
+  const todos = await offeneTodos(d, tag, fr).catch(() => []);
+  return { tag, wochentag, fristen: fr, sdworx, fallTitel: titel, entwuerfe: Number(e?.n ?? 0), briefe, codriver, todos };
+}
+
+/** Letzte nicht-leere Zeile der Notizen – dort steht bei Claude-Fällen der neueste Stand. */
+export function letzterStand(notes: string, max = 160): string {
+  const zeilen = (notes || "")
+    .split(/\r?\n/)
+    .map((z) => z.trim())
+    .filter((z) => z && !/^Dokument:/i.test(z) && !/^Frist:/i.test(z));
+  const z = zeilen[zeilen.length - 1] ?? "";
+  return z.length > max ? `${z.slice(0, max - 1).trimEnd()}…` : z;
+}
+
+/**
+ * Alle offenen Aufgaben, die nicht schon unter „Fristen“ stehen (sonst doppelt):
+ * ohne Frist, Frist später als 7 Tage oder länger als 60 Tage überfällig.
+ * Dringende zuerst, dann nach Frist.
+ */
+export function todosAuswaehlen(
+  rows: { title: string; project: string | null; due_date: string | null; priority: number | null; notes: string | null; recurrence?: string | null }[],
+  today: string,
+  schonGelistet: Set<string>
+): ToDo[] {
+  const jahr = Number(today.slice(0, 4));
+  const out: ToDo[] = [];
+  for (const r of rows) {
+    const titel = (r.title || "").trim();
+    // tägliche Routinen (SD Worx Check, Letterbox Check …) sind keine To-dos
+    if (!titel || schonGelistet.has(titel) || r.recurrence === "daily") continue;
+    const due = /^\d{4}-\d{2}-\d{2}/.test(r.due_date || "") ? String(r.due_date).slice(0, 10) : "";
+    const frist = due || fristAusStand(r.notes || "", jahr).frist || "";
+    out.push({ titel, projekt: (r.project || "").trim(), frist, dringend: Number(r.priority) === 1, stand: letzterStand(r.notes || "") });
+  }
+  out.sort((a, b) => Number(b.dringend) - Number(a.dringend) || (a.frist || "9999").localeCompare(b.frist || "9999"));
+  return out.slice(0, MAX_TODOS);
+}
+
+async function offeneTodos(d: DB, today: string, gelistet: Frist[]): Promise<ToDo[]> {
+  const rows = await d.all<{ title: string; project: string | null; due_date: string | null; priority: number | null; notes: string | null; recurrence: string | null }>(
+    "SELECT title, project, due_date, priority, notes, recurrence FROM tasks WHERE done = 0 AND (accepted IS NULL OR accepted = 1) ORDER BY priority, id"
+  );
+  return todosAuswaehlen(rows, today, new Set(gelistet.map((f) => f.titel)));
 }
 
 async function neueBriefe(d: DB, seit: string): Promise<BriefNeu[]> {

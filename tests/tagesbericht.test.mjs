@@ -1,7 +1,7 @@
 // Tagesbericht: SD-Worx-Mails auswerten, Text bauen, Zeit in Berlin. Aufruf: npm run test:tagesbericht
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { berichtText, berlinJetzt, sdworxAuswerten } from "../lib/tagesbericht.ts";
+import { berichtText, berlinJetzt, letzterStand, sdworxAuswerten, todosAuswaehlen } from "../lib/tagesbericht.ts";
 
 const PORTAL = "SD Worx - MySP - Customer Portal <no-reply@sdworx.com>";
 
@@ -88,7 +88,7 @@ test("Bericht ohne Fristen und ohne SD-Worx-Post bleibt freundlich", () => {
   assert.equal(b.betreff, "Tagesbericht 02.11.2026: keine Frist in 7 Tagen");
   assert.match(b.text, /läuft nichts ab/);
   assert.match(b.text, /Keine neuen Nachrichten im Kundenportal/);
-  assert.doesNotMatch(b.text, /WARTET AUF DICH/);
+  assert.doesNotMatch(b.text, /TO-DOS FÜR DICH/);
 });
 
 test("Berliner Zeit: 9 Uhr im Winter = 8 Uhr UTC, im Sommer = 7 Uhr UTC", () => {
@@ -166,7 +166,7 @@ test("Text: neue Briefe und Codriver-Abschnitt, Betreff zählt Briefe", () => {
 test("HTML: Abschnitte, Abstände, Escaping, Hinweis ohne Codriver", () => {
   const html = berichtHtml(basis, "Tagesbericht 31.10.2026: Test");
   assert.match(html, /^<!doctype html>/);
-  for (const t of ["Überfällig", "Fristen – nächste 7 Tage", "Neue Briefe", "Codriver – Fälligkeiten", "SD Worx – neu seit dem letzten Bericht", "Wartet auf dich"]) {
+  for (const t of ["Überfällig", "Fristen – nächste 7 Tage", "Neue Briefe", "Codriver – Fälligkeiten", "SD Worx – neu seit dem letzten Bericht", "To-dos für dich"]) {
     assert.ok(html.includes(t), t);
   }
   assert.ok(html.includes("Cüneyt &lt;Kaplan&gt;"));
@@ -194,4 +194,35 @@ test("HTML mit Codriver-Fristen gruppiert nach Fahrzeugen und Fahrern", () => {
   assert.ok(html.indexOf("Fahrzeuge") < html.indexOf("MAZ6416 – TÜV/HU"));
   assert.ok(html.indexOf("MAZ6416 – TÜV/HU") < html.indexOf(">Fahrer<"));
   assert.ok(html.includes("Anna – Vertrag endet"));
+});
+
+test("To-dos: ohne Doppelte zu Fristen, ohne tägliche Routinen, dringende zuerst", () => {
+  const rows = [
+    { title: "SD Worx Check", project: "", due_date: "2026-09-02", priority: 2, notes: "", recurrence: "daily" },
+    { title: "TÜV NORD – Mahnung", project: "Arion", due_date: "2026-11-06", priority: 2, notes: "", recurrence: null },
+    { title: "Sitzmann – Jumper", project: "Arion", due_date: null, priority: 2, notes: "Kulanz angefragt.\nDokument: brief 63", recurrence: null },
+    { title: "ITSG – freischalten", project: "Arion", due_date: null, priority: 1, notes: "Code eingeben (machst du selbst).", recurrence: null },
+    { title: "Gewerbeaufsicht", project: "Arion", due_date: "2026-12-31", priority: 2, notes: "Frist: 31.12.2026\nVollzugsbericht zurückschicken", recurrence: null },
+  ];
+  const t = todosAuswaehlen(rows, "2026-11-01", new Set(["TÜV NORD – Mahnung"]));
+  assert.deepEqual(t.map((x) => x.titel), ["ITSG – freischalten", "Gewerbeaufsicht", "Sitzmann – Jumper"]);
+  assert.equal(t[0].dringend, true);
+  assert.equal(t[1].frist, "2026-12-31");
+  assert.equal(t[2].stand, "Kulanz angefragt.");
+});
+
+test("letzterStand nimmt die letzte echte Zeile und kürzt", () => {
+  assert.equal(letzterStand("Frist: 01.11.2026\nerste\n30.10.: neuester Stand\nDokument: brief 4"), "30.10.: neuester Stand");
+  assert.equal(letzterStand("x".repeat(200), 20).length, 20);
+});
+
+test("Text und HTML zeigen To-dos für dich direkt nach den Fristen", () => {
+  const mitTodos = { ...basis, todos: [{ titel: "ITSG – SV-Meldeportal freischalten", projekt: "Arion", frist: "", dringend: true, stand: "Code eingeben" }] };
+  const b = berichtText(mitTodos);
+  assert.match(b.text, /TO-DOS FÜR DICH\n- 2 Mail-Entwürfe zum Prüfen und Senden\n- \[dringend\] ITSG – SV-Meldeportal freischalten \(Arion\)\n  Code eingeben/);
+  assert.ok(b.text.indexOf("TO-DOS FÜR DICH") < b.text.indexOf("NEUE BRIEFE"));
+  assert.match(b.betreff, /1 To-do · 2 Entwürfe warten/);
+  const html = berichtHtml(mitTodos);
+  assert.ok(html.indexOf("To-dos für dich") < html.indexOf("Fristen – nächste 7 Tage"));
+  assert.ok(html.includes("ITSG – SV-Meldeportal freischalten"));
 });
