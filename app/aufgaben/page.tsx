@@ -48,7 +48,15 @@ export default function TasksPage() {
   const ich = aktiv.filter((t) => t.horizon !== "long" && status(t) !== "wartet");
   const wartet = aktiv.filter((t) => t.horizon !== "long" && status(t) === "wartet");
   const lang = aktiv.filter((t) => t.horizon === "long");
-  const open = ansicht === "ich" ? ich : ansicht === "wartet" ? wartet : lang;
+  // Echte Vorgänge zuerst (dringend, dann nach Frist), Routinen (täglich/wöchentlich) ans Ende
+  const sortiert = (l: Task[]) =>
+    [...l].sort(
+      (a, b) =>
+        Number(Boolean(a.recurrence)) - Number(Boolean(b.recurrence)) ||
+        (a.priority ?? 2) - (b.priority ?? 2) ||
+        (a.due_date ?? "9999").localeCompare(b.due_date ?? "9999")
+    );
+  const open = sortiert(ansicht === "ich" ? ich : ansicht === "wartet" ? wartet : lang);
   const vor14 = new Date(Date.now() - 14 * 86_400_000).toISOString().slice(0, 10);
   const doneRows = rows.filter((t) => t.done && (t.completed_at ?? "").slice(0, 10) >= vor14).slice(0, 20);
   const recLabel: Record<string, string> = { daily: "täglich", weekly: "wöchentlich", monthly: "monatlich" };
@@ -127,7 +135,7 @@ export default function TasksPage() {
                       </Badge>
                     )}
                     {t.project && <Badge>{t.project}</Badge>}
-                    {t.due_date && <Badge tone={t.due_date < today ? "bad" : "neutral"}>{fmtDate(t.due_date)}</Badge>}
+                    {t.due_date && !t.recurrence && <Badge tone={t.due_date < today ? "bad" : "neutral"}>{fmtDate(t.due_date)}</Badge>}
                     {t.source && t.source !== "eigen" && t.source !== "claude" && <Badge tone="accent">von {t.submitted_by || t.source}</Badge>}
                     {t.recurrence && <Badge tone="accent">{recLabel[t.recurrence] ?? t.recurrence}</Badge>}
                     {t.priority === 1 && <Badge tone="bad">dringend</Badge>}
