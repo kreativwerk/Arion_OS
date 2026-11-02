@@ -22,12 +22,12 @@ export default function MorePage() {
               <Link
                 key={m.href}
                 href={m.href}
-                className="bg-card border border-line rounded-card p-4 hover:border-accent/40 transition-all flex items-center gap-3"
+                className="bg-card border border-line rounded-card p-4 hover:border-accent/40 transition-all flex flex-col items-start gap-2.5 min-w-0"
               >
                 <div className="w-10 h-10 rounded-[12px] bg-accent-soft text-accent flex items-center justify-center shrink-0">
                   <Icon name={m.icon} size={22} />
                 </div>
-                <div className="text-[14px] font-semibold">{m.label}</div>
+                <div className="text-[14px] font-semibold min-w-0 max-w-full break-words hyphens-auto" lang="de">{m.label}</div>
               </Link>
             ))}
           </div>
