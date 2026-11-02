@@ -369,48 +369,11 @@ export default function TodayPage() {
     <div>
       {/* Kopf: Orientierung in einer Sekunde */}
       <div className="mb-6">
-        <div className="flex items-start justify-between gap-3">
-          <h1 className="text-[26px] sm:text-[32px] font-bold tracking-tight">
-            {greeting}
-            {data.config?.user_name ? `, ${data.config.user_name}` : ""}.
-          </h1>
-          {/* Schnellzugriff oben rechts: Clipboard, Einstellungen, Profil */}
-          <div className="flex items-center gap-1 shrink-0 mt-1">
-            <Link
-              href="/arion"
-              aria-label="ARION – Sprachassistent"
-              title="ARION – Sprachassistent"
-              className="w-10 h-10 rounded-full flex items-center justify-center bg-accent-soft text-accent hover:bg-accent hover:text-on-accent transition-all"
-            >
-              <Icon name="graphic_eq" size={22} />
-            </Link>
-            <Link
-              href="/clipboard"
-              aria-label="Clipboard"
-              className="w-10 h-10 rounded-full flex items-center justify-center text-ink-2 hover:text-accent hover:bg-inset transition-all"
-            >
-              <Icon name="attach_file" size={22} />
-            </Link>
-            <Link
-              href="/einstellungen"
-              aria-label="Einstellungen"
-              className="w-10 h-10 rounded-full flex items-center justify-center text-ink-2 hover:text-accent hover:bg-inset transition-all"
-            >
-              <Icon name="settings" size={22} />
-            </Link>
-            <button
-              onClick={async () => {
-                if (!confirm("Abmelden?")) return;
-                await fetch("/api/auth/logout", { method: "POST" });
-                window.location.href = "/login";
-              }}
-              aria-label="Profil / Abmelden"
-              className="w-10 h-10 rounded-full flex items-center justify-center text-ink-2 hover:text-accent hover:bg-inset transition-all"
-            >
-              <Icon name="account_circle" size={24} />
-            </button>
-          </div>
-        </div>
+        {/* ARION, Clipboard, Neu laden und Einstellungen stehen in der globalen Kopfleiste (TopBar) */}
+        <h1 className="text-[26px] sm:text-[32px] font-bold tracking-tight">
+          {greeting}
+          {data.config?.user_name ? `, ${data.config.user_name}` : ""}.
+        </h1>
         <p className="text-[12px] text-ink-3 mt-1">
           {dateStr} · KW {isoWeek(now)}
         </p>
