@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icon } from "@/components/ui";
 
+/** Clipboard, ARION und Einstellungen stehen in der Kopfleiste (TopBar) – hier nicht doppelt. */
 const NAV: { href: string; label: string; icon: string }[] = [
   { href: "/", label: "Heute", icon: "sunny" },
   { href: "/aufgaben", label: "Aufgaben", icon: "task_alt" },
@@ -16,12 +17,9 @@ const NAV: { href: string; label: string; icon: string }[] = [
   { href: "/buchhaltung", label: "Buchhaltung", icon: "account_balance" },
   { href: "/bescheinigungen", label: "Bescheinigungen", icon: "assignment_ind" },
   { href: "/vertraege", label: "Verträge", icon: "contract" },
-  { href: "/clipboard", label: "Clipboard", icon: "content_paste" },
   { href: "/watcher", label: "Portale", icon: "travel_explore" },
   { href: "/slack", label: "Slack", icon: "forum" },
   { href: "/assistent", label: "Arion Bot", icon: "auto_awesome" },
-  { href: "/arion", label: "ARION Sprache", icon: "graphic_eq" },
-  { href: "/einstellungen", label: "Einstellungen", icon: "settings" },
 ];
 
 export default function Sidebar() {

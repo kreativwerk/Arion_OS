@@ -4,7 +4,6 @@ import Link from "next/link";
 import { PageHeader, Icon } from "@/components/ui";
 
 const MODULES = [
-  { href: "/arion", label: "ARION", icon: "graphic_eq", desc: "Sprachassistent, Push-to-Talk" },
   { href: "/gewohnheiten", label: "Gewohnheiten", icon: "autorenew", desc: "Habit-Tracker & Serien" },
   { href: "/kalender", label: "Kalender", icon: "calendar_month", desc: "Termine & Einträge" },
   { href: "/wissen", label: "Wissen", icon: "school", desc: "Notizen & Firmenwissen, auch für Arion Bot" },
@@ -13,10 +12,8 @@ const MODULES = [
   { href: "/buchhaltung", label: "Buchhaltung", icon: "account_balance", desc: "Belege, Abgleich, Fristen" },
   { href: "/bescheinigungen", label: "Bescheinigungen", icon: "assignment_ind", desc: "Arbeitsagentur & Kassen, SV-Meldeportal" },
   { href: "/vertraege", label: "Verträge", icon: "contract", desc: "Fristen & Kosten" },
-  { href: "/clipboard", label: "Clipboard", icon: "content_paste", desc: "Textbausteine & Nummern" },
   { href: "/watcher", label: "Portale", icon: "travel_explore", desc: "Watcher & Meldungen" },
   { href: "/slack", label: "Slack", icon: "forum", desc: "Wichtige Personen" },
-  { href: "/einstellungen", label: "Einstellungen", icon: "settings", desc: "Profil, Push, API-Zugänge" },
 ];
 
 export default function MorePage() {
