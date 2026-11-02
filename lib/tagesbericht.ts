@@ -1,5 +1,5 @@
 import type { DB } from "@/lib/db";
-import { fristAusStand, fristen, type Frist } from "@/lib/home-data";
+import { fristAusStand, fristen, jetzt, type Frist } from "@/lib/home-data";
 import { pushConfigured, sendPushToAll } from "@/lib/push";
 import { sendDraft } from "@/lib/mail-send";
 import { vorgangStatus, wartetText } from "@/lib/vorgang";
@@ -134,6 +134,8 @@ export type BerichtDaten = {
   codriver?: CodriverStand;
   /** Offene Aufgaben, die nicht schon unter „Fristen“ stehen */
   todos?: ToDo[];
+  /** Freitags: Wochenrückblick – worauf wir warten */
+  rueckblick?: { wartetGesamt: number; wartet: { titel: string; wartet: string; nachhakenAm: string | null }[] };
 };
 
 export type ToDo = {
@@ -203,6 +205,17 @@ export function berichtText(b: BerichtDaten): { betreff: string; text: string; p
     if (!b.codriver.verbunden) zeilen.push(`- Codriver ist noch nicht verbunden.`);
     else if (!b.codriver.fristen.length) zeilen.push(`- In den nächsten 30 Tagen läuft nichts ab.`);
     for (const f of b.codriver.fristen) zeilen.push(fristZeile(f));
+    zeilen.push(``);
+  }
+
+  if (b.rueckblick && b.wochentag === "Freitag") {
+    zeilen.push(`WOCHENRÜCKBLICK – WARTET AUF ANDERE`);
+    if (!b.rueckblick.wartetGesamt) zeilen.push(`- Du wartest auf niemanden.`);
+    for (const w of b.rueckblick.wartet) {
+      zeilen.push(`- ${w.titel} – ${w.wartet}${w.nachhakenAm ? `, nachhaken ab ${kurzDatum(w.nachhakenAm)}` : ""}`);
+    }
+    if (b.rueckblick.wartetGesamt > b.rueckblick.wartet.length) zeilen.push(`- + ${b.rueckblick.wartetGesamt - b.rueckblick.wartet.length} weitere unter Vorgänge → Wartet`);
+    zeilen.push(`- Für den Rückblick: Fristen 14 Tage, Belege, Codriver – mit Claude in 30 Minuten.`);
     zeilen.push(``);
   }
 
@@ -296,7 +309,9 @@ export async function berichtDaten(d: DB, now: Date, seit: string): Promise<Beri
   const briefe = await neueBriefe(d, seit).catch(() => []);
   const codriver = await codriverStand(d, tag);
   const todos = await offeneTodos(d, tag, fr).catch(() => []);
-  return { tag, wochentag, fristen: fr, sdworx, fallTitel: titel, entwuerfe: Number(e?.n ?? 0), briefe, codriver, todos };
+  const j = await jetzt(d, tag);
+  const rueckblick = { wartetGesamt: j.wartetGesamt, wartet: j.wartet.map((w) => ({ titel: w.titel, wartet: w.wartet, nachhakenAm: w.nachhakenAm })) };
+  return { tag, wochentag, fristen: fr, sdworx, fallTitel: titel, entwuerfe: Number(e?.n ?? 0), briefe, codriver, todos, rueckblick };
 }
 
 /** Letzte nicht-leere Zeile der Notizen – dort steht bei Claude-Fällen der neueste Stand. */

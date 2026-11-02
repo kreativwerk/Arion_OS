@@ -10,7 +10,7 @@ const LEFT = [
   { href: "/aufgaben", label: "Vorgänge", icon: "task_alt" },
 ];
 const RIGHT = [
-  { href: "/postfach", label: "Postfach", icon: "inbox" },
+  { href: "/eingang", label: "Eingang", icon: "move_to_inbox" },
   { href: "/mehr", label: "Mehr", icon: "apps" },
 ];
 

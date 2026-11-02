@@ -4,10 +4,10 @@ import Link from "next/link";
 import { PageHeader, Icon } from "@/components/ui";
 import { NAV_GRUPPEN } from "@/components/Sidebar";
 
-// Gleiche Gruppen wie die Seitenleiste; Heute, Vorgänge und Postfach sind unten in der Tab-Leiste.
+// Gleiche Gruppen wie die Seitenleiste; Heute, Vorgänge und Eingang sind unten in der Tab-Leiste.
 const GRUPPEN = NAV_GRUPPEN.map((g) => ({
   titel: g.titel || "Alltag",
-  items: g.items.filter((i) => !["/", "/aufgaben", "/postfach", "/assistent"].includes(i.href)),
+  items: g.items.filter((i) => !["/", "/aufgaben", "/eingang", "/assistent"].includes(i.href)),
 })).filter((g) => g.items.length);
 
 export default function MorePage() {

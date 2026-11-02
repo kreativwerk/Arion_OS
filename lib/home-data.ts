@@ -511,3 +511,101 @@ export function flotte(d: DB): Promise<Flotte> {
     };
   }, leer);
 }
+
+/* ── Heute: Jetzt dran · Wartet auf andere · Eingang (docs/VORGAENGE.md) ── */
+
+export type JetztItem = {
+  id: number;
+  titel: string;
+  schritt: string;
+  projekt: string;
+  frist: string | null;
+  tage: number | null;
+  dringend: boolean;
+  status: VorgangStatus;
+  /** „wartet auf SD Worx“ – nur bei nachhaken/wartet */
+  wartet: string;
+  nachhakenAm: string | null;
+};
+export type Routine = { id: number; titel: string };
+export type Jetzt = { items: JetztItem[]; gesamt: number; wartet: JetztItem[]; wartetGesamt: number; routinen: Routine[] };
+
+type VorgangRow = {
+  id: number;
+  title: string;
+  notes: string | null;
+  project: string | null;
+  due_date: string | null;
+  priority: number | null;
+  recurrence: string | null;
+  horizon: string | null;
+  wer_dran: string | null;
+  wartet_auf: string | null;
+  naechster_schritt: string | null;
+  nachhaken_am: string | null;
+};
+
+/** Reine Auswahl für die Heute-Seite – testbar. */
+export function jetztAuswaehlen(rows: VorgangRow[], today: string, max = 7): Jetzt {
+  const tagesDiff = (iso: string) =>
+    Math.round((new Date(`${iso}T12:00:00Z`).getTime() - new Date(`${today}T12:00:00Z`).getTime()) / DAY);
+  const jahr = Number(today.slice(0, 4));
+  const routinen: Routine[] = [];
+  const alle: JetztItem[] = [];
+  for (const r of rows) {
+    if ((r.recurrence ?? "") !== "") {
+      if (!r.due_date || r.due_date.slice(0, 10) <= today) routinen.push({ id: Number(r.id), titel: r.title });
+      continue;
+    }
+    if (r.horizon === "long") continue;
+    const due = /^\d{4}-\d{2}-\d{2}/.test(r.due_date ?? "") ? String(r.due_date).slice(0, 10) : null;
+    const frist = due ?? fristAusStand(r.notes ?? "", jahr).frist;
+    alle.push({
+      id: Number(r.id),
+      titel: r.title,
+      schritt: (r.naechster_schritt ?? "").trim(),
+      projekt: (r.project ?? "").trim(),
+      frist,
+      tage: frist ? tagesDiff(frist) : null,
+      dringend: Number(r.priority ?? 2) === 1,
+      status: vorgangStatus({ done: 0, wer_dran: r.wer_dran, nachhaken_am: r.nachhaken_am }, today),
+      wartet: wartetText(r.wer_dran, r.wartet_auf),
+      nachhakenAm: /^\d{4}-\d{2}-\d{2}/.test(r.nachhaken_am ?? "") ? String(r.nachhaken_am).slice(0, 10) : null,
+    });
+  }
+  // Reihenfolge: Frist in ≤ 3 Tagen (auch überfällig) · Nachhaken fällig · dringend · Rest nach Frist
+  const gruppe = (x: JetztItem) => (x.tage !== null && x.tage <= 3 ? 0 : x.status === "nachhaken" ? 1 : x.dringend ? 2 : 3);
+  const bei = alle
+    .filter((x) => x.status === "ich" || x.status === "nachhaken")
+    .sort((a, b) => gruppe(a) - gruppe(b) || (a.frist ?? "9999").localeCompare(b.frist ?? "9999") || a.titel.localeCompare(b.titel));
+  const wartend = alle
+    .filter((x) => x.status === "wartet")
+    .sort((a, b) => (a.nachhakenAm ?? "9999").localeCompare(b.nachhakenAm ?? "9999"));
+  return { items: bei.slice(0, max), gesamt: bei.length, wartet: wartend.slice(0, 5), wartetGesamt: wartend.length, routinen };
+}
+
+export function jetzt(d: DB, today: string): Promise<Jetzt> {
+  return safe(async () => {
+    const rows = await d.all<VorgangRow>(
+      `SELECT id, title, notes, project, due_date, priority, recurrence, horizon, wer_dran, wartet_auf, naechster_schritt, nachhaken_am
+       FROM tasks WHERE done = 0 AND accepted = 1`
+    );
+    return jetztAuswaehlen(rows, today);
+  }, { items: [], gesamt: 0, wartet: [], wartetGesamt: 0, routinen: [] });
+}
+
+export type EingangZahlen = { briefe: number; mails: number; mitarbeiter: number; gesamt: number };
+
+export function eingangZahlen(d: DB): Promise<EingangZahlen> {
+  return safe(async () => {
+    const [b, m, t] = await Promise.all([
+      d.get<{ n: number }>("SELECT COUNT(*) AS n FROM letters WHERE status = 'neu'"),
+      d.get<{ n: number }>("SELECT COUNT(*) AS n FROM mail_digest WHERE read = 0 AND important = 1"),
+      d.get<{ n: number }>("SELECT COUNT(*) AS n FROM tasks WHERE done = 0 AND accepted = 0"),
+    ]);
+    const briefe = Number(b?.n ?? 0);
+    const mails = Number(m?.n ?? 0);
+    const mitarbeiter = Number(t?.n ?? 0);
+    return { briefe, mails, mitarbeiter, gesamt: briefe + mails + mitarbeiter };
+  }, { briefe: 0, mails: 0, mitarbeiter: 0, gesamt: 0 });
+}

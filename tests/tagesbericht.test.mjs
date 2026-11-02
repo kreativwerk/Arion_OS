@@ -254,3 +254,26 @@ test("To-dos: Wartende bleiben draußen, fälliges Nachhaken und nächster Schri
   assert.equal(t[0].stand, "Nachhaken – wartet auf SVG Koblenz");
   assert.equal(t[1].stand, "→ 200 € überweisen");
 });
+
+/* ── Heute: Jetzt dran ─────────────────────────────────── */
+import { jetztAuswaehlen } from "../lib/home-data.ts";
+
+test("Jetzt dran: Fristen ≤ 3 Tage zuerst, Wartende getrennt, Routinen extra", () => {
+  const r = (o) => ({ notes: "", project: "Arion", due_date: null, priority: 2, recurrence: null, horizon: "short", wer_dran: "", wartet_auf: "", naechster_schritt: "", nachhaken_am: "", ...o });
+  const j = jetztAuswaehlen(
+    [
+      r({ id: 1, title: "Später", due_date: "2026-12-31" }),
+      r({ id: 2, title: "Morgen", due_date: "2026-11-03" }),
+      r({ id: 3, title: "Dringend ohne Frist", priority: 1 }),
+      r({ id: 4, title: "SD Worx", wer_dran: "extern", wartet_auf: "SD Worx", nachhaken_am: "2026-11-05" }),
+      r({ id: 5, title: "Nachhaken", wer_dran: "extern", wartet_auf: "SVG", nachhaken_am: "2026-11-02" }),
+      r({ id: 6, title: "SD Worx Check", recurrence: "daily", due_date: "2026-09-02" }),
+      r({ id: 7, title: "Lang", horizon: "long" }),
+    ],
+    "2026-11-02"
+  );
+  assert.deepEqual(j.items.map((x) => x.titel), ["Morgen", "Nachhaken", "Dringend ohne Frist", "Später"]);
+  assert.equal(j.gesamt, 4);
+  assert.deepEqual(j.wartet.map((x) => x.titel), ["SD Worx"]);
+  assert.deepEqual(j.routinen.map((x) => x.titel), ["SD Worx Check"]);
+});
