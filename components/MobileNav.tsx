@@ -7,7 +7,7 @@ import { Icon } from "@/components/ui";
 
 const LEFT = [
   { href: "/", label: "Heute", icon: "sunny" },
-  { href: "/aufgaben", label: "Aufgaben", icon: "task_alt" },
+  { href: "/aufgaben", label: "Vorgänge", icon: "task_alt" },
 ];
 const RIGHT = [
   { href: "/postfach", label: "Postfach", icon: "inbox" },

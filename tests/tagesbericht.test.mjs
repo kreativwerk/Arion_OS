@@ -226,3 +226,31 @@ test("Text und HTML zeigen To-dos für dich direkt nach den Fristen", () => {
   assert.ok(html.indexOf("To-dos für dich") < html.indexOf("Fristen – nächste 7 Tage"));
   assert.ok(html.includes("ITSG – SV-Meldeportal freischalten"));
 });
+
+/* ── Vorgangsmodell ─────────────────────────────────────── */
+import { vorgangStatus, wartetText, beiAlbert } from "../lib/vorgang.ts";
+
+test("Vorgang: Status aus wer_dran und Nachhak-Datum", () => {
+  assert.equal(vorgangStatus({ done: 0, wer_dran: "" }, "2026-11-02"), "ich");
+  assert.equal(vorgangStatus({ done: 0, wer_dran: "albert" }, "2026-11-02"), "ich");
+  assert.equal(vorgangStatus({ done: 0, wer_dran: "extern", nachhaken_am: "2026-11-05" }, "2026-11-02"), "wartet");
+  assert.equal(vorgangStatus({ done: 0, wer_dran: "extern", nachhaken_am: "2026-11-02" }, "2026-11-02"), "nachhaken");
+  assert.equal(vorgangStatus({ done: 0, wer_dran: "claude" }, "2026-11-02"), "wartet");
+  assert.equal(vorgangStatus({ done: 1, wer_dran: "" }, "2026-11-02"), "erledigt");
+  assert.equal(wartetText("extern", "SD Worx"), "wartet auf SD Worx");
+  assert.equal(wartetText("claude", ""), "bei Claude");
+  assert.equal(wartetText("", "SD Worx"), "");
+  assert.equal(beiAlbert(null), true);
+});
+
+test("To-dos: Wartende bleiben draußen, fälliges Nachhaken und nächster Schritt kommen rein", () => {
+  const rows = [
+    { title: "Sitzmann", project: "Arion", due_date: null, priority: 2, notes: "", wer_dran: "extern", wartet_auf: "Sitzmann", nachhaken_am: "2026-11-09" },
+    { title: "SVG Koblenz", project: "Arion", due_date: null, priority: 1, notes: "", wer_dran: "extern", wartet_auf: "SVG Koblenz", nachhaken_am: "2026-11-02" },
+    { title: "Handwerkskammer", project: "Fleet Fix", due_date: null, priority: 2, notes: "alt", naechster_schritt: "200 € überweisen" },
+  ];
+  const t = todosAuswaehlen(rows, "2026-11-02", new Set());
+  assert.deepEqual(t.map((x) => x.titel), ["SVG Koblenz", "Handwerkskammer"]);
+  assert.equal(t[0].stand, "Nachhaken – wartet auf SVG Koblenz");
+  assert.equal(t[1].stand, "→ 200 € überweisen");
+});

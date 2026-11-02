@@ -688,6 +688,19 @@ const DRAFT_SIGN_COLUMNS = ["sign_spec", "sign_status", "sign_error"];
 /** Spalten, die die Briefpost nachträglich bekommen hat (Upload + KI-Analyse). */
 const LETTER_COLUMNS = ["category", "action", "due_date", "reference", "notes", "mime", "extracted", "firma", "drive_file_id", "analysis_error"];
 
+/**
+ * Vorgangsmodell (docs/VORGAENGE.md): Jede Aufgabe ist ein Vorgang.
+ * wer_dran: '' | 'albert' | 'claude' | 'mitarbeiter' | 'extern' – leer heißt „bei Albert“.
+ * wartet_auf: Name, wenn jemand anderes dran ist (z. B. „SD Worx“).
+ * naechster_schritt: ein Satz. nachhaken_am: YYYY-MM-DD, ab wann wir wieder fragen.
+ */
+export const VORGANG_COLUMNS: [string, string][] = [
+  ["wer_dran", "TEXT DEFAULT ''"],
+  ["wartet_auf", "TEXT DEFAULT ''"],
+  ["naechster_schritt", "TEXT DEFAULT ''"],
+  ["nachhaken_am", "TEXT DEFAULT ''"],
+];
+
 async function ensureSchema(d: DB) {
   for (const stmt of schemaStatements(d.dialect)) {
     await d.run(stmt);
@@ -702,6 +715,9 @@ async function ensureSchema(d: DB) {
     await addColumn("tasks", "submitted_by", "TEXT DEFAULT ''");
     await addColumn("tasks", "accepted", "INTEGER DEFAULT 1");
     await addColumn("tasks", "workspace_id", "TEXT NOT NULL DEFAULT 'default'");
+    for (const [col, def] of VORGANG_COLUMNS) await addColumn("tasks", col, def);
+    await addColumn("letters", "task_id", "INTEGER");
+    await addColumn("mail_drafts", "task_id", "INTEGER");
     await addColumn("mail_accounts", "host", "TEXT DEFAULT ''");
     await addColumn("mail_accounts", "port", "INTEGER DEFAULT 993");
     await addColumn("mail_accounts", "username", "TEXT DEFAULT ''");
@@ -732,6 +748,10 @@ async function ensureSchema(d: DB) {
       await d.run(`ALTER TABLE letters ADD COLUMN IF NOT EXISTS ${col} TEXT DEFAULT ''`);
     }
     await d.run("ALTER TABLE assistant_messages ADD COLUMN IF NOT EXISTS conversation_id TEXT DEFAULT ''");
+    // Vorgangsmodell: wer ist dran, nächster Schritt, Nachhaken; Briefe und Entwürfe hängen am Vorgang
+    for (const [col, def] of VORGANG_COLUMNS) await d.run(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS ${col} ${def}`);
+    await d.run("ALTER TABLE letters ADD COLUMN IF NOT EXISTS task_id INTEGER");
+    await d.run("ALTER TABLE mail_drafts ADD COLUMN IF NOT EXISTS task_id INTEGER");
     // Push „Entwurf wartet“ nur einmal je Entwurf (lib/draft-notify.ts)
     await d.run("ALTER TABLE mail_drafts ADD COLUMN IF NOT EXISTS notified_at TEXT");
     // Weiterleiten: Verweis auf die Originalmail, Anhänge kommen beim Versand per IMAP (lib/mail-forward.ts)
