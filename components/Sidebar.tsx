@@ -14,6 +14,7 @@ export const NAV_GRUPPEN: { titel: string; items: { href: string; label: string;
     titel: "",
     items: [
       { href: "/", label: "Heute", icon: "sunny" },
+      { href: "/eingang", label: "Eingang", icon: "move_to_inbox" },
       { href: "/aufgaben", label: "Vorgänge", icon: "task_alt" },
       { href: "/postfach", label: "Postfach", icon: "inbox" },
       { href: "/post", label: "Briefpost", icon: "markunread_mailbox" },
@@ -23,6 +24,7 @@ export const NAV_GRUPPEN: { titel: string; items: { href: string; label: string;
   {
     titel: "Firmen & Ablage",
     items: [
+      { href: "/firmen", label: "Firmen", icon: "domain" },
       { href: "/buchhaltung", label: "Buchhaltung", icon: "account_balance" },
       { href: "/bescheinigungen", label: "Bescheinigungen", icon: "assignment_ind" },
       { href: "/vertraege", label: "Verträge", icon: "contract" },

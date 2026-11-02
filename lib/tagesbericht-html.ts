@@ -217,6 +217,15 @@ ${zahlKachel(sdN, "SD Worx neu", "neutral")}
     }
   }
 
+  // Freitags: Wochenrückblick
+  if (b.rueckblick && b.wochentag === "Freitag") {
+    zeilen.push(kopf("Wochenrückblick – wartet auf andere", b.rueckblick.wartetGesamt, "Nachhaken, Fristen 14 Tage, Belege, Codriver – mit Claude in 30 Minuten"));
+    if (!b.rueckblick.wartetGesamt) zeilen.push(leer("Du wartest auf niemanden."));
+    for (const w of b.rueckblick.wartet) {
+      zeilen.push(karte(`${titelZeile(w.titel, `${APP_URL}aufgaben`)}${meta(`${w.wartet}${w.nachhakenAm ? ` · nachhaken ab ${kurzDatum(w.nachhakenAm)}` : ""}`)}`));
+    }
+  }
+
   // SD Worx
   zeilen.push(kopf("SD Worx – neu seit dem letzten Bericht", sdN));
   if (!sdN) zeilen.push(leer("Keine neuen Nachrichten im Kundenportal."));

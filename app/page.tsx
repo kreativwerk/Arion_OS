@@ -7,14 +7,19 @@ import { fmtDate, todayIso } from "@/lib/client";
 import TaskQuickSheet from "@/components/TaskQuickSheet";
 import NutritionTracker from "@/components/NutritionTracker";
 import {
+  EingangKarte,
   FaelleWidget,
   FlotteWidget,
+  JetztWidget,
+  WartetAndereWidget,
   FristenWidget,
   KontoWidget,
   StationWidget,
   WartetWidget,
   WohnwerkWidget,
+  type EingangZahlen,
   type Faelle,
+  type Jetzt,
   type Flotte,
   type Frist,
   type Konto,
@@ -49,7 +54,12 @@ type Dash = {
   station?: Station;
   flotte?: Flotte;
   faelle?: Faelle;
+  jetzt?: Jetzt;
+  eingang?: EingangZahlen;
 };
+
+/** Diese Blöcke stehen fest oben (docs/VORGAENGE.md) – im Baukasten darunter nicht noch einmal. */
+const FEST: WidgetId[] = ["posteingaenge", "wartet", "termine", "faelle", "aufgaben"];
 
 const eur = (n: number) => n.toLocaleString("de-DE", { style: "currency", currency: "EUR" });
 const monthLabel = (m: string) =>
@@ -377,19 +387,24 @@ export default function TodayPage() {
         <p className="text-[12px] text-ink-3 mt-1">
           {dateStr} · KW {isoWeek(now)}
         </p>
-        {data.inboxCount > 0 && (
-          <Link
-            href="/aufgaben"
-            className="inline-flex items-center gap-2 mt-3 px-3.5 h-8 rounded-full bg-accent-soft text-accent text-[13px] font-medium"
-          >
-            <Icon name="inbox" size={16} /> {data.inboxCount} neue{" "}
-            {data.inboxCount === 1 ? "Aufgabe" : "Aufgaben"} von Mitarbeitern im Eingang →
-          </Link>
-        )}
       </div>
 
-      {/* Startseite = Widget-Baukasten: Reihenfolge/Sichtbarkeit/Breite in app_config.home_layout */}
-      <div className="flex justify-end -mt-3 mb-2">
+      {/* Feste Blöcke in fester Reihenfolge: Jetzt dran · Nur du kannst · Eingang · Termine · Wartet auf andere */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start mb-8">
+        <div className="space-y-4">
+          <JetztWidget jetzt={data.jetzt ?? { items: [], gesamt: 0, wartet: [], wartetGesamt: 0, routinen: [] }} onChanged={reload} />
+        </div>
+        <div className="space-y-4">
+          {(data.wartet ?? []).length > 0 && <WartetWidget items={data.wartet ?? []} onChanged={reload} />}
+          {data.eingang && <EingangKarte e={data.eingang} />}
+          {renderWidget("termine")}
+          {data.jetzt && <WartetAndereWidget jetzt={data.jetzt} />}
+        </div>
+      </div>
+
+      {/* Darunter der Baukasten für alles Weitere: Reihenfolge/Sichtbarkeit/Breite in app_config.home_layout */}
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-3">Weitere Karten</h2>
         <button
           onClick={() => setEditing((v) => !v)}
           className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-[12px] text-ink-2 hover:text-accent hover:bg-inset transition-all"
@@ -399,11 +414,11 @@ export default function TodayPage() {
         </button>
       </div>
 
-      {editing && <LayoutEditor layout={layout} onChange={saveLayout} />}
+      {editing && <LayoutEditor layout={layout.filter((w) => !FEST.includes(w.id))} onChange={(l) => saveLayout([...l, ...layout.filter((w) => FEST.includes(w.id))])} />}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
         {layout
-          .filter((w) => w.an)
+          .filter((w) => w.an && !FEST.includes(w.id))
           .map((w) => {
             const el = renderWidget(w.id);
             if (!el) return null;

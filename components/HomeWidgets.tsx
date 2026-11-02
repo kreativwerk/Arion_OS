@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Badge, Button, Card, CardHeader, CheckCircle, EmptyState, Icon, Row } from "@/components/ui";
 import { fmtDate } from "@/lib/client";
-import type { Faelle, FallItem, WartetItem } from "@/lib/home-data";
+import type { EingangZahlen, Faelle, FallItem, Jetzt, JetztItem, WartetItem } from "@/lib/home-data";
 
 /* Neue Startseiten-Widgets. Daten kommen fertig aus /api/dashboard (lib/home-data.ts). */
 
@@ -12,7 +12,7 @@ const eur = (n: number) => n.toLocaleString("de-DE", { style: "currency", curren
 const tageText = (t: number) => (t < 0 ? `seit ${-t} T` : t === 0 ? "heute" : t === 1 ? "morgen" : `in ${t} T`);
 const tageTon = (t: number): "bad" | "warn" | "neutral" => (t <= 1 ? "bad" : t <= 7 ? "warn" : "neutral");
 
-export type { WartetItem, Faelle };
+export type { WartetItem, Faelle, Jetzt, EingangZahlen };
 export type Frist = { titel: string; datum: string; tage: number; art: string; href: string };
 export type Konto = { saldo: number | null; stand: string | null; lastschriften: { an: string; datum: string; betrag: number | null; tage: number }[]; summe7: number };
 export type Wohnwerk = { monat: string; summe: number; anzahl: number; eingaenge: { von: string; betrag: number; datum: string }[] };
@@ -83,7 +83,7 @@ export function WartetWidget({ items, onChanged }: { items: WartetItem[]; onChan
   return (
     <Card>
       <CardHeader
-        title="Wartet auf dich"
+        title="Nur du kannst: senden"
         subtitle={items.length ? `${items.length} ${items.length === 1 ? "Entwurf" : "Entwürfe"} zum Senden` : "Nichts offen"}
         action={
           <Link href="/postfach?ansicht=entwuerfe" className="text-[12px] text-accent">
@@ -518,6 +518,151 @@ export function WohnwerkWidget({ w }: { w: Wohnwerk }) {
           <span className="text-[12px] text-ink-3">{fmtDate(e.datum)}</span>
           <span className="text-[13px] tabular-nums">{eur(e.betrag)}</span>
         </Row>
+      ))}
+    </Card>
+  );
+}
+
+/* ── Heute in festen Blöcken (docs/VORGAENGE.md) ─────────── */
+
+async function vorgangAbhaken(id: number, undo = false) {
+  await fetch("/api/tasks/complete", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ id, undo }),
+  });
+}
+
+function JetztZeile({ v, onDone }: { v: JetztItem; onDone: () => void }) {
+  return (
+    <div className="flex items-start gap-3 px-5 py-3 border-t border-line first:border-t-0">
+      <div className="shrink-0 pt-px">
+        <CheckCircle size={22} onComplete={async () => { await vorgangAbhaken(v.id); onDone(); }} />
+      </div>
+      <Link href="/aufgaben" className="flex-1 min-w-0">
+        <div className="text-[14px] font-medium line-clamp-2">{v.titel}</div>
+        {v.schritt && <div className="text-[12px] text-ink-2 mt-0.5 line-clamp-2">→ {v.schritt}</div>}
+        <div className="flex flex-wrap items-center gap-1.5 mt-1.5 empty:hidden">
+          {v.status === "nachhaken" && <Badge tone="warn">nachhaken · {v.wartet.replace(/^wartet auf /, "")}</Badge>}
+          {v.tage !== null && v.frist && (
+            <Badge tone={tageTon(v.tage)}>
+              {fmtDate(v.frist).slice(0, 6)} · {tageText(v.tage)}
+            </Badge>
+          )}
+          {v.projekt && <Badge>{v.projekt}</Badge>}
+          {v.dringend && <Badge tone="bad">dringend</Badge>}
+        </div>
+      </Link>
+    </div>
+  );
+}
+
+/** Block 1: was jetzt bei Albert liegt – höchstens sieben, Fristen zuerst. Unten die täglichen Routinen. */
+export function JetztWidget({ jetzt, onChanged }: { jetzt: Jetzt; onChanged?: () => void }) {
+  const [erledigt, setErledigt] = useState<Set<number>>(new Set());
+  const neu = () => onChanged?.();
+  const routineAbhaken = async (id: number) => {
+    setErledigt((s) => new Set(s).add(id));
+    await vorgangAbhaken(id);
+    neu();
+  };
+  return (
+    <Card>
+      <CardHeader
+        title="Jetzt dran"
+        subtitle={jetzt.gesamt ? `${jetzt.gesamt} ${jetzt.gesamt === 1 ? "Vorgang liegt" : "Vorgänge liegen"} bei dir` : "Nichts liegt bei dir"}
+        action={
+          <Link href="/aufgaben" className="text-[12px] text-accent">
+            Alle →
+          </Link>
+        }
+      />
+      {jetzt.items.length === 0 && <EmptyState text="Alles erledigt – freier Kopf." />}
+      {jetzt.items.map((v) => (
+        <JetztZeile key={v.id} v={v} onDone={neu} />
+      ))}
+      {jetzt.gesamt > jetzt.items.length && (
+        <Link href="/aufgaben" className="block px-5 py-2.5 border-t border-line text-[12px] text-accent">
+          + {jetzt.gesamt - jetzt.items.length} weitere bei dir →
+        </Link>
+      )}
+      {jetzt.routinen.length > 0 && (
+        <div className="px-5 py-3 border-t border-line bg-inset/40">
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-3 mb-2 flex items-center gap-1">
+            <Icon name="autorenew" size={12} /> Täglich
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {jetzt.routinen.map((r) => {
+              const fertig = erledigt.has(r.id);
+              return (
+                <button
+                  key={r.id}
+                  type="button"
+                  disabled={fertig}
+                  onClick={() => routineAbhaken(r.id)}
+                  className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-full border text-[12px] font-medium transition-all ${
+                    fertig ? "bg-accent-soft border-accent/30 text-accent" : "bg-card border-line text-ink-2 hover:border-ink-3"
+                  }`}
+                >
+                  <Icon name={fertig ? "check" : "radio_button_unchecked"} size={15} />
+                  {r.titel}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/** Block 3: der Eingang als eine Zahl mit Weg dorthin. */
+export function EingangKarte({ e }: { e: EingangZahlen }) {
+  const teile = [
+    e.briefe ? `${e.briefe} ${e.briefe === 1 ? "Brief" : "Briefe"}` : "",
+    e.mails ? `${e.mails} ${e.mails === 1 ? "Mail" : "Mails"}` : "",
+    e.mitarbeiter ? `${e.mitarbeiter} von Mitarbeitern` : "",
+  ].filter(Boolean);
+  return (
+    <Link href="/eingang" className="block">
+      <Card className="hover:border-accent/40 transition-all">
+        <div className="px-5 py-4 flex items-center gap-4">
+          <div className={`w-11 h-11 rounded-[14px] flex items-center justify-center shrink-0 ${e.gesamt ? "bg-accent-soft text-accent" : "bg-inset text-ink-3"}`}>
+            <Icon name="move_to_inbox" size={24} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-[15px] font-semibold">{e.gesamt ? `Eingang: ${e.gesamt} zu klären` : "Eingang ist leer"}</div>
+            <div className="text-[12px] text-ink-3 truncate">{teile.length ? teile.join(" · ") : "Neue Briefe, Mails und Aufgaben landen hier"}</div>
+          </div>
+          <Icon name="chevron_right" size={22} className="text-ink-3" />
+        </div>
+      </Card>
+    </Link>
+  );
+}
+
+/** Block 5: worauf Albert wartet – nach Nachhak-Datum. */
+export function WartetAndereWidget({ jetzt }: { jetzt: Jetzt }) {
+  if (!jetzt.wartetGesamt) return null;
+  return (
+    <Card>
+      <CardHeader
+        title="Wartet auf andere"
+        subtitle={`${jetzt.wartetGesamt} ${jetzt.wartetGesamt === 1 ? "Vorgang" : "Vorgänge"}`}
+        action={
+          <Link href="/aufgaben" className="text-[12px] text-accent">
+            Alle →
+          </Link>
+        }
+      />
+      {jetzt.wartet.map((v) => (
+        <Link key={v.id} href="/aufgaben" className="block px-5 py-2.5 border-t border-line first:border-t-0 hover:bg-inset/40">
+          <div className="text-[13px] font-medium line-clamp-1">{v.titel}</div>
+          <div className="text-[11px] text-ink-3 mt-0.5">
+            {v.wartet}
+            {v.nachhakenAm ? ` · nachhaken ab ${fmtDate(v.nachhakenAm).slice(0, 6)}` : ""}
+          </div>
+        </Link>
       ))}
     </Card>
   );
