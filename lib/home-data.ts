@@ -1,3 +1,4 @@
+import { vorgangStatus, wartetText, type VorgangStatus } from "@/lib/vorgang";
 import type { DB } from "@/lib/db";
 import { forwardFileNames } from "@/lib/mail-forward-names";
 import { parseQontoEingang, parseQontoLastschrift } from "@/lib/home-widgets";
@@ -112,6 +113,12 @@ export type FallItem = {
   frist: string | null;
   /** Dokumente aus den Zeilen „Dokument: brief 37“ / „Dokument: mail 403/2“. */
   dokumente: FallDokument[];
+  /** Vorgangsmodell (lib/vorgang.ts): ich · nachhaken · wartet · erledigt */
+  status: VorgangStatus;
+  /** „wartet auf SD Worx“ – leer, wenn Albert dran ist */
+  wartet: string;
+  naechsterSchritt: string;
+  nachhakenAm: string | null;
 };
 
 /** Ein Dokument zum Fall: gescannter Brief oder Mail-Anhang, zum Öffnen und Herunterladen. */
@@ -129,14 +136,18 @@ export function faelle(d: DB, today: string): Promise<Faelle> {
     const seit = iso(new Date(new Date(`${today}T12:00:00Z`).getTime() - FAELLE_ERLEDIGT_TAGE * DAY));
     const [offen, erledigt] = await Promise.all([
       d.all<FallRow>(
-        "SELECT id, title, notes, project, created_at, completed_at, priority FROM tasks WHERE source = 'claude' AND accepted = 1 AND done = 0 ORDER BY priority ASC, id DESC LIMIT 40"
+        "SELECT id, title, notes, project, created_at, completed_at, priority, done, wer_dran, wartet_auf, naechster_schritt, nachhaken_am FROM tasks WHERE source = 'claude' AND accepted = 1 AND done = 0 ORDER BY priority ASC, id DESC LIMIT 40"
       ),
       d.all<FallRow>(
-        "SELECT id, title, notes, project, created_at, completed_at, priority FROM tasks WHERE source = 'claude' AND accepted = 1 AND done = 1 AND completed_at >= ? ORDER BY completed_at DESC LIMIT 20",
+        "SELECT id, title, notes, project, created_at, completed_at, priority, done, wer_dran, wartet_auf, naechster_schritt, nachhaken_am FROM tasks WHERE source = 'claude' AND accepted = 1 AND done = 1 AND completed_at >= ? ORDER BY completed_at DESC LIMIT 20",
         [seit]
       ),
     ]);
-    const result = { offen: offen.map(fallItem), erledigt: erledigt.map(fallItem) };
+    const rang: Record<VorgangStatus, number> = { nachhaken: 0, ich: 1, wartet: 2, erledigt: 3 };
+    const offenItems = offen
+      .map((r) => fallItem(r, today))
+      .sort((a, b) => rang[a.status] - rang[b.status] || a.prio - b.prio || (a.frist ?? "9999").localeCompare(b.frist ?? "9999"));
+    const result = { offen: offenItems, erledigt: erledigt.map((r) => fallItem(r, today)) };
     await safe(() => dokumentNamen(d, [...result.offen, ...result.erledigt]), undefined);
     return result;
   }, { offen: [], erledigt: [] });
@@ -200,7 +211,20 @@ export function dokumenteAusStand(notes: string): { stand: string; dokumente: Fa
   return { stand: dokumente.length ? stand.replace(/\n{3,}/g, "\n\n").trim() : notes, dokumente };
 }
 
-type FallRow = { id: number; title: string; notes: string | null; project: string | null; created_at: string | null; completed_at: string | null; priority: number | null };
+type FallRow = {
+  id: number;
+  title: string;
+  notes: string | null;
+  project: string | null;
+  created_at: string | null;
+  completed_at: string | null;
+  priority: number | null;
+  done?: number | null;
+  wer_dran?: string | null;
+  wartet_auf?: string | null;
+  naechster_schritt?: string | null;
+  nachhaken_am?: string | null;
+};
 
 /**
  * Zeile „SD Worx: …“ im Stand eines Falls lesen, z. B.
@@ -231,7 +255,7 @@ export function fristAusStand(notes: string, jahr = new Date().getFullYear()): {
   return { stand: notes.replace(m[0], "").replace(/\n{3,}/g, "\n\n").trim(), frist };
 }
 
-function fallItem(r: FallRow): FallItem {
+export function fallItem(r: FallRow, today = new Date().toISOString().slice(0, 10)): FallItem {
   const dok = dokumenteAusStand(r.notes ?? "");
   const f = fristAusStand(dok.stand);
   const { stand, sdworx } = sdworxAusStand(f.stand);
@@ -246,6 +270,10 @@ function fallItem(r: FallRow): FallItem {
     erstellt: (r.created_at ?? "").slice(0, 10),
     erledigtAm: r.completed_at ? r.completed_at.slice(0, 10) : null,
     prio: Number(r.priority ?? 2),
+    status: vorgangStatus(r, today),
+    wartet: wartetText(r.wer_dran, r.wartet_auf),
+    naechsterSchritt: (r.naechster_schritt ?? "").trim(),
+    nachhakenAm: /^\d{4}-\d{2}-\d{2}/.test(r.nachhaken_am ?? "") ? String(r.nachhaken_am).slice(0, 10) : null,
   };
 }
 

@@ -2,39 +2,37 @@
 
 import Link from "next/link";
 import { PageHeader, Icon } from "@/components/ui";
+import { NAV_GRUPPEN } from "@/components/Sidebar";
 
-const MODULES = [
-  { href: "/gewohnheiten", label: "Gewohnheiten", icon: "autorenew", desc: "Habit-Tracker & Serien" },
-  { href: "/kalender", label: "Kalender", icon: "calendar_month", desc: "Termine & Einträge" },
-  { href: "/wissen", label: "Wissen", icon: "school", desc: "Notizen & Firmenwissen, auch für Arion Bot" },
-  { href: "/mail", label: "Mail-Digest", icon: "mail", desc: "Wichtige Mails, gefiltert" },
-  { href: "/post", label: "Briefpost", icon: "markunread_mailbox", desc: "Digital zugestellte Scans" },
-  { href: "/buchhaltung", label: "Buchhaltung", icon: "account_balance", desc: "Belege, Abgleich, Fristen" },
-  { href: "/bescheinigungen", label: "Bescheinigungen", icon: "assignment_ind", desc: "Arbeitsagentur & Kassen, SV-Meldeportal" },
-  { href: "/vertraege", label: "Verträge", icon: "contract", desc: "Fristen & Kosten" },
-  { href: "/watcher", label: "Portale", icon: "travel_explore", desc: "Watcher & Meldungen" },
-  { href: "/slack", label: "Slack", icon: "forum", desc: "Wichtige Personen" },
-];
+// Gleiche Gruppen wie die Seitenleiste; Heute, Vorgänge und Postfach sind unten in der Tab-Leiste.
+const GRUPPEN = NAV_GRUPPEN.map((g) => ({
+  titel: g.titel || "Alltag",
+  items: g.items.filter((i) => !["/", "/aufgaben", "/postfach", "/assistent"].includes(i.href)),
+})).filter((g) => g.items.length);
 
 export default function MorePage() {
   return (
     <div>
-      <PageHeader title="Alle Module" subtitle="Der Rest von Arion OS" />
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        {MODULES.map((m) => (
-          <Link
-            key={m.href}
-            href={m.href}
-            className="bg-card border border-line rounded-card p-4 hover:border-accent/40 transition-all"
-          >
-            <div className="w-10 h-10 rounded-[12px] bg-accent-soft text-accent flex items-center justify-center mb-3">
-              <Icon name={m.icon} size={22} />
-            </div>
-            <div className="text-[14px] font-semibold">{m.label}</div>
-            <div className="text-[11px] text-ink-3 mt-0.5">{m.desc}</div>
-          </Link>
-        ))}
-      </div>
+      <PageHeader title="Mehr" subtitle="Alles, was nicht unten in der Leiste steht" />
+      {GRUPPEN.map((g) => (
+        <section key={g.titel} className="mb-6">
+          <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-3 mb-2 px-1">{g.titel}</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {g.items.map((m) => (
+              <Link
+                key={m.href}
+                href={m.href}
+                className="bg-card border border-line rounded-card p-4 hover:border-accent/40 transition-all flex items-center gap-3"
+              >
+                <div className="w-10 h-10 rounded-[12px] bg-accent-soft text-accent flex items-center justify-center shrink-0">
+                  <Icon name={m.icon} size={22} />
+                </div>
+                <div className="text-[14px] font-semibold">{m.label}</div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      ))}
     </div>
   );
 }

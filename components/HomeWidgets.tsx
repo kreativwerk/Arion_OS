@@ -216,7 +216,7 @@ export function FaelleWidget({ faelle, onChanged }: { faelle: Faelle; onChanged?
 
   const zeile = (f: FallItem, erledigt: boolean) => {
     const auf = offen === f.id;
-    const hatPills = f.dokumente.length > 0 || f.sdworx || f.bereich || (!erledigt && (f.prio === 1 || f.frist));
+    const hatPills = f.dokumente.length > 0 || f.sdworx || f.bereich || (!erledigt && (f.prio === 1 || f.frist || f.wartet));
     return (
       <div key={f.id} className={auf ? "bg-inset/40" : ""}>
         {/* Titel und Stand bekommen die volle Breite, die Pills stehen in einer eigenen Zeile darunter */}
@@ -239,7 +239,11 @@ export function FaelleWidget({ faelle, onChanged }: { faelle: Faelle; onChanged?
           <div className="flex-1 min-w-0">
             <button type="button" onClick={() => setOffen(auf ? null : f.id)} aria-expanded={auf} className="block w-full text-left">
               <div className={`text-[13px] font-medium ${auf ? "" : "line-clamp-2"} ${erledigt ? "line-through text-ink-3" : ""}`}>{f.titel}</div>
-              {!auf && f.stand && <div className="text-[11px] text-ink-3 line-clamp-2">{f.stand}</div>}
+              {!auf && (f.naechsterSchritt || f.stand) && (
+                <div className={`text-[11px] line-clamp-2 ${f.naechsterSchritt ? "text-ink-2" : "text-ink-3"}`}>
+                  {f.naechsterSchritt ? `→ ${f.naechsterSchritt}` : f.stand}
+                </div>
+              )}
             </button>
             {hatPills && (
               <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
@@ -253,6 +257,13 @@ export function FaelleWidget({ faelle, onChanged }: { faelle: Faelle; onChanged?
                     {f.sdworx.status === "weitergeleitet" ? "bei SD Worx" : f.sdworx.status === "wartet" ? "SD Worx wartet" : "nicht an SD Worx"}
                   </Badge>
                 )}
+                {!erledigt && f.status === "nachhaken" && <Badge tone="warn">nachhaken · {f.wartet.replace(/^wartet auf /, "")}</Badge>}
+                {!erledigt && f.status === "wartet" && (
+                  <Badge>
+                    {f.wartet}
+                    {f.nachhakenAm ? ` · ab ${fmtDate(f.nachhakenAm).slice(0, 6)}` : ""}
+                  </Badge>
+                )}
                 {f.bereich && <Badge>{f.bereich}</Badge>}
                 {!erledigt && f.prio === 1 && <Badge tone="bad">dringend</Badge>}
                 {!erledigt && f.frist && <FristBadge iso={f.frist} />}
@@ -262,6 +273,12 @@ export function FaelleWidget({ faelle, onChanged }: { faelle: Faelle; onChanged?
         </div>
         {auf && (
           <div className="px-5 pb-3 -mt-1 pl-[54px] space-y-1">
+            {f.naechsterSchritt && (
+              <p className="text-[13px] text-ink">
+                <span className="text-accent font-medium">Nächster Schritt: </span>
+                {f.naechsterSchritt}
+              </p>
+            )}
             {f.sdworx && <p className="text-[12px] text-ink-2">SD Worx: {f.sdworx.text}</p>}
             {f.stand && <p className="text-[13px] text-ink-2 leading-relaxed whitespace-pre-line">{f.stand}</p>}
             {f.dokumente.length > 0 && (
@@ -307,10 +324,18 @@ export function FaelleWidget({ faelle, onChanged }: { faelle: Faelle; onChanged?
       <CardHeader
         title="Offene Fälle"
         badge={<Badge tone="accent">Claude</Badge>}
-        subtitle={faelle.offen.length ? `${faelle.offen.length} offen` : "Alles erledigt"}
+        subtitle={
+          faelle.offen.length
+            ? (() => {
+                const bei = faelle.offen.filter((f) => f.status === "ich" || f.status === "nachhaken").length;
+                const warten = faelle.offen.length - bei;
+                return `${bei} bei dir${warten ? ` · ${warten} warten auf andere` : ""}`;
+              })()
+            : "Alles erledigt"
+        }
         action={
           <Link href="/aufgaben" className="text-[12px] text-accent">
-            Aufgaben →
+            Vorgänge →
           </Link>
         }
       />

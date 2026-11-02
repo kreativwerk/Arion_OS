@@ -2,6 +2,7 @@ import type { DB } from "@/lib/db";
 import { fristAusStand, fristen, type Frist } from "@/lib/home-data";
 import { pushConfigured, sendPushToAll } from "@/lib/push";
 import { sendDraft } from "@/lib/mail-send";
+import { vorgangStatus, wartetText } from "@/lib/vorgang";
 import { codriverStand, type CodriverStand } from "@/lib/codriver-faelligkeiten";
 import { APP_URL, berichtHtml, deDatum, kurzDatum, wannText } from "@/lib/tagesbericht-html";
 
@@ -314,7 +315,18 @@ export function letzterStand(notes: string, max = 160): string {
  * Dringende zuerst, dann nach Frist.
  */
 export function todosAuswaehlen(
-  rows: { title: string; project: string | null; due_date: string | null; priority: number | null; notes: string | null; recurrence?: string | null }[],
+  rows: {
+    title: string;
+    project: string | null;
+    due_date: string | null;
+    priority: number | null;
+    notes: string | null;
+    recurrence?: string | null;
+    wer_dran?: string | null;
+    wartet_auf?: string | null;
+    naechster_schritt?: string | null;
+    nachhaken_am?: string | null;
+  }[],
   today: string,
   schonGelistet: Set<string>
 ): ToDo[] {
@@ -324,17 +336,22 @@ export function todosAuswaehlen(
     const titel = (r.title || "").trim();
     // tägliche Routinen (SD Worx Check, Letterbox Check …) sind keine To-dos
     if (!titel || schonGelistet.has(titel) || r.recurrence === "daily") continue;
+    // Vorgangsmodell: Wartet jemand anderes und ist das Nachhak-Datum noch nicht da, ist es kein To-do für Albert
+    const status = vorgangStatus(r, today);
+    if (status === "wartet") continue;
     const due = /^\d{4}-\d{2}-\d{2}/.test(r.due_date || "") ? String(r.due_date).slice(0, 10) : "";
     const frist = due || fristAusStand(r.notes || "", jahr).frist || "";
-    out.push({ titel, projekt: (r.project || "").trim(), frist, dringend: Number(r.priority) === 1, stand: letzterStand(r.notes || "") });
+    const schritt = (r.naechster_schritt || "").trim();
+    const stand = status === "nachhaken" ? `Nachhaken – ${wartetText(r.wer_dran, r.wartet_auf)}` : schritt ? `→ ${schritt}` : letzterStand(r.notes || "");
+    out.push({ titel, projekt: (r.project || "").trim(), frist, dringend: Number(r.priority) === 1, stand });
   }
   out.sort((a, b) => Number(b.dringend) - Number(a.dringend) || (a.frist || "9999").localeCompare(b.frist || "9999"));
   return out.slice(0, MAX_TODOS);
 }
 
 async function offeneTodos(d: DB, today: string, gelistet: Frist[]): Promise<ToDo[]> {
-  const rows = await d.all<{ title: string; project: string | null; due_date: string | null; priority: number | null; notes: string | null; recurrence: string | null }>(
-    "SELECT title, project, due_date, priority, notes, recurrence FROM tasks WHERE done = 0 AND (accepted IS NULL OR accepted = 1) ORDER BY priority, id"
+  const rows = await d.all<Parameters<typeof todosAuswaehlen>[0][number]>(
+    "SELECT title, project, due_date, priority, notes, recurrence, wer_dran, wartet_auf, naechster_schritt, nachhaken_am FROM tasks WHERE done = 0 AND (accepted IS NULL OR accepted = 1) ORDER BY priority, id"
   );
   return todosAuswaehlen(rows, today, new Set(gelistet.map((f) => f.titel)));
 }

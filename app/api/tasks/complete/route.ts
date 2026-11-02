@@ -40,6 +40,9 @@ export const POST = withApi(async (req: NextRequest) => {
     await d.run("UPDATE tasks SET due_date = ? WHERE id = ?", [nextIso, id]);
   } else {
     await d.run(`UPDATE tasks SET done = 1, completed_at = ${nowExpr(d)} WHERE id = ?`, [id]);
+    // Ein Haken für alles: verknüpfte Briefe gelten mit dem Vorgang als erledigt
+    // („archiv“ ist der Erledigt-Status der Briefpost). Rückgängig lässt die Briefe in Ruhe.
+    await d.run("UPDATE letters SET status = 'archiv' WHERE task_id = ? AND status IN ('neu', 'sdworx')", [id]).catch(() => undefined);
   }
 
   const row = await d.get("SELECT * FROM tasks WHERE id = ?", [id]);
