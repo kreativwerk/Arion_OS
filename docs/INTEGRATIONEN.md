@@ -104,7 +104,7 @@ Absendername pro Postfach: `mail_accounts.display_name` (PATCH `/api/mail/accoun
 (`source = 'claude'`, `note` = kurze Erklärung); sie erscheinen unter „Entwürfe“ mit
 dem Hinweis „von Claude“ und gehen erst nach deinem Tipp auf „Senden“ raus.
 
-**Automatischer Abruf alle 10 Minuten (kostenlos, unabhängig vom Vercel-Plan)** –
+**Automatischer Abruf alle 15 Minuten** (pg_cron ist kostenlos, jeder Abruf kostet aber Vercel-Rechenzeit, siehe „Abruf-Takt“ unten) –
 im Supabase-Projekt „Arion OS“ → SQL Editor, einmalig:
 
 ```sql
@@ -113,8 +113,8 @@ create extension if not exists pg_net;
 -- Wert von CRON_SECRET aus Vercel einsetzen (liegt danach verschlüsselt im Vault)
 select vault.create_secret('<CRON_SECRET>', 'arion_cron_secret');
 select cron.schedule(
-  'arion-postfach-10min',
-  '*/10 * * * *',
+  'arion-postfach-15min',
+  '*/15 * * * *',
   $$
   select net.http_post(
     url := 'https://<DEINE-APP>.vercel.app/api/cron/mail',
@@ -131,9 +131,25 @@ select cron.schedule(
 
 Die Seite /postfach aktualisiert sich zusätzlich jede Minute selbst, solange sie offen ist.
 
+### Abruf-Takt (Stand 02.11.2026)
+
+Im Gratis-Tarif waren 4 Stunden Fluid Active CPU im Monat enthalten. Mail- und Briefkasten-Abruf
+alle 5 Minuten haben das am 01.11.2026 aufgebraucht, Vercel hat das Konto am 02.11. pausiert.
+Seitdem läuft das Team „kreativwerks-projects“ auf **Pro**, und die pg_cron-Jobs sind gedrosselt:
+
+| Job | Endpunkt | Takt |
+| --- | --- | --- |
+| `arion-mail-5min` (Name historisch) | `/api/cron/mail` | `*/15 * * * *` |
+| `arion-letterbox-5min` (Name historisch) | `/api/cron/letterbox` | `3-59/15 * * * *` |
+| `arion-belege-10min` (Name historisch) | `/api/cron/buchhaltung?modus=belege` | `12 * * * *` (stündlich) |
+| `arion-codriver-15min` | `/api/cron/codriver` | `7-59/15 * * * *` |
+
+Ändern: `select cron.alter_job(<jobid>, schedule := '…');` Vor jedem schnelleren Takt den
+Verbrauch unter Vercel → Usage prüfen.
+
 ### Tagesbericht um 9 Uhr (Push + Mail)
 
-`lib/tagesbericht.ts` läuft im Mail-Cron (pg_cron alle 10 Minuten) und schickt ab 9:00 Uhr Berliner
+`lib/tagesbericht.ts` läuft im Mail-Cron (pg_cron alle 15 Minuten) und schickt ab 9:00 Uhr Berliner
 Zeit einmal pro Tag einen Bericht – als Push aufs Handy und als Mail an info@arion-logistics.de
 (gesendet über dasselbe Postfach, Entwurf mit `source = 'tagesbericht'`).
 
@@ -189,7 +205,7 @@ Einzug gelegt und am Drucker per **Brother Web Connect → Google Drive** in den
 **„Letterbox“** gescannt (am besten als Shortcut „Briefkasten“ auf dem Display).
 
 ```
-Brother MFC-L8390CDW ──Web Connect──▶ Google Drive: Letterbox ◀── pg_cron alle 5 Min
+Brother MFC-L8390CDW ──Web Connect──▶ Google Drive: Letterbox ◀── pg_cron alle 15 Min
                                                                     /api/cron/letterbox
                                        Letterbox/_verarbeitet ◀──── Datei wird verschoben
                                                                     Claude zerlegt den Stapel,
@@ -209,13 +225,13 @@ Brother MFC-L8390CDW ──Web Connect──▶ Google Drive: Letterbox ◀─�
   übernommene Dateien erkennt Arion OS an `letters.drive_file_id`.
 - Analyse-Fehler landen in `letters.analysis_error` (kein Endlos-Wiederholen);
   „Neu analysieren“ auf `/post` versucht es erneut.
-- **Abruf:** pg_cron ruft `/api/cron/letterbox` alle 5 Minuten (CRON_SECRET), sofort
+- **Abruf:** pg_cron ruft `/api/cron/letterbox` alle 15 Minuten (CRON_SECRET), sofort
   über „Briefkasten abrufen“ auf `/post`. Nach der Analyse kommt ein Push
   „Briefkasten: N neue Briefe · M mit To-do“ mit den Firmen.
 
 ```sql
 -- pg_cron (Supabase), Muster wie der Mail-Abruf
-select cron.schedule('arion-letterbox', '*/5 * * * *', $$
+select cron.schedule('arion-letterbox', '3-59/15 * * * *', $$
   select net.http_post(url := 'https://arion-os.vercel.app/api/cron/letterbox',
     headers := jsonb_build_object('Authorization', 'Bearer <CRON_SECRET>'), timeout_milliseconds := 300000)
 $$);
