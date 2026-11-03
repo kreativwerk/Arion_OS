@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Badge, Button, Card, CardHeader, CheckCircle, EmptyState, Icon, Row } from "@/components/ui";
+import { Badge, Card, CardHeader, CheckCircle, EmptyState, Icon, Row } from "@/components/ui";
 import { fmtDate } from "@/lib/client";
+import SendeSheet from "@/components/SendeSheet";
 import type { EingangZahlen, Faelle, FallItem, Jetzt, JetztItem, WartetItem } from "@/lib/home-data";
 
 /* Neue Startseiten-Widgets. Daten kommen fertig aus /api/dashboard (lib/home-data.ts). */
@@ -39,46 +40,22 @@ function Hinweis({ icon, text }: { icon: string; text: string }) {
 }
 
 /**
- * Entwürfe zur Freigabe. Claude legt Entwürfe an, gesendet wird nur hier per
- * Knopfdruck (zweistufig: „Senden“ → „Jetzt senden“). Aufklappen zeigt Absender,
- * Empfänger, Textanfang und Anhänge. Push-Link /?entwurf=ID klappt den Entwurf auf.
+ * Entwürfe zur Freigabe. Claude legt Entwürfe an, gesendet wird nur hier.
+ * Ein Tipp auf den Entwurf öffnet das Sende-Popup (components/SendeSheet.tsx):
+ * Absender, Empfänger, Text, Anhänge und „Zum Senden schieben“.
+ * Push-Link /?entwurf=ID öffnet das Popup direkt.
  */
 export function WartetWidget({ items, onChanged }: { items: WartetItem[]; onChanged?: () => void }) {
-  const [offen, setOffen] = useState<number | null>(null);
-  const [bestaetigen, setBestaetigen] = useState<number | null>(null);
-  const [sendet, setSendet] = useState<number | null>(null);
-  const [meldung, setMeldung] = useState<{ id: number; ok: boolean; text: string } | null>(null);
+  const [offenId, setOffenId] = useState<number | null>(null);
+  const [meldung, setMeldung] = useState("");
 
   useEffect(() => {
     const id = Number(new URLSearchParams(window.location.search).get("entwurf"));
     // eslint-disable-next-line react-hooks/set-state-in-effect -- einmalig aus dem Push-Link übernehmen
-    if (id) setOffen(id);
+    if (id) setOffenId(id);
   }, []);
 
-  const senden = async (id: number) => {
-    setSendet(id);
-    setMeldung(null);
-    try {
-      const res = await fetch("/api/mail/drafts/send", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id }),
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok || !data?.ok) {
-        setMeldung({ id, ok: false, text: data?.error ?? `Server-Fehler ${res.status}` });
-      } else {
-        setMeldung({ id, ok: true, text: data.hinweis ? `Gesendet. ${data.hinweis}` : "Gesendet." });
-        setOffen(null);
-        onChanged?.();
-      }
-    } catch (e) {
-      setMeldung({ id, ok: false, text: e instanceof Error ? e.message : String(e) });
-    } finally {
-      setSendet(null);
-      setBestaetigen(null);
-    }
-  };
+  const offen = items.find((d) => d.id === offenId) ?? null;
 
   return (
     <Card>
@@ -91,82 +68,42 @@ export function WartetWidget({ items, onChanged }: { items: WartetItem[]; onChan
           </Link>
         }
       />
-      {meldung?.ok && <Hinweis icon="check_circle" text={meldung.text} />}
-      {items.length === 0 && !meldung?.ok && <EmptyState text="Keine Mail wartet auf deine Freigabe." />}
-      {items.slice(0, 5).map((d) => {
-        const auf = offen === d.id;
-        return (
-          <div key={d.id} className={auf ? "bg-inset/40" : ""}>
-            <button
-              type="button"
-              onClick={() => {
-                setOffen(auf ? null : d.id);
-                setBestaetigen(null);
-              }}
-              aria-expanded={auf}
-              className="block w-full text-left hover:bg-inset/40 transition-colors"
-            >
-              <Row>
-                <Icon name={d.status === "fehler" ? "error" : "outgoing_mail"} size={18} className={d.status === "fehler" ? "text-bad" : "text-ink-3"} />
-                <div className="flex-1 min-w-0">
-                  <div className="text-[13px] font-medium truncate">{d.betreff || "(ohne Betreff)"}</div>
-                  <div className="text-[11px] text-ink-3 truncate">an {d.an}</div>
-                </div>
-                {d.status === "fehler" ? <Badge tone="bad">Fehler</Badge> : d.quelle === "claude" ? <Badge tone="accent">Claude</Badge> : null}
-                <Icon name={auf ? "expand_less" : "expand_more"} size={18} className="text-ink-3" />
-              </Row>
-            </button>
-            {auf && (
-              <div className="px-5 pb-4 pt-1 space-y-2">
-                <div className="text-[12px] text-ink-2 space-y-0.5">
-                  <div>
-                    <span className="text-ink-3">Von </span>
-                    {d.von || "–"}
-                  </div>
-                  <div>
-                    <span className="text-ink-3">An </span>
-                    {d.an}
-                  </div>
-                </div>
-                {d.vorschau && <p className="text-[13px] text-ink-2 leading-relaxed">{d.vorschau}</p>}
-                {d.anhaenge.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {d.anhaenge.map((f) => (
-                      <Badge key={f}>
-                        <Icon name="attach_file" size={13} className="mr-1" />
-                        {f}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-                {meldung && !meldung.ok && meldung.id === d.id && <p className="text-[12px] text-bad">{meldung.text}</p>}
-                <div className="flex items-center gap-2 pt-1">
-                  {bestaetigen === d.id ? (
-                    <>
-                      <Button onClick={() => senden(d.id)} disabled={sendet === d.id}>
-                        {sendet === d.id ? "Sendet …" : "Jetzt senden"}
-                      </Button>
-                      <Button variant="ghost" onClick={() => setBestaetigen(null)} disabled={sendet === d.id}>
-                        Abbrechen
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      <Button onClick={() => setBestaetigen(d.id)}>
-                        <Icon name="send" size={15} className="mr-1.5 -ml-0.5" />
-                        Senden
-                      </Button>
-                      <Link href="/postfach?ansicht=entwuerfe" className="text-[13px] text-accent px-2">
-                        Bearbeiten
-                      </Link>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        );
-      })}
+      {meldung && <Hinweis icon="check_circle" text={meldung} />}
+      {items.length === 0 && !meldung && <EmptyState text="Keine Mail wartet auf deine Freigabe." />}
+      {items.slice(0, 5).map((d) => (
+        <button
+          key={d.id}
+          type="button"
+          onClick={() => {
+            setMeldung("");
+            setOffenId(d.id);
+          }}
+          className="block w-full text-left hover:bg-inset/40 transition-colors"
+        >
+          <Row>
+            <Icon name={d.status === "fehler" ? "error" : "outgoing_mail"} size={18} className={d.status === "fehler" ? "text-bad" : "text-ink-3"} />
+            <div className="flex-1 min-w-0">
+              <div className="text-[13px] font-medium truncate">{d.betreff || "(ohne Betreff)"}</div>
+              <div className="text-[11px] text-ink-3 truncate">an {d.an}</div>
+            </div>
+            {d.status === "fehler" ? <Badge tone="bad">Fehler</Badge> : d.quelle === "claude" ? <Badge tone="accent">Claude</Badge> : null}
+            <span className="inline-flex items-center gap-1 h-8 px-3 rounded-full bg-accent-soft text-accent text-[12px] font-medium shrink-0">
+              <Icon name="send" size={14} />
+              Senden
+            </span>
+          </Row>
+        </button>
+      ))}
+      <SendeSheet
+        entwurf={offen}
+        onClose={() => setOffenId(null)}
+        onGesendet={(text) => {
+          setOffenId(null);
+          setMeldung(text);
+          if (window.location.search.includes("entwurf=")) window.history.replaceState(null, "", window.location.pathname);
+          onChanged?.();
+        }}
+      />
     </Card>
   );
 }
