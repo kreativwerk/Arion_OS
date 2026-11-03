@@ -5,9 +5,10 @@
  *   QONTO_LOGIN        Organisations-Login (Qonto → Einstellungen → Integrationen → API-Schlüssel)
  *   QONTO_SECRET_KEY   geheimer Schlüssel dazu
  *   QONTO_IBAN         optional: welches Konto (sonst das Hauptkonto)
+ *   QONTO_API_URL      optional: andere API-Basis, z. B. die Qonto-Sandbox
  */
 
-const BASE = "https://thirdparty.qonto.com/v2";
+const BASE = process.env.QONTO_API_URL || "https://thirdparty.qonto.com/v2";
 
 export function qontoConfigured(): boolean {
   return Boolean(process.env.QONTO_LOGIN && process.env.QONTO_SECRET_KEY);
@@ -43,16 +44,24 @@ async function qonto<T>(path: string, deadline: number): Promise<T> {
   return (await res.json()) as T;
 }
 
-async function bankAccountId(deadline: number): Promise<string> {
-  const org = await qonto<{ organization: { bank_accounts: { id: string; iban: string; main?: boolean; status?: string }[] } }>(
-    "/organization",
-    deadline
-  );
+export type QontoKonto = { id: string; iban: string; balance: number; updated_at: string | null };
+
+/** Das abgeglichene Konto (QONTO_IBAN, sonst Hauptkonto) samt Saldo in Euro. */
+export async function qontoKonto(deadline: number): Promise<QontoKonto> {
+  const org = await qonto<{
+    organization: {
+      bank_accounts: { id: string; iban: string; main?: boolean; balance?: number; updated_at?: string | null }[];
+    };
+  }>("/organization", deadline);
   const accs = org.organization.bank_accounts ?? [];
   const iban = (process.env.QONTO_IBAN ?? "").replace(/\s/g, "").toUpperCase();
   const acc = (iban && accs.find((a) => a.iban.replace(/\s/g, "").toUpperCase() === iban)) || accs.find((a) => a.main) || accs[0];
   if (!acc) throw new Error("Qonto: kein Konto gefunden.");
-  return acc.id;
+  return { id: acc.id, iban: acc.iban, balance: Number(acc.balance ?? 0), updated_at: acc.updated_at ?? null };
+}
+
+async function bankAccountId(deadline: number): Promise<string> {
+  return (await qontoKonto(deadline)).id;
 }
 
 /** Alle abgeschlossenen Abbuchungen eines Monats (YYYY-MM). */

@@ -2,6 +2,7 @@ import { getDb } from "@/lib/db";
 import { runMailFetch, type MailFetchResult } from "@/lib/mail-fetch";
 import { runAblage, type AblageResult } from "@/lib/buch-ablage";
 import { withLock } from "@/lib/run-lock";
+import { syncQontoSaldo } from "@/lib/beleg-abgleich";
 import { runKlassifizieren, type KlassifizierResult } from "@/lib/buch-klassifizieren";
 
 /** Gesamtbudget eines Laufs – bleibt unter Vercels 60-s-Limit (maxDuration). */
@@ -9,7 +10,14 @@ const RUN_BUDGET_MS = 55_000;
 const MAIL_BUDGET_MS = 30_000;
 
 export type BuchRunResult =
-  | { mail?: MailFetchResult; einsortiert?: KlassifizierResult; ablage: AblageResult; dauer_ms: number }
+  | {
+      mail?: MailFetchResult;
+      einsortiert?: KlassifizierResult;
+      ablage: AblageResult;
+      /** Neuer Qonto-Saldo, null ohne Qonto/Zeit, sonst die Fehlermeldung. */
+      qonto_saldo?: number | null | string;
+      dauer_ms: number;
+    }
   | { skipped: string };
 
 /** Ein Buchhaltungs-Lauf: Postfächer abrufen (inkl. Belege) und danach offene
@@ -21,7 +29,15 @@ export async function runBuchhaltung(opts: { push?: boolean } = {}): Promise<Buc
   const result = await withLock(d, "buchhaltung", async () => {
     const mail = await runMailFetch({ deadline: start + MAIL_BUDGET_MS, push: opts.push });
     const ablage = await runAblage({ deadline: start + RUN_BUDGET_MS });
-    return { mail, ablage, dauer_ms: Date.now() - start };
+    // Kontostand täglich mitziehen; ein Qonto-Fehler bricht den Lauf nicht ab.
+    let qonto_saldo: number | null | string = null;
+    try {
+      // Nur mit Restzeit: der Lauf muss unter Vercels 60-s-Limit bleiben.
+      if (Date.now() < start + RUN_BUDGET_MS - 3_000) qonto_saldo = await syncQontoSaldo(d, start + RUN_BUDGET_MS);
+    } catch (e) {
+      qonto_saldo = `Fehler: ${e instanceof Error ? e.message : String(e)}`;
+    }
+    return { mail, ablage, qonto_saldo, dauer_ms: Date.now() - start };
   });
   return result ?? { skipped: "läuft bereits" };
 }

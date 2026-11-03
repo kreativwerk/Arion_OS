@@ -1,6 +1,6 @@
 import type { DB } from "@/lib/db";
 import { driveConfigured, listFilesUnder, type DriveTreeFile } from "@/lib/google-drive";
-import { qontoAbbuchungen, qontoConfigured } from "@/lib/qonto";
+import { qontoAbbuchungen, qontoConfigured, qontoKonto } from "@/lib/qonto";
 import { KAT, monatAusPfad, monatsOrdner, nachbarMonat, ohneBelegGrund, ordneZu, type Datei } from "@/lib/abgleich-regeln";
 
 /**
@@ -47,6 +47,24 @@ export async function merkeEmpfaenger(d: DB, empfaenger: string): Promise<void> 
   else await d.run("INSERT INTO buch_kennzahlen (key, value, updated_at) VALUES (?,?,?)", [GEMERKT_KEY, value, now]);
 }
 
+/** Kontostand aus Qonto nach buch_kennzahlen (qonto_saldo, qonto_stand) –
+ *  Grundlage für Startseite, Buchhaltung und Arion. */
+export async function syncQontoSaldo(d: DB, deadline: number): Promise<number | null> {
+  if (!qontoConfigured()) return null;
+  const konto = await qontoKonto(deadline);
+  const now = new Date().toISOString();
+  const stand = (konto.updated_at ?? now).slice(0, 10);
+  for (const [key, value] of [
+    ["qonto_saldo", konto.balance.toFixed(2)],
+    ["qonto_stand", stand],
+  ]) {
+    const exists = await d.get("SELECT key FROM buch_kennzahlen WHERE key = ?", [key]);
+    if (exists) await d.run("UPDATE buch_kennzahlen SET value = ?, updated_at = ? WHERE key = ?", [value, now, key]);
+    else await d.run("INSERT INTO buch_kennzahlen (key, value, updated_at) VALUES (?,?,?)", [key, value, now]);
+  }
+  return konto.balance;
+}
+
 type AusgabeRow = { id: number; empfaenger: string; zweck: string; betrag: number; kategorie: string; beleg: string; hinweis: string; monat: string };
 
 export async function runAbgleich(d: DB, monat: string, deadline: number): Promise<AbgleichResult> {
@@ -55,6 +73,11 @@ export async function runAbgleich(d: DB, monat: string, deadline: number): Promi
 
   // 1. Qonto
   if (qontoConfigured()) {
+    try {
+      await syncQontoSaldo(d, deadline);
+    } catch (e) {
+      res.hinweise.push(`Qonto-Saldo nicht aktualisiert: ${e instanceof Error ? e.message : String(e)}`);
+    }
     const txs = await qontoAbbuchungen(monat, deadline);
     for (const t of txs) {
       const datum = (t.settled_at ?? t.emitted_at ?? "").slice(0, 10) || null;

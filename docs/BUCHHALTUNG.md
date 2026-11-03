@@ -52,6 +52,9 @@ PDF-Schnitt, Anhang-Erkennung, Drive-Logik gegen ein gemocktes Drive).
 | `MAIL_n_USER` | vollständige Adresse, z. B. `rechnung@arion-logistics.de` |
 | `MAIL_n_PASS` | Postfach-Passwort |
 | `MAIL_n_PORT` | optional, Standard 993 |
+| `QONTO_LOGIN` | Qonto-Organisations-Login (siehe „Qonto verbinden“) |
+| `QONTO_SECRET_KEY` | geheimer Schlüssel dazu |
+| `QONTO_IBAN` | optional: welches Konto abgeglichen wird (sonst das Hauptkonto) |
 
 Postfächer können statt per Env weiterhin im Mail-Modul („Postfächer“) angelegt werden –
 beide Quellen werden zusammengeführt. Empfohlen: `info@`, `rechnung@`, `admin@`,
@@ -59,6 +62,28 @@ beide Quellen werden zusammengeführt. Empfohlen: `info@`, `rechnung@`, `admin@`
 bekommen `quelle = 'scan'`.
 
 Nach dem Setzen: **Redeploy**.
+
+## Qonto verbinden
+
+Arion OS liest Qonto nur (keine Überweisungen, keine Freigaben):
+
+- **Saldo**: Kontostand des Hauptkontos (bzw. `QONTO_IBAN`) → `buch_kennzahlen`
+  (`qonto_saldo`, `qonto_stand`); sichtbar auf der Startseite, in /buchhaltung und für Arion.
+  Aktualisiert beim täglichen Buchhaltungs-Cron und bei jedem „Abgleichen“.
+- **Abbuchungen** eines Monats für den Belegabgleich (`buch_ausgaben`, per `qonto_id`).
+
+Einrichten:
+
+1. In Qonto (Web-App, als Inhaber oder Admin): **Einstellungen → Integrationen &
+   Partnerschaften → API-Schlüssel** (bei manchen Konten „Integrationen → API“).
+   Dort stehen **Login** (Organisations-Slug) und **Geheimer Schlüssel**.
+2. In Vercel → Projekt **arion-os** → Settings → Environment Variables (Production):
+   `QONTO_LOGIN` und `QONTO_SECRET_KEY` setzen, optional `QONTO_IBAN`.
+3. **Redeploy**, dann in /buchhaltung auf „Abgleichen“ tippen – der Hinweis
+   „Qonto noch nicht verbunden“ verschwindet und der Saldo erscheint.
+
+Den Schlüssel nie in den Code oder in Chats kopieren – nur in Vercel. Zum Testen
+gegen die Qonto-Sandbox kann `QONTO_API_URL` auf deren API-Basis zeigen.
 
 ## Google Drive verbinden – „Mit Google verbinden“ (normales Google-Konto)
 
