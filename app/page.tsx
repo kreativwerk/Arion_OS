@@ -389,13 +389,19 @@ export default function TodayPage() {
         </p>
       </div>
 
-      {/* Feste Blöcke in fester Reihenfolge: Jetzt dran · Nur du kannst · Eingang · Termine · Wartet auf andere */}
+      {/* Entwürfe zur Freigabe stehen ganz oben: nur du kannst sie senden */}
+      {(data.wartet ?? []).length > 0 && (
+        <div className="mb-4">
+          <WartetWidget items={data.wartet ?? []} onChanged={reload} />
+        </div>
+      )}
+
+      {/* Feste Blöcke in fester Reihenfolge: Jetzt dran · Eingang · Termine · Wartet auf andere */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start mb-8">
         <div className="space-y-4">
           <JetztWidget jetzt={data.jetzt ?? { items: [], gesamt: 0, wartet: [], wartetGesamt: 0, routinen: [] }} onChanged={reload} />
         </div>
         <div className="space-y-4">
-          {(data.wartet ?? []).length > 0 && <WartetWidget items={data.wartet ?? []} onChanged={reload} />}
           {data.eingang && <EingangKarte e={data.eingang} />}
           {renderWidget("termine")}
           {data.jetzt && <WartetAndereWidget jetzt={data.jetzt} />}
