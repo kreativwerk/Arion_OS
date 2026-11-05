@@ -2,6 +2,7 @@ import { vorgangStatus, wartetText, type VorgangStatus } from "@/lib/vorgang";
 import type { DB } from "@/lib/db";
 import { forwardFileNames } from "@/lib/mail-forward-names";
 import { parseQontoEingang, parseQontoLastschrift } from "@/lib/home-widgets";
+import { briefText, zahlungAus, type Zahlung } from "@/lib/zahlung";
 
 /**
  * Daten für die neuen Startseiten-Widgets. Jede Funktion ist für sich
@@ -279,7 +280,15 @@ export function fallItem(r: FallRow, today = new Date().toISOString().slice(0, 1
 
 /* ── Fristen-Ampel ──────────────────────────────────────── */
 
-export type Frist = { titel: string; datum: string; tage: number; art: "buchhaltung" | "aufgabe" | "vertrag" | "termin"; href: string };
+export type Frist = {
+  titel: string;
+  datum: string;
+  tage: number;
+  art: "buchhaltung" | "aufgabe" | "vertrag" | "termin";
+  href: string;
+  /** Erstes Dokument zum Vorgang (Brief oder Mail-Anhang) zum direkten Öffnen */
+  dokument?: { name: string; oeffnen: string };
+};
 
 export function fristen(d: DB, today: string): Promise<Frist[]> {
   return safe(async () => {
@@ -295,8 +304,8 @@ export function fristen(d: DB, today: string): Promise<Frist[]> {
       ),
       safe(
         () =>
-          d.all<{ title: string; due_date: string }>(
-            "SELECT title, due_date FROM tasks WHERE done = 0 AND accepted = 1 AND due_date IS NOT NULL AND due_date <= ? AND (recurrence IS NULL OR recurrence <> 'daily') ORDER BY due_date LIMIT 10",
+          d.all<{ id: number; title: string; due_date: string; notes: string | null }>(
+            "SELECT id, title, due_date, notes FROM tasks WHERE done = 0 AND accepted = 1 AND due_date IS NOT NULL AND due_date <= ? AND (recurrence IS NULL OR recurrence <> 'daily') ORDER BY due_date LIMIT 10",
             [bis]
           ),
         []
@@ -319,7 +328,29 @@ export function fristen(d: DB, today: string): Promise<Frist[]> {
     ]);
     const out: Frist[] = [];
     for (const b of buch) out.push({ titel: b.titel, datum: b.faellig, tage: diffDays(b.faellig, today), art: "buchhaltung", href: "/buchhaltung" });
-    for (const t of tasks) out.push({ titel: t.title, datum: t.due_date, tage: diffDays(t.due_date, today), art: "aufgabe", href: "/aufgaben" });
+    const verknuepft = tasks.length
+      ? await safe(
+          () =>
+            d.all<{ id: number; task_id: number; subject: string | null }>(
+              `SELECT id, task_id, subject FROM letters WHERE task_id IN (${tasks.map(() => "?").join(",")}) ORDER BY id DESC`,
+              tasks.map((t) => Number(t.id))
+            ),
+          []
+        )
+      : [];
+    for (const t of tasks) {
+      const ausStand = dokumenteAusStand(t.notes ?? "").dokumente;
+      const brief = verknuepft.find((b) => Number(b.task_id) === Number(t.id));
+      const dok = ausStand[ausStand.length - 1] ?? (brief ? { name: brief.subject ?? "", oeffnen: `/api/letters/${brief.id}` } : undefined);
+      out.push({
+        titel: t.title,
+        datum: t.due_date,
+        tage: diffDays(t.due_date, today),
+        art: "aufgabe",
+        href: "/aufgaben",
+        ...(dok ? { dokument: { name: dok.name || "Dokument", oeffnen: dok.oeffnen } } : {}),
+      });
+    }
     for (const c of contracts) {
       const kuendbar = iso(new Date(new Date(`${c.end_date.slice(0, 10)}T12:00:00Z`).getTime() - Number(c.cancel_period_days || 0) * DAY));
       const tage = diffDays(kuendbar, today);
@@ -526,6 +557,10 @@ export type JetztItem = {
   /** „wartet auf SD Worx“ – nur bei nachhaken/wartet */
   wartet: string;
   nachhakenAm: string | null;
+  /** Dokumente zum Vorgang: Zeilen „Dokument: …“ im Stand und Briefe mit letters.task_id */
+  dokumente: FallDokument[];
+  /** Überweisungsdaten, wenn der Vorgang eine Zahlung ist (lib/zahlung.ts) */
+  zahlung: Zahlung | null;
 };
 export type Routine = { id: number; titel: string };
 export type Jetzt = { items: JetztItem[]; gesamt: number; wartet: JetztItem[]; wartetGesamt: number; routinen: Routine[] };
@@ -571,6 +606,8 @@ export function jetztAuswaehlen(rows: VorgangRow[], today: string, max = 7): Jet
       status: vorgangStatus({ done: 0, wer_dran: r.wer_dran, nachhaken_am: r.nachhaken_am }, today),
       wartet: wartetText(r.wer_dran, r.wartet_auf),
       nachhakenAm: /^\d{4}-\d{2}-\d{2}/.test(r.nachhaken_am ?? "") ? String(r.nachhaken_am).slice(0, 10) : null,
+      dokumente: dokumenteAusStand(r.notes ?? "").dokumente,
+      zahlung: null,
     });
   }
   // Reihenfolge: Frist in ≤ 3 Tagen (auch überfällig) · Nachhaken fällig · dringend · Rest nach Frist
@@ -590,8 +627,64 @@ export function jetzt(d: DB, today: string): Promise<Jetzt> {
       `SELECT id, title, notes, project, due_date, priority, recurrence, horizon, wer_dran, wartet_auf, naechster_schritt, nachhaken_am
        FROM tasks WHERE done = 0 AND accepted = 1`
     );
-    return jetztAuswaehlen(rows, today);
+    const j = jetztAuswaehlen(rows, today);
+    const notes = new Map(rows.map((r) => [Number(r.id), r.notes ?? ""]));
+    await safe(() => vorgangDokumente(d, [...j.items, ...j.wartet], notes), undefined);
+    return j;
   }, { items: [], gesamt: 0, wartet: [], wartetGesamt: 0, routinen: [] });
+}
+
+type BriefRow = { id: number; task_id: number | null; subject: string | null; file_ref: string | null; sender: string | null; reference: string | null; extracted: string | null };
+
+/**
+ * Dokumente und Zahlungsdaten an die Vorgänge hängen: Briefe aus den Zeilen
+ * „Dokument: brief N“ und Briefe mit letters.task_id = Vorgang. Mail-Anhänge
+ * bekommen ihren Dateinamen.
+ */
+export async function vorgangDokumente(d: DB, items: JetztItem[], notes: Map<number, string>): Promise<void> {
+  if (!items.length) return;
+  const taskIds = [...new Set(items.map((x) => x.id))];
+  const briefIds = [...new Set(items.flatMap((x) => x.dokumente.filter((k) => k.art === "brief").map((k) => dokRef(k.oeffnen).id)))];
+  const ph = (n: number) => Array.from({ length: n }, () => "?").join(",");
+  const briefe = await d.all<BriefRow>(
+    `SELECT id, task_id, subject, file_ref, sender, reference, extracted FROM letters WHERE task_id IN (${ph(taskIds.length)})${
+      briefIds.length ? ` OR id IN (${ph(briefIds.length)})` : ""
+    } ORDER BY id DESC LIMIT 200`,
+    [...taskIds, ...briefIds]
+  );
+  const eigene = [process.env.QONTO_IBAN ?? ""].filter(Boolean);
+  for (const x of items) {
+    const ausStand = new Set(x.dokumente.filter((k) => k.art === "brief").map((k) => dokRef(k.oeffnen).id));
+    const verknuepft = briefe.filter((b) => Number(b.task_id) === x.id && !ausStand.has(Number(b.id)));
+    for (const b of verknuepft) {
+      x.dokumente.push({ art: "brief", name: "", oeffnen: `/api/letters/${b.id}`, download: `/api/letters/${b.id}?download=1` });
+    }
+    // Neueste Briefe zuerst – die letzte Mahnung trägt den aktuellen Stand
+    const zumVorgang = briefe.filter((b) => ausStand.has(Number(b.id)) || Number(b.task_id) === x.id).sort((a, b) => Number(b.id) - Number(a.id));
+    for (const k of x.dokumente) {
+      if (k.art !== "brief" || k.name) continue;
+      const b = briefe.find((b) => Number(b.id) === dokRef(k.oeffnen).id);
+      k.name = (b?.subject || b?.file_ref || "").trim() || `Brief ${dokRef(k.oeffnen).id}`;
+    }
+    x.zahlung = zahlungAus(
+      { titel: x.titel, schritt: x.schritt, notes: notes.get(x.id) ?? "" },
+      zumVorgang.map((b) => ({ sender: b.sender, reference: b.reference, text: briefText(b.extracted) })),
+      eigene
+    );
+  }
+  // Mail-Anhänge: Dateinamen nachtragen
+  const mails = items.flatMap((x) => x.dokumente).filter((k) => k.art === "mail" && !k.name);
+  if (mails.length) {
+    const ids = [...new Set(mails.map((k) => dokRef(k.oeffnen).id))];
+    const anh = await safe(
+      () => d.all<{ mail_id: number; part: string; filename: string | null }>(`SELECT mail_id, part, filename FROM mail_attachment_blobs WHERE mail_id IN (${ph(ids.length)})`, ids),
+      []
+    );
+    for (const k of mails) {
+      const r = dokRef(k.oeffnen);
+      k.name = (anh.find((a) => Number(a.mail_id) === r.id && a.part === r.part)?.filename ?? "").trim() || "Mail-Anhang";
+    }
+  }
 }
 
 export type EingangZahlen = { briefe: number; mails: number; mitarbeiter: number; gesamt: number };

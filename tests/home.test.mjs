@@ -91,3 +91,56 @@ test("Fall: Dokument-Zeilen werden zu Öffnen-/Download-Links", async () => {
   assert.equal(b.dokumente.length, 0);
   assert.equal(dokumenteAusStand("ohne Dokument").stand, "ohne Dokument");
 });
+
+// ── Zahlungsdaten für „Mit Qonto bezahlen“ (lib/zahlung.ts) ──
+import { ibanAusText, ibanGueltig, zahlungAus, zweckAus } from "../lib/zahlung.ts";
+import { jetztAuswaehlen } from "../lib/home-data.ts";
+
+test("IBAN: Prüfziffer und erste fremde IBAN aus dem Brieftext", () => {
+  assert.equal(ibanGueltig("DE59 3608 0080 0525 9435 00"), true);
+  assert.equal(ibanGueltig("DE59 3608 0080 0525 9435 01"), false);
+  const text = "Steuer-Nr.: 25/207/00992\nCommerzbank AG, Essen BIC DRESDEFF360 IBAN DE59 3608 0080 0525 9435 00\nDeutsche Bank AG, Hannover BIC DEUTDE2HXXX IBAN DE72 2507 0070 0060 0338 00\nSeite 1";
+  assert.deepEqual(ibanAusText(text), { iban: "DE59 3608 0080 0525 9435 00", bic: "DRESDEFF360" });
+  // eigene IBAN wird übersprungen
+  assert.equal(ibanAusText(text, ["DE59360800800525943500"])?.iban, "DE72 2507 0070 0060 0338 00");
+  assert.equal(ibanAusText("keine Bankverbindung"), null);
+});
+
+test("Verwendungszweck: Ref. / Rechnung aus dem nächsten Schritt, sonst aus der Referenz", () => {
+  assert.equal(zweckAus("614,50 EUR bis 06.11. überweisen (Ref. 1001050000049325) oder …", "Sixt", ""), "1001050000049325");
+  assert.equal(zweckAus("1.288,30 € an TÜV NORD überweisen (Rechnung 5355709765)", "", ""), "5355709765");
+  assert.equal(zweckAus("", "Landesjustizkasse", "Kassenzeichen 614261415201 · ReNr. 823361187658"), "614261415201");
+});
+
+test("Zahlung: Mahnung mit Betrag und Brief → Überweisungsdaten, Arbeitsbescheinigung → keine", () => {
+  const z = zahlungAus(
+    { titel: "TÜV NORD – Mahnung 1.288,30 € (letzte Frist 06.11.)", schritt: "1.288,30 € an TÜV NORD überweisen (Rechnung 5355709765)", notes: "" },
+    [{ sender: "TÜV NORD Mobilität GmbH & Co. KG", reference: "EARG7292 · 5355709765", text: "Commerzbank AG BIC DRESDEFF360 IBAN DE59 3608 0080 0525 9435 00" }]
+  );
+  assert.deepEqual(z, { empfaenger: "TÜV NORD Mobilität GmbH & Co. KG", iban: "DE59 3608 0080 0525 9435 00", bic: "DRESDEFF360", betrag: 1288.3, zweck: "5355709765" });
+  // Sixt ohne erkannten Brieftext: Betrag und Referenz da, IBAN fehlt
+  const s = zahlungAus(
+    { titel: "Sixt: letzte Erinnerung Schaden 9079072965 (614,50 €, M-TA 4227)", schritt: "614,50 EUR bis 06.11. überweisen (Ref. 1001050000049325)", notes: "" },
+    [{ sender: "Sixt GmbH & Co. Autovermietung KG (Schadenregulierung)", reference: "Schadennr. 9079072965", text: "" }]
+  );
+  assert.equal(s?.betrag, 614.5);
+  assert.equal(s?.iban, null);
+  assert.equal(s?.empfaenger, "Sixt GmbH & Co. Autovermietung KG");
+  assert.equal(s?.zweck, "1001050000049325");
+  // Kein Zahlvorgang, auch wenn der Brief eine IBAN im Fuß hat
+  assert.equal(
+    zahlungAus({ titel: "David Reng – Arbeitsbescheinigung", schritt: "SD Worx übermittelt per BEA", notes: "" }, [{ text: "IBAN DE50 7600 0000 0076 0016 17" }]),
+    null
+  );
+});
+
+test("Jetzt dran: Dokumente aus den Zeilen „Dokument: …“ am Vorgang", () => {
+  const j = jetztAuswaehlen(
+    [{ id: 1, title: "Mahnung", notes: "Frist: 06.11.2026\nDokument: brief 87\nDokument: mail 403/2 – Rechnung", project: "Arion", due_date: "2026-11-06", priority: 2, recurrence: null, horizon: "short", wer_dran: "", wartet_auf: "", naechster_schritt: "", nachhaken_am: null }],
+    "2026-11-05"
+  );
+  assert.equal(j.items[0].dokumente.length, 2);
+  assert.equal(j.items[0].dokumente[0].oeffnen, "/api/letters/87");
+  assert.equal(j.items[0].dokumente[1].name, "Rechnung");
+  assert.equal(j.items[0].zahlung, null);
+});

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Badge, Card, CardHeader, CheckCircle, EmptyState, Icon, Row } from "@/components/ui";
 import { fmtDate } from "@/lib/client";
 import SendeSheet from "@/components/SendeSheet";
+import BezahlSheet from "@/components/BezahlSheet";
 import type { EingangZahlen, Faelle, FallItem, Jetzt, JetztItem, WartetItem } from "@/lib/home-data";
 
 /* Neue Startseiten-Widgets. Daten kommen fertig aus /api/dashboard (lib/home-data.ts). */
@@ -14,7 +15,7 @@ const tageText = (t: number) => (t < 0 ? `seit ${-t} T` : t === 0 ? "heute" : t 
 const tageTon = (t: number): "bad" | "warn" | "neutral" => (t <= 1 ? "bad" : t <= 7 ? "warn" : "neutral");
 
 export type { WartetItem, Faelle, Jetzt, EingangZahlen };
-export type Frist = { titel: string; datum: string; tage: number; art: string; href: string };
+export type Frist = { titel: string; datum: string; tage: number; art: string; href: string; dokument?: { name: string; oeffnen: string } };
 export type Konto = { saldo: number | null; stand: string | null; lastschriften: { an: string; datum: string; betrag: number | null; tage: number }[]; summe7: number };
 export type Wohnwerk = { monat: string; summe: number; anzahl: number; eingaenge: { von: string; betrag: number; datum: string }[] };
 export type Station = {
@@ -304,16 +305,30 @@ export function FristenWidget({ items }: { items: Frist[] }) {
       <CardHeader title="Fristen-Ampel" subtitle="Nächste 45 Tage" />
       {items.length === 0 && <EmptyState text="Keine Fristen in Sicht." />}
       {items.slice(0, 6).map((f, i) => (
-        <Link key={`${f.art}-${i}`} href={f.href} className="block hover:bg-inset/40 transition-all">
-          <Row>
-            <Icon name={ICON[f.art] ?? "event"} size={18} className="text-ink-3" />
-            <div className="flex-1 min-w-0">
-              <div className="text-[13px] font-medium truncate">{f.titel}</div>
-              <div className="text-[11px] text-ink-3">{fmtDate(f.datum)}</div>
-            </div>
-            <Badge tone={tageTon(f.tage)}>{tageText(f.tage)}</Badge>
-          </Row>
-        </Link>
+        <div key={`${f.art}-${i}`} className="flex items-center hover:bg-inset/40 transition-all">
+          <Link href={f.href} className="flex-1 min-w-0">
+            <Row>
+              <Icon name={ICON[f.art] ?? "event"} size={18} className="text-ink-3" />
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] font-medium truncate">{f.titel}</div>
+                <div className="text-[11px] text-ink-3">{fmtDate(f.datum)}</div>
+              </div>
+              <Badge tone={tageTon(f.tage)}>{tageText(f.tage)}</Badge>
+            </Row>
+          </Link>
+          {f.dokument && (
+            <a
+              href={f.dokument.oeffnen}
+              target="_blank"
+              rel="noopener"
+              title={f.dokument.name}
+              aria-label={`Dokument öffnen: ${f.dokument.name}`}
+              className="shrink-0 w-10 h-10 mr-2 rounded-full flex items-center justify-center text-ink-3 hover:text-ink hover:bg-inset"
+            >
+              <Icon name="description" size={18} />
+            </a>
+          )}
+        </div>
       ))}
     </Card>
   );
@@ -470,13 +485,47 @@ async function vorgangAbhaken(id: number, undo = false) {
   });
 }
 
-function JetztZeile({ v, onDone }: { v: JetztItem; onDone: () => void }) {
+/** Dokumente und „Mit Qonto bezahlen“ unter einem Vorgang. */
+function VorgangAktionen({ v, onBezahlen }: { v: JetztItem; onBezahlen?: (v: JetztItem) => void }) {
+  if (!v.dokumente.length && !v.zahlung) return null;
+  return (
+    <div className="flex flex-wrap gap-1.5 mt-2">
+      {v.zahlung && onBezahlen && (
+        <button
+          type="button"
+          onClick={() => onBezahlen(v)}
+          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-accent-soft text-accent text-[12px] font-semibold hover:bg-accent/20 transition-all"
+        >
+          <Icon name="account_balance" size={15} />
+          Mit Qonto bezahlen
+        </button>
+      )}
+      {v.dokumente.slice(0, 3).map((k) => (
+        <a
+          key={k.oeffnen}
+          href={k.oeffnen}
+          target="_blank"
+          rel="noopener"
+          title={k.name}
+          className="inline-flex items-center gap-1.5 h-8 px-3 max-w-[220px] rounded-full border border-line bg-card text-[12px] text-ink-2 hover:border-ink-3 transition-all"
+        >
+          <Icon name={k.art === "mail" ? "attach_file" : "description"} size={15} className="shrink-0" />
+          <span className="truncate">{k.name || "Dokument"}</span>
+        </a>
+      ))}
+      {v.dokumente.length > 3 && <span className="inline-flex items-center h-8 px-2 text-[12px] text-ink-3">+{v.dokumente.length - 3}</span>}
+    </div>
+  );
+}
+
+function JetztZeile({ v, onDone, onBezahlen }: { v: JetztItem; onDone: () => void; onBezahlen?: (v: JetztItem) => void }) {
   return (
     <div className="flex items-start gap-3 px-5 py-3 border-t border-line first:border-t-0">
       <div className="shrink-0 pt-px">
         <CheckCircle size={22} onComplete={async () => { await vorgangAbhaken(v.id); onDone(); }} />
       </div>
-      <Link href="/aufgaben" className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0">
+      <Link href="/aufgaben" className="block">
         <div className="text-[14px] font-medium line-clamp-2">{v.titel}</div>
         {v.schritt && <div className="text-[12px] text-ink-2 mt-0.5 line-clamp-2">→ {v.schritt}</div>}
         <div className="flex flex-wrap items-center gap-1.5 mt-1.5 empty:hidden">
@@ -490,6 +539,8 @@ function JetztZeile({ v, onDone }: { v: JetztItem; onDone: () => void }) {
           {v.dringend && <Badge tone="bad">dringend</Badge>}
         </div>
       </Link>
+      <VorgangAktionen v={v} onBezahlen={onBezahlen} />
+      </div>
     </div>
   );
 }
@@ -497,6 +548,7 @@ function JetztZeile({ v, onDone }: { v: JetztItem; onDone: () => void }) {
 /** Block 1: was jetzt bei Albert liegt – höchstens sieben, Fristen zuerst. Unten die täglichen Routinen. */
 export function JetztWidget({ jetzt, onChanged }: { jetzt: Jetzt; onChanged?: () => void }) {
   const [erledigt, setErledigt] = useState<Set<number>>(new Set());
+  const [bezahlen, setBezahlen] = useState<JetztItem | null>(null);
   const neu = () => onChanged?.();
   const routineAbhaken = async (id: number) => {
     setErledigt((s) => new Set(s).add(id));
@@ -516,8 +568,18 @@ export function JetztWidget({ jetzt, onChanged }: { jetzt: Jetzt; onChanged?: ()
       />
       {jetzt.items.length === 0 && <EmptyState text="Alles erledigt – freier Kopf." />}
       {jetzt.items.map((v) => (
-        <JetztZeile key={v.id} v={v} onDone={neu} />
+        <JetztZeile key={v.id} v={v} onDone={neu} onBezahlen={setBezahlen} />
       ))}
+      <BezahlSheet
+        key={bezahlen?.id ?? 0}
+        vorgang={bezahlen}
+        onClose={() => setBezahlen(null)}
+        onBezahlt={async (id) => {
+          setBezahlen(null);
+          await vorgangAbhaken(id);
+          neu();
+        }}
+      />
       {jetzt.gesamt > jetzt.items.length && (
         <Link href="/aufgaben" className="block px-5 py-2.5 border-t border-line text-[12px] text-accent">
           + {jetzt.gesamt - jetzt.items.length} weitere bei dir →
