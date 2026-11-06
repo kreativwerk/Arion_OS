@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Badge, Card, CardHeader, CheckCircle, EmptyState, Icon, Row } from "@/components/ui";
 import { fmtDate } from "@/lib/client";
 import SendeSheet from "@/components/SendeSheet";
-import BezahlSheet from "@/components/BezahlSheet";
+import BezahlSheet, { type BezahlVorgang } from "@/components/BezahlSheet";
 import type { EingangZahlen, Faelle, FallItem, Jetzt, JetztItem, WartetItem } from "@/lib/home-data";
 
 /* Neue Startseiten-Widgets. Daten kommen fertig aus /api/dashboard (lib/home-data.ts). */
@@ -485,8 +485,8 @@ async function vorgangAbhaken(id: number, undo = false) {
   });
 }
 
-/** Dokumente und „Mit Qonto bezahlen“ unter einem Vorgang. */
-function VorgangAktionen({ v, onBezahlen }: { v: JetztItem; onBezahlen?: (v: JetztItem) => void }) {
+/** Dokumente und „Mit Qonto bezahlen“ unter einem Vorgang (auch auf der Vorgänge-Seite). */
+export function VorgangAktionen<T extends BezahlVorgang>({ v, onBezahlen }: { v: T; onBezahlen?: (v: T) => void }) {
   if (!v.dokumente.length && !v.zahlung) return null;
   return (
     <div className="flex flex-wrap gap-1.5 mt-2">

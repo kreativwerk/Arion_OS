@@ -2,7 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { Icon } from "@/components/ui";
-import type { JetztItem } from "@/lib/home-data";
+import type { FallDokument } from "@/lib/home-data";
+import type { Zahlung } from "@/lib/zahlung";
+
+/** Was das Sheet vom Vorgang braucht (Heute → Jetzt dran, Vorgänge-Seite). */
+export type BezahlVorgang = { id: number; titel: string; dokumente: FallDokument[]; zahlung: Zahlung | null };
 
 /**
  * Bezahl-Sheet für Vorgänge mit Zahlung (Heute → Jetzt dran → „Mit Qonto bezahlen“).
@@ -51,7 +55,7 @@ function Zeile({ label, wert, kopierWert, hinweis }: { label: string; wert: stri
   );
 }
 
-export default function BezahlSheet({ vorgang, onClose, onBezahlt }: { vorgang: JetztItem | null; onClose: () => void; onBezahlt: (id: number) => void }) {
+export default function BezahlSheet({ vorgang, onClose, onBezahlt }: { vorgang: BezahlVorgang | null; onClose: () => void; onBezahlt: (id: number) => void }) {
   const [allesOk, setAllesOk] = useState(false);
   useEffect(() => {
     if (!vorgang) return;
