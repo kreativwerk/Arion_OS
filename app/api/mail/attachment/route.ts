@@ -23,13 +23,25 @@ export const GET = withApi(async (req: NextRequest) => {
     const status = /nicht gefunden|nicht \(mehr\) verbunden/.test(msg) ? 404 : /neu aufgebaut/.test(msg) ? 409 : 500;
     return NextResponse.json({ error: msg }, { status });
   }
-  const inline = req.nextUrl.searchParams.get("inline") === "1" && /^(application\/pdf|image\/(png|jpe?g|gif|webp))$/.test(att.mime);
+  // Viele Absender schicken PDFs als application/octet-stream – dann zählt die Dateiendung
+  const mime = typGenau(att.mime, att.filename);
+  const inline = req.nextUrl.searchParams.get("inline") === "1" && /^(application\/pdf|image\/(png|jpe?g|gif|webp))$/.test(mime);
   return new NextResponse(new Uint8Array(att.data), {
     headers: {
-      "content-type": att.mime || "application/octet-stream",
+      "content-type": mime,
       "content-disposition": `${inline ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(att.filename)}`,
       "cache-control": "private, max-age=300",
       "x-content-type-options": "nosniff",
     },
   });
 });
+
+const ENDUNG: Record<string, string> = { pdf: "application/pdf", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp" };
+
+/** Allgemeiner Typ (leer, octet-stream) → Typ nach Dateiendung, sonst der gemeldete Typ. */
+function typGenau(mime: string, filename: string): string {
+  const m = (mime || "").toLowerCase();
+  if (m && m !== "application/octet-stream" && m !== "application/x-download" && m !== "binary/octet-stream") return m;
+  const endung = (filename.split(".").pop() || "").toLowerCase();
+  return ENDUNG[endung] ?? (m || "application/octet-stream");
+}
