@@ -1,10 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Card, PageHeader, Badge, Button, Segmented, EmptyState, Row, Icon, CheckCircle , ErrorNote } from "@/components/ui";
 import { useTable, fmtDate, todayIso } from "@/lib/client";
 import { vorgangStatus, wartetText, WER_DRAN } from "@/lib/vorgang";
 import TaskQuickSheet from "@/components/TaskQuickSheet";
+import BezahlSheet, { type BezahlVorgang } from "@/components/BezahlSheet";
+import { VorgangAktionen } from "@/components/HomeWidgets";
+import type { FallDokument } from "@/lib/home-data";
+import type { Zahlung } from "@/lib/zahlung";
+
+type Anlagen = Record<number, { dokumente: FallDokument[]; zahlung: Zahlung | null }>;
+
+/** Zeilen „Dokument: brief 37“ / „Dokument: mail 403/2“ aus dem Stand ausblenden – sie stehen als Chips darüber. */
+const ohneDokumentZeilen = (notes: string) => notes.replace(/^[ \t]*Dokument:.*$\n?/gim, "").replace(/\n{3,}/g, "\n\n").trim();
 
 type Task = {
   id: number;
@@ -35,6 +44,18 @@ export default function TasksPage() {
   const horizon: "short" | "long" = ansicht === "lang" ? "long" : "short";
   const today = todayIso();
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [anlagen, setAnlagen] = useState<Anlagen>({});
+  const [bezahlen, setBezahlen] = useState<BezahlVorgang | null>(null);
+
+  const ladeAnlagen = useCallback(() => {
+    fetch("/api/tasks/dokumente")
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((j: Anlagen) => setAnlagen(j))
+      .catch(() => {});
+  }, []);
+  useEffect(() => {
+    ladeAnlagen();
+  }, [ladeAnlagen]);
 
   const complete = async (id: number, undo = false) => {
     await fetch("/api/tasks/complete", { method: "POST", body: JSON.stringify({ id, undo }) });
@@ -117,6 +138,8 @@ export default function TasksPage() {
           const st = status(t);
           const auf = offenId === t.id;
           const warteText = wartetText(t.wer_dran, t.wartet_auf);
+          const anl = anlagen[t.id];
+          const vorgang: BezahlVorgang | null = anl ? { id: t.id, titel: t.title, dokumente: anl.dokumente, zahlung: anl.zahlung } : null;
           return (
             <div key={t.id} className={`border-t border-line first:border-t-0 ${auf ? "bg-inset/40" : ""}`}>
               <div className="flex items-start gap-3 px-5 py-3 group">
@@ -143,6 +166,11 @@ export default function TasksPage() {
                   </div>
                 </button>
               </div>
+              {vorgang && (
+                <div className="px-5 pl-[60px] -mt-1 pb-3">
+                  <VorgangAktionen v={vorgang} onBezahlen={setBezahlen} />
+                </div>
+              )}
               {auf && (
                 <div className="px-5 pb-4 pl-[60px] space-y-3">
                   <div>
@@ -180,7 +208,9 @@ export default function TasksPage() {
                     }
                     className="w-full h-9 px-3 rounded-[10px] bg-inset border border-line text-[13px]"
                   />
-                  {t.notes && <p className="text-[12px] text-ink-2 whitespace-pre-line leading-relaxed">{t.notes}</p>}
+                  {t.notes && ohneDokumentZeilen(t.notes) && (
+                    <p className="text-[12px] text-ink-2 whitespace-pre-line leading-relaxed">{ohneDokumentZeilen(t.notes)}</p>
+                  )}
                   <button onClick={() => remove(t.id)} className="text-ink-3 hover:text-bad text-[12px]">
                     Vorgang löschen
                   </button>
@@ -219,6 +249,17 @@ export default function TasksPage() {
       >
         <Icon name="add" size={28} />
       </button>
+
+      <BezahlSheet
+        key={bezahlen?.id ?? 0}
+        vorgang={bezahlen}
+        onClose={() => setBezahlen(null)}
+        onBezahlt={async (id) => {
+          setBezahlen(null);
+          await complete(id);
+          ladeAnlagen();
+        }}
+      />
 
       <TaskQuickSheet
         open={sheetOpen}
