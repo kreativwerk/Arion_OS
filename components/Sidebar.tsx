@@ -14,6 +14,7 @@ export const NAV_GRUPPEN: { titel: string; items: { href: string; label: string;
     titel: "",
     items: [
       { href: "/", label: "Heute", icon: "sunny" },
+      { href: "/leitstand", label: "Leitstand", icon: "monitoring" },
       { href: "/eingang", label: "Eingang", icon: "move_to_inbox" },
       { href: "/aufgaben", label: "Vorgänge", icon: "task_alt" },
       { href: "/postfach", label: "Postfach", icon: "inbox" },
