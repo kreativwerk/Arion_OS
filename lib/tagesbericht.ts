@@ -400,7 +400,14 @@ async function neueBriefe(d: DB, seit: string): Promise<BriefNeu[]> {
 
 /* ── Senden ─────────────────────────────────────────────── */
 
-export async function mailSenden(d: DB, betreff: string, text: string, html?: string, an = ""): Promise<string> {
+export async function mailSenden(
+  d: DB,
+  betreff: string,
+  text: string,
+  html?: string,
+  an = "",
+  herkunft: { source: string; note: string } = { source: "tagesbericht", note: "Tagesbericht (automatisch)" }
+): Promise<string> {
   an = (an || process.env.ARION_TAGESBERICHT_AN || STANDARD_AN).trim();
   const acc = await d.get<{ id: number }>(
     "SELECT id FROM mail_accounts WHERE LOWER(address) = LOWER(?) OR LOWER(username) = LOWER(?) ORDER BY id LIMIT 1",
@@ -409,8 +416,8 @@ export async function mailSenden(d: DB, betreff: string, text: string, html?: st
   if (!acc) return "Postfach info@ fehlt";
   const row = await d.get<{ id: number }>(
     `INSERT INTO mail_drafts (account_id, to_addr, subject, body_text, source, note, status, notified_at)
-     VALUES (?, ?, ?, ?, 'tagesbericht', 'Tagesbericht (automatisch)', 'entwurf', ?) RETURNING id`,
-    [acc.id, an, betreff, text, new Date().toISOString()]
+     VALUES (?, ?, ?, ?, ?, ?, 'entwurf', ?) RETURNING id`,
+    [acc.id, an, betreff, text, herkunft.source, herkunft.note, new Date().toISOString()]
   );
   if (!row) return "Entwurf nicht angelegt";
   const res = await sendDraft(d, Number(row.id), { html });

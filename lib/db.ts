@@ -560,11 +560,33 @@ function postfachStatements(dialect: "sqlite" | "postgres", ID: string, NOW: str
       data ${BLOB} NOT NULL,
       updated_at TEXT DEFAULT ${NOW}
     )`,
+    // Antwort-Wächter: gesendete Mails, auf die eine Antwort erwartet wird (lib/antwort-wache.ts)
+    `CREATE TABLE IF NOT EXISTS antwort_wache (
+      ${ID}, ${WS},
+      mail_id INTEGER,
+      account TEXT DEFAULT '',
+      message_id TEXT NOT NULL,
+      thread_key TEXT NOT NULL DEFAULT '',
+      an TEXT NOT NULL DEFAULT '',
+      subject TEXT NOT NULL DEFAULT '',
+      gesendet_am TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'wartet',
+      grund TEXT DEFAULT '',
+      antwort_mail_id INTEGER,
+      antwort_von TEXT DEFAULT '',
+      antwort_am TEXT,
+      erinnert_am TEXT,
+      created_at TEXT DEFAULT ${NOW},
+      updated_at TEXT DEFAULT ${NOW}
+    )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS antwort_wache_msgid_uq ON antwort_wache (message_id)`,
+    `CREATE INDEX IF NOT EXISTS antwort_wache_status_idx ON antwort_wache (status, gesendet_am)`,
+    `CREATE INDEX IF NOT EXISTS antwort_wache_thread_idx ON antwort_wache (thread_key)`,
   ];
 }
 
 /** Postfach-Tabellen – Mailinhalte sind sensibel, öffentliche Supabase-API sperren. */
-const POSTFACH_TABLES = ["mails", "mail_html", "mail_sync", "mail_drafts", "mail_draft_files", "mail_attachment_blobs", "sign_assets"];
+const POSTFACH_TABLES = ["mails", "mail_html", "mail_sync", "mail_drafts", "mail_draft_files", "mail_attachment_blobs", "sign_assets", "antwort_wache"];
 
 /**
  * Buchhaltungs-Modul (siehe docs/BUCHHALTUNG.md):

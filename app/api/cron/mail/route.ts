@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withApi } from "@/lib/api-error";
 import { getDb } from "@/lib/db";
+import { antwortWache } from "@/lib/antwort-wache";
 import { notifyNewDrafts } from "@/lib/draft-notify";
 import { signPendingDrafts } from "@/lib/draft-sign";
 import { runMailFetch } from "@/lib/mail-fetch";
@@ -35,9 +36,12 @@ export const GET = withApi(async (req: NextRequest) => {
   const entwuerfe = await notifyNewDrafts(d).catch(() => ({ gemeldet: 0 }));
   // Tagesbericht ab 9 Uhr (Berlin), einmal pro Tag – Push + Mail (lib/tagesbericht.ts)
   const bericht = await tagesberichtFaellig(d).catch((e) => ({ gesendet: false, grund: e instanceof Error ? e.message : String(e) }));
-  const res = await runMailFetch({ push: true, deadline: Date.now() + 40_000 });
+  const res = await runMailFetch({ push: true, deadline: Date.now() + 36_000 });
+  // Antwort-Wächter nach dem Abruf: neue Antworten melden, nach 5 Tagen erinnern (lib/antwort-wache.ts)
+  const wache = await antwortWache(d).catch((e) => ({ fehler: e instanceof Error ? e.message : String(e) }));
   return NextResponse.json({
     ...res,
+    antwort_wache: wache,
     entwuerfe_gemeldet: entwuerfe.gemeldet,
     unterschrieben: sign.unterschrieben,
     unterschrift_fehler: sign.fehler,
