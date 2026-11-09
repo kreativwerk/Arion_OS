@@ -553,7 +553,44 @@ function Composer({
   const [busy, setBusy] = useState<"" | "save" | "send">("");
   const [error, setError] = useState(draft.status === "fehler" ? draft.error : "");
   const [sent, setSent] = useState("");
+  const [files, setFiles] = useState(draft.files);
+  const [uploading, setUploading] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
   const readOnly = !["entwurf", "fehler"].includes(draft.status);
+
+  const addFiles = async (list: FileList | null) => {
+    if (!list?.length) return;
+    setError("");
+    setUploading(true);
+    try {
+      for (const f of Array.from(list)) {
+        const fd = new FormData();
+        fd.append("draft_id", String(draft.id));
+        fd.append("file", f);
+        const res = await fetch("/api/mail/drafts/files", { method: "POST", body: fd });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data?.ok) throw new Error(data?.error ?? `Upload fehlgeschlagen (${res.status})`);
+        setFiles(data.files);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setUploading(false);
+      if (fileInput.current) fileInput.current.value = "";
+    }
+  };
+
+  const removeFile = async (id: number) => {
+    setError("");
+    try {
+      const res = await fetch(`/api/mail/drafts/files?draft_id=${draft.id}&id=${id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.ok) throw new Error(data?.error ?? `Fehler ${res.status}`);
+      setFiles(data.files);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
 
   const usable = useMemo(() => accounts.filter((a) => a.has_password), [accounts]);
   const dirty =
@@ -666,12 +703,21 @@ function Composer({
             rows={14}
             className="leading-relaxed min-h-[40dvh]"
           />
-          {draft.files.length + (draft.forward_files?.length ?? 0) > 0 && (
+          {files.length + (draft.forward_files?.length ?? 0) > 0 && (
             <div className="flex flex-wrap gap-1.5">
-              {draft.files.map((f) => (
+              {files.map((f) => (
                 <Badge key={f.id}>
                   <Icon name="attach_file" size={13} className="mr-1" />
                   {f.filename}
+                  {!readOnly && !sent && (
+                    <button
+                      onClick={() => removeFile(f.id)}
+                      aria-label={`${f.filename} entfernen`}
+                      className="ml-1 -mr-0.5 text-ink-3 hover:text-bad"
+                    >
+                      <Icon name="close" size={13} />
+                    </button>
+                  )}
                 </Badge>
               ))}
               {(draft.forward_files ?? []).map((f, i) => (
@@ -692,6 +738,21 @@ function Composer({
                 className="text-[13px] text-ink-3 hover:text-bad transition-colors px-1 disabled:opacity-40"
               >
                 Verwerfen
+              </button>
+              <input
+                ref={fileInput}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={(e) => addFiles(e.target.files)}
+              />
+              <button
+                onClick={() => fileInput.current?.click()}
+                disabled={Boolean(busy) || uploading}
+                className="inline-flex items-center gap-1 text-[13px] text-ink-2 hover:text-ink transition-colors px-1 disabled:opacity-40"
+              >
+                <Icon name="attach_file" size={16} />
+                {uploading ? "Lädt hoch …" : "Anhang"}
               </button>
               <div className="flex-1" />
               <Button variant="ghost" onClick={() => run("save")} disabled={Boolean(busy)}>
