@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Card, CardHeader, Badge, EmptyState, Icon, PageHeader, Row } from "@/components/ui";
 import type { AmazonAvis, Ampel, Bereich } from "@/lib/leitstand";
+import type { WacheListe } from "@/lib/antwort-wache";
 
 type Daten = {
   today: string;
@@ -12,6 +13,7 @@ type Daten = {
   amazon: AmazonAvis[];
   eigeneStationen: string[];
   lastschriften: { an: string; datum: string; betrag: number | null; tage: number }[];
+  antworten: WacheListe | null;
 };
 
 const AMPEL: Record<Ampel, { label: string; punkt: string; rand: string; badge: "bad" | "warn" | "good" | "neutral" }> = {
@@ -98,6 +100,12 @@ export default function LeitstandPage() {
           <BereichKarte key={b.id} b={b} />
         ))}
       </div>
+
+      {daten.antworten && (
+        <div id="antworten" className="mb-4 scroll-mt-4">
+          <AntwortKarte liste={daten.antworten} onChanged={laden} />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
         <AmazonKarte avis={daten.amazon} eigene={daten.eigeneStationen} today={daten.today} />
@@ -190,6 +198,64 @@ function AmazonKarte({ avis, eigene, today }: { avis: AmazonAvis[]; eigene: stri
           </Row>
         );
       })}
+    </Card>
+  );
+}
+
+/** Antwort-Wächter: gesendete Mails ohne Antwort + neue Antworten (lib/antwort-wache.ts). */
+function AntwortKarte({ liste, onChanged }: { liste: WacheListe; onChanged: () => void }) {
+  const [laeuft, setLaeuft] = useState<number | null>(null);
+  const erledigt = async (id: number) => {
+    setLaeuft(id);
+    await fetch("/api/antwort-wache", { method: "POST", body: JSON.stringify({ id, aktion: "erledigt" }) }).catch(() => undefined);
+    setLaeuft(null);
+    onChanged();
+  };
+  const wartet = [...liste.wartet].sort((a, b) => b.tage - a.tage);
+  return (
+    <Card>
+      <CardHeader
+        title="Wartet auf Antwort"
+        subtitle={
+          wartet.length
+            ? `${wartet.length} gesendete ${wartet.length === 1 ? "Mail" : "Mails"} · nach 5 Tagen kommt eine Erinnerung`
+            : "Alle gesendeten Mails sind beantwortet."
+        }
+      />
+      {liste.beantwortet.map((b) => (
+        <Row key={`a-${b.id}`}>
+          <Icon name="mark_email_read" size={18} className="text-accent shrink-0" />
+          <div className="flex-1 min-w-0">
+            <div className="text-[13px] font-medium truncate">{b.betreff || "(ohne Betreff)"}</div>
+            <div className="text-[11px] text-ink-3 truncate">
+              Antwort von {b.von} · {tt(b.am.slice(0, 10))}
+            </div>
+          </div>
+          <Badge tone="good">Antwort da</Badge>
+        </Row>
+      ))}
+      {wartet.length === 0 && liste.beantwortet.length === 0 && <EmptyState text="Nichts offen." />}
+      {wartet.map((w) => (
+        <Row key={w.id} className="group">
+          <Icon name="schedule_send" size={18} className={`shrink-0 ${w.tage >= 5 ? "text-warn" : "text-ink-3"}`} />
+          <div className="flex-1 min-w-0">
+            <div className="text-[13px] font-medium truncate">{w.betreff || "(ohne Betreff)"}</div>
+            <div className="text-[11px] text-ink-3 truncate">
+              an {w.an} · gesendet {tt(w.gesendet.slice(0, 10))}
+            </div>
+          </div>
+          <Badge tone={w.tage >= 5 ? "warn" : "neutral"}>{w.tage === 0 ? "heute" : `${w.tage} T`}</Badge>
+          <button
+            onClick={() => erledigt(w.id)}
+            disabled={laeuft === w.id}
+            title="Braucht keine Antwort"
+            aria-label="Braucht keine Antwort"
+            className="w-9 h-9 rounded-full flex items-center justify-center text-ink-3 hover:text-accent hover:bg-inset shrink-0 disabled:opacity-40"
+          >
+            <Icon name="done" size={18} />
+          </button>
+        </Row>
+      ))}
     </Card>
   );
 }

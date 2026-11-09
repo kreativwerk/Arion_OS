@@ -83,6 +83,8 @@ export type LeitstandInput = {
   fristen: { titel: string; datum: string; tage: number; href: string }[];
   station: { verbunden: boolean; abwesend: number; offeneAntraege: number; vorfaelle: { datum: string; fahrer: string; kennzeichen: string }[] };
   flotte: { verbunden: boolean; gesamt: number; ausgefallen: { kennzeichen: string; status: string }[] };
+  /** Antwort-Wächter (lib/antwort-wache.ts) */
+  antworten?: { wartet: { an: string; betreff: string; tage: number; erinnert: boolean }[]; beantwortet: { von: string; betreff: string }[] };
 };
 
 const eur = (n: number) => n.toLocaleString("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
@@ -156,6 +158,28 @@ export function leitstandBereiche(x: LeitstandInput): Bereich[] {
       zeile: "liegen bei dir",
       punkte,
       href: "/aufgaben",
+    });
+  }
+
+  /* Antworten (Antwort-Wächter) */
+  if (x.antworten) {
+    const a = x.antworten;
+    const ueber = a.wartet.filter((w) => w.erinnert || w.tage >= 5);
+    out.push({
+      id: "antworten",
+      titel: "Antworten",
+      icon: "forward_to_inbox",
+      ampel: ueber.length ? "gelb" : "gruen",
+      kennzahl: String(a.wartet.length),
+      zeile: "warten auf Antwort",
+      punkte: [
+        ...ueber
+          .sort((p, q) => q.tage - p.tage)
+          .slice(0, 3)
+          .map((w): Punkt => ({ text: `${w.an} · seit ${w.tage} T · ${w.betreff}`, ton: "warn" })),
+        ...a.beantwortet.slice(0, 2).map((b): Punkt => ({ text: `Antwort da: ${b.von} · ${b.betreff}` })),
+      ],
+      href: "/leitstand#antworten",
     });
   }
 

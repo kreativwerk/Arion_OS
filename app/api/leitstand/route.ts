@@ -3,6 +3,7 @@ import { withApi } from "@/lib/api-error";
 import { getDb, todayIso } from "@/lib/db";
 import { dashboardBuchhaltung } from "@/lib/buch-overview";
 import { eingangZahlen, fristen, jetztAuswaehlen, konto, station, flotte, wartetAufDich } from "@/lib/home-data";
+import { wacheListe, type WacheListe } from "@/lib/antwort-wache";
 import { amazonAvis, leitstandBereiche, leitstandKopf, type AmazonAvis } from "@/lib/leitstand";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +25,7 @@ export const GET = withApi(async () => {
   const today = todayIso();
   const seit = new Date(Date.now() - 14 * 86_400_000).toISOString().slice(0, 10);
 
-  const [kontoDaten, buch, vorgangRows, entwuerfe, eingang, fristenListe, stationDaten, flotteDaten, avisMails] = await Promise.all([
+  const [kontoDaten, buch, vorgangRows, entwuerfe, eingang, fristenListe, stationDaten, flotteDaten, avisMails, antworten] = await Promise.all([
     konto(d, today),
     safe(() => dashboardBuchhaltung(d), null),
     safe(
@@ -48,6 +49,7 @@ export const GET = withApi(async () => {
         ),
       []
     ),
+    safe<WacheListe | null>(() => wacheListe(d), null),
   ]);
 
   // Vorgänge: alle offenen zählen (nicht nur die sieben für „Jetzt dran“)
@@ -87,6 +89,7 @@ export const GET = withApi(async () => {
     fristen: fristenListe,
     station: { verbunden: stationDaten.verbunden, abwesend: stationDaten.abwesend.length, offeneAntraege: stationDaten.offeneAntraege, vorfaelle: stationDaten.vorfaelle },
     flotte: { verbunden: flotteDaten.verbunden, gesamt: flotteDaten.gesamt, ausgefallen: flotteDaten.ausgefallen },
+    ...(antworten ? { antworten } : {}),
   });
 
   return NextResponse.json({
@@ -96,5 +99,6 @@ export const GET = withApi(async () => {
     amazon: amazon.slice(0, 8),
     eigeneStationen: EIGENE_STATIONEN,
     lastschriften: kontoDaten.lastschriften,
+    antworten,
   });
 });
