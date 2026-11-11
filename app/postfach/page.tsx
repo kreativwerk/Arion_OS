@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Badge, Button, Card, EmptyState, ErrorNote, Icon, Input, PageHeader, Segmented, Select, TextArea } from "@/components/ui";
+import AlleSendenSheet from "@/components/AlleSendenSheet";
 
 /**
  * Postfach: alle Mails aller verbundenen Konten (Archiv in der Datenbank,
@@ -113,6 +114,8 @@ export default function PostfachPage() {
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [editing, setEditing] = useState<Draft | null>(null);
+  const [alleOffen, setAlleOffen] = useState(false);
+  const [alleMeldung, setAlleMeldung] = useState("");
   // Direktlink /postfach?ansicht=entwuerfe&entwurf=ID (z. B. „Als E-Mail weiterleiten“ aus der Briefpost) öffnet den Entwurf
   const openedFromUrl = useRef(false);
   useEffect(() => {
@@ -350,7 +353,39 @@ export default function PostfachPage() {
       </div>
 
       {view === "drafts" ? (
-        <DraftList drafts={drafts} onOpen={setEditing} />
+        <>
+          {(drafts.filter((d) => d.status === "entwurf").length > 1 || alleMeldung) && (
+            <div className="flex items-center gap-3 mb-3">
+              <span className="flex-1 min-w-0 text-[12px] text-ink-3 truncate">{alleMeldung}</span>
+              {drafts.filter((d) => d.status === "entwurf").length > 1 && (
+                <Button
+                  onClick={() => {
+                    setAlleMeldung("");
+                    setAlleOffen(true);
+                  }}
+                  className="shrink-0 whitespace-nowrap"
+                >
+                  <span className="inline-flex items-center gap-1.5">
+                    <Icon name="send" size={16} />
+                    Alle senden ({drafts.filter((d) => d.status === "entwurf").length})
+                  </span>
+                </Button>
+              )}
+            </div>
+          )}
+          <DraftList drafts={drafts} onOpen={setEditing} />
+          <AlleSendenSheet
+            offen={alleOffen}
+            onClose={() => setAlleOffen(false)}
+            onFertig={(text) => {
+              setAlleMeldung(text);
+              api<Draft[]>("/api/mail/drafts")
+                .then(setDrafts)
+                .catch(() => {});
+              reload();
+            }}
+          />
+        </>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)] gap-5 items-start">
           <Card className={`overflow-hidden ${selected ? "hidden lg:block" : ""}`}>
