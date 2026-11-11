@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Badge, Card, CardHeader, CheckCircle, EmptyState, Icon, Row } from "@/components/ui";
 import { fmtDate } from "@/lib/client";
 import SendeSheet from "@/components/SendeSheet";
+import AlleSendenSheet from "@/components/AlleSendenSheet";
 import BezahlSheet, { type BezahlVorgang } from "@/components/BezahlSheet";
 import type { EingangZahlen, Faelle, FallItem, Jetzt, JetztItem, WartetItem } from "@/lib/home-data";
 
@@ -48,7 +49,9 @@ function Hinweis({ icon, text }: { icon: string; text: string }) {
  */
 export function WartetWidget({ items, onChanged }: { items: WartetItem[]; onChanged?: () => void }) {
   const [offenId, setOffenId] = useState<number | null>(null);
+  const [alleOffen, setAlleOffen] = useState(false);
   const [meldung, setMeldung] = useState("");
+  const sendbereit = items.filter((d) => d.status === "entwurf").length;
 
   useEffect(() => {
     const id = Number(new URLSearchParams(window.location.search).get("entwurf"));
@@ -64,9 +67,24 @@ export function WartetWidget({ items, onChanged }: { items: WartetItem[]; onChan
         title="Nur du kannst: senden"
         subtitle={items.length ? `${items.length} ${items.length === 1 ? "Entwurf" : "Entwürfe"} zum Senden` : "Nichts offen"}
         action={
-          <Link href="/postfach?ansicht=entwuerfe" className="text-[12px] text-accent">
-            Postfach →
-          </Link>
+          <span className="flex items-center gap-3">
+            {sendbereit > 1 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setMeldung("");
+                  setAlleOffen(true);
+                }}
+                className="inline-flex items-center gap-1 h-8 px-3 rounded-full bg-accent text-on-accent text-[12px] font-semibold"
+              >
+                <Icon name="send" size={14} />
+                Alle senden
+              </button>
+            )}
+            <Link href="/postfach?ansicht=entwuerfe" className="text-[12px] text-accent">
+              Postfach →
+            </Link>
+          </span>
         }
       />
       {meldung && <Hinweis icon="check_circle" text={meldung} />}
@@ -102,6 +120,14 @@ export function WartetWidget({ items, onChanged }: { items: WartetItem[]; onChan
           setOffenId(null);
           setMeldung(text);
           if (window.location.search.includes("entwurf=")) window.history.replaceState(null, "", window.location.pathname);
+          onChanged?.();
+        }}
+      />
+      <AlleSendenSheet
+        offen={alleOffen}
+        onClose={() => setAlleOffen(false)}
+        onFertig={(text) => {
+          setMeldung(text);
           onChanged?.();
         }}
       />

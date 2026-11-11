@@ -110,7 +110,15 @@ function Flieger({ t, phase }: { t: number; phase: Phase }) {
 }
 
 /** „Zum Senden schieben“ – Regler mit Zeiger/Touch, per Tastatur Enter/Leertaste. */
-function SendeRegler({ onSenden, gesperrt }: { onSenden: () => void; gesperrt: boolean }) {
+export function SendeRegler({
+  onSenden,
+  gesperrt,
+  text = "Zum Senden schieben",
+}: {
+  onSenden: () => void;
+  gesperrt: boolean;
+  text?: string;
+}) {
   const spur = useRef<HTMLDivElement>(null);
   const start = useRef<{ x: number; basis: number } | null>(null);
   const [x, setX] = useState(0);
@@ -158,12 +166,12 @@ function SendeRegler({ onSenden, gesperrt }: { onSenden: () => void; gesperrt: b
         className="absolute inset-0 flex items-center justify-center pl-12 text-[14px] font-medium text-ink-2 pointer-events-none"
         style={{ opacity: 1 - anteil * 1.4 }}
       >
-        <span className="sende-schimmer">Zum Senden schieben</span>
+        <span className="sende-schimmer">{text}</span>
       </div>
       <button
         type="button"
         disabled={gesperrt}
-        aria-label="Zum Senden schieben oder Enter drücken"
+        aria-label={`${text} oder Enter drücken`}
         onKeyDown={(e) => {
           if (!gesperrt && (e.key === "Enter" || e.key === " ")) {
             e.preventDefault();
