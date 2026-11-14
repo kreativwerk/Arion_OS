@@ -63,8 +63,16 @@ export function looksLikeIban(raw: string): boolean {
 
 const FILE_URL = /(firebasestorage\.googleapis\.com|storage\.googleapis\.com|firebasestorage\.app\/|^gs:\/\/)/i;
 
-function redactString(s: string): string {
-  if (FILE_URL.test(s)) return FILE;
+export type DecodeOpts = {
+  /** Datei-Links behalten statt „[file]“ – nur für Fahrzeugdaten (Fahrzeugschein, TÜV-Bericht …),
+   *  nie für Fahrerdaten. Die Links verlassen Arion OS nicht: der MCP lädt die Datei serverseitig. */
+  keepFiles?: boolean;
+};
+
+export const isFileRef = (s: string) => FILE_URL.test(s);
+
+function redactString(s: string, o: DecodeOpts = {}): string {
+  if (FILE_URL.test(s)) return o.keepFiles && s.length < 4000 ? s : FILE;
   if (/^data:[^;]+;base64,/i.test(s)) return FILE;
   if (s.length > 2000 && /^[A-Za-z0-9+/=\s]+$/.test(s)) return FILE;
   if (s.length <= 40 && looksLikeIban(s)) return REDACTED;
@@ -87,26 +95,26 @@ type FsValue = {
 };
 
 /** Firestore-REST-Wert → JSON (Schwärzung nach Schlüssel erfolgt in decodeFields). */
-export function decodeValue(v: FsValue): unknown {
+export function decodeValue(v: FsValue, o: DecodeOpts = {}): unknown {
   if (v == null) return null;
-  if ("stringValue" in v) return redactString(v.stringValue ?? "");
+  if ("stringValue" in v) return redactString(v.stringValue ?? "", o);
   if ("integerValue" in v) return Number(v.integerValue);
   if ("doubleValue" in v) return v.doubleValue;
   if ("booleanValue" in v) return v.booleanValue;
   if ("nullValue" in v) return null;
   if ("timestampValue" in v) return v.timestampValue;
-  if ("mapValue" in v) return decodeFields(v.mapValue?.fields ?? {});
-  if ("arrayValue" in v) return (v.arrayValue?.values ?? []).map(decodeValue);
+  if ("mapValue" in v) return decodeFields(v.mapValue?.fields ?? {}, o);
+  if ("arrayValue" in v) return (v.arrayValue?.values ?? []).map((x) => decodeValue(x, o));
   if ("referenceValue" in v) return (v.referenceValue ?? "").replace(/^projects\/[^/]+\/databases\/[^/]+\/documents\//, "");
   if ("geoPointValue" in v) return { lat: v.geoPointValue?.latitude, lng: v.geoPointValue?.longitude };
   if ("bytesValue" in v) return FILE;
   return null;
 }
 
-export function decodeFields(fields: Record<string, FsValue>): Record<string, unknown> {
+export function decodeFields(fields: Record<string, FsValue>, o: DecodeOpts = {}): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(fields)) {
-    out[k] = isSensitiveKey(k) ? REDACTED : decodeValue(v);
+    out[k] = isSensitiveKey(k) ? REDACTED : decodeValue(v, o);
   }
   return out;
 }

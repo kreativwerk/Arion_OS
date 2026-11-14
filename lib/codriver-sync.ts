@@ -146,7 +146,7 @@ async function speichern(d: DB, col: string, docs: FsDoc[], idOf: (doc: FsDoc) =
       `INSERT INTO codriver_docs (collection, doc_id, data, update_time, synced_at, removed_at) VALUES (?,?,?,?,?,NULL)
        ON CONFLICT (collection, doc_id) DO UPDATE SET data = excluded.data, update_time = excluded.update_time,
          synced_at = excluded.synced_at, removed_at = NULL`,
-      [col, ids[k], JSON.stringify(decodeFields(doc.fields ?? {})), doc.updateTime || "", now]
+      [col, ids[k], JSON.stringify(decodeFields(doc.fields ?? {}, { keepFiles: FAHRZEUG_SAMMLUNGEN.has(col) })), doc.updateTime || "", now]
     );
     n++;
   }
@@ -158,6 +158,9 @@ async function speichern(d: DB, col: string, docs: FsDoc[], idOf: (doc: FsDoc) =
 }
 
 export const VEHICLE_DOCUMENTS = "vehicle_documents";
+
+/** Sammlungen, in denen Datei-Links erhalten bleiben (Fahrzeugschein, TÜV-Bericht …) – keine Personendaten. */
+export const FAHRZEUG_SAMMLUNGEN = new Set(["vehicles", VEHICLE_DOCUMENTS, "fleet_vehicle_extras"]);
 
 /**
  * Fahrzeugdokumente (vehicles/{id}/documents) Fahrzeug für Fahrzeug spiegeln.
@@ -278,3 +281,40 @@ export async function runCodriverSync(opts: { deadline?: number } = {}): Promise
   await setConfig(d, "codriver_last_sync", new Date().toISOString());
   return res;
 }
+
+/* ── Dateien (für den MCP) ───────────────────────────────── */
+
+const MAX_FILE_BYTES = 8 * 1024 * 1024;
+
+/**
+ * Lädt eine Datei aus dem Codriver-Speicher (Firebase Storage) mit dem
+ * Codriver-Login – nur Links aus Fahrzeugdaten (siehe FAHRZEUG_SAMMLUNGEN).
+ * Erlaubt sind ausschließlich Firebase-Storage-Adressen des Codriver-Projekts.
+ */
+export async function codriverDatei(ref: string, deadline = Date.now() + 25_000): Promise<{ bytes: Uint8Array; mime: string; name: string }> {
+  let url: string;
+  const gs = ref.match(/^gs:\/\/([^/]+)\/(.+)$/);
+  if (gs) {
+    url = `https://firebasestorage.googleapis.com/v0/b/${gs[1]}/o/${encodeURIComponent(gs[2])}?alt=media`;
+  } else {
+    const u = new URL(ref);
+    const erlaubt = u.protocol === "https:" && /(^|\.)firebasestorage\.googleapis\.com$|(^|\.)storage\.googleapis\.com$|\.firebasestorage\.app$/.test(u.hostname);
+    if (!erlaubt) throw new Error("Keine Codriver-Datei.");
+    if (!/codriver/i.test(u.pathname + u.hostname)) throw new Error("Datei liegt nicht im Codriver-Speicher.");
+    url = u.toString();
+  }
+  const headers: Record<string, string> = {};
+  if (!/[?&]token=/.test(url) && codriverConfigured()) {
+    const s = await signIn(deadline);
+    headers.authorization = `Firebase ${s.idToken}`;
+  }
+  const res = await fetch(url, { headers, signal: AbortSignal.timeout(Math.max(2_000, deadline - Date.now())) });
+  if (!res.ok) throw new Error(`Datei nicht abrufbar (${res.status}).`);
+  const len = Number(res.headers.get("content-length") || 0);
+  if (len > MAX_FILE_BYTES) throw new Error("Datei zu groß.");
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  if (bytes.length > MAX_FILE_BYTES) throw new Error("Datei zu groß.");
+  const name = decodeURIComponent((new URL(url).pathname.split("/o/")[1] || "").split("/").pop() || "datei");
+  return { bytes, mime: (res.headers.get("content-type") || "application/octet-stream").split(";")[0], name };
+}
+

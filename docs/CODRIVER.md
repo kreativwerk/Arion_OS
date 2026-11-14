@@ -95,3 +95,37 @@ Arion OS schreibt nie nach Codriver. In Codriver gelöschte Dokumente bekommen `
 select data::jsonb->>'name' from codriver_docs where collection = 'drivers' and removed_at is null;
 select doc_id, data::jsonb->'summary'->>'overallScore' from codriver_docs where collection = 'reports' order by doc_id desc;
 ```
+
+## 6. Codriver-MCP für Claude (nur lesend)
+
+Damit Claude im Chat die Arion-Flotte kennt – Fahrzeug per Kennzeichen finden,
+Fahrzeugschein ansehen (FIN, HSN/TSN, Erstzulassung) zum Teilebestellen –, stellt
+Arion OS einen MCP-Server bereit. Quelle ist ausschließlich der Spiegel `codriver_docs`
+(Abschnitt 5), es läuft also nichts über den Mac, und nichts wird nach Codriver geschrieben.
+
+**Adresse:** `{ARION_OS_URL}/api/external/mcp/{arion_…-Token}`
+(MCP „Streamable HTTP“, zustandslos; alternativ Token per `Authorization: Bearer`).
+
+**Einrichtung**
+1. Abschnitt 5 erledigt (Abgleich läuft, `codriver_status` zeigt Daten).
+2. Einstellungen → API-Zugänge → Token „Claude Codriver-MCP“ anlegen.
+3. claude.ai → Einstellungen → Connectors → „Eigenen Connector hinzufügen“,
+   Name „Codriver Arion“, URL = Adresse oben mit dem Token. Widerruf jederzeit über den Token.
+
+**Werkzeuge**
+
+| Werkzeug | Zweck |
+| --- | --- |
+| `codriver_status` | Welche Bereiche gespiegelt sind, wie viele Einträge, letzter Abgleich |
+| `codriver_fahrzeug` | Fahrzeug per Kennzeichen (Schreibweise egal), FIN oder ID – Stammdaten, Cortex, Dokumente, Ereignisse |
+| `codriver_fahrzeugschein` | Fahrzeugschein als Bild/PDF plus FIN/Marke/Modell |
+| `codriver_datei` | Andere Fahrzeugdatei (TÜV-Bericht, Gutachten, Vertrag) als Bild/PDF |
+| `codriver_fahrzeuge` | Fahrzeugliste, Filter Station/Freitext |
+| `codriver_fahrer` | Fahrer suchen; bei einem Treffer mit Abwesenheiten, Unfällen, Scores |
+| `codriver_fristen` | TÜV/HU, Zulassung, Leasing-/Mietende, Verträge, Führerscheine |
+| `codriver_suche` / `codriver_liste` / `codriver_eintrag` | Volltext, Bereich blättern, Einzeleintrag |
+
+**Dateien:** In Fahrzeug-Sammlungen (`vehicles`, `vehicle_documents`, `fleet_vehicle_extras`)
+behält der Abgleich die Datei-Links; bei Fahrerdaten bleiben sie `[file]`. Die Links
+verlassen Arion OS nie – der MCP lädt die Datei serverseitig (`codriverDatei`, nur
+Firebase-Storage des Codriver-Projekts, max. 8 MB) und gibt sie als Bild bzw. PDF zurück.
