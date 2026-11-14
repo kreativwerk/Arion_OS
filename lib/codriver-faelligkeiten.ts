@@ -82,7 +82,7 @@ function imFenster(tage: number, voraus = CODRIVER_TAGE_VORAUS, zurueck = CODRIV
 export type CodriverQuellen = { vehicles: Doc[]; vehicleDocuments: Doc[]; drivers: Doc[] };
 
 /** Reine Auswertung: alle Codriver-Fälligkeiten im Fenster, früheste zuerst. */
-export function codriverFaelligkeiten(q: CodriverQuellen, today: string): CodriverFrist[] {
+export function codriverFaelligkeiten(q: CodriverQuellen, today: string, voraus = CODRIVER_TAGE_VORAUS): CodriverFrist[] {
   const out: CodriverFrist[] = [];
 
   // ── Fahrzeuge ──
@@ -113,7 +113,7 @@ export function codriverFaelligkeiten(q: CodriverQuellen, today: string): Codriv
   }
   for (const n of neuestes.values()) {
     const tage = tageBis(n.datum, today);
-    if (!imFenster(tage)) continue;
+    if (!imFenster(tage, voraus)) continue;
     out.push({ bereich: "fahrzeug", titel: `${n.plate} – ${dokumentName(n.typ)}`, detail: beschreibung(fahrzeug.get(n.plate)!), datum: n.datum, tage });
   }
 
@@ -122,13 +122,13 @@ export function codriverFaelligkeiten(q: CodriverQuellen, today: string): Codriv
     const reg = isoTag(cortex.registrationExpiry);
     if (reg) {
       const tage = tageBis(reg, today);
-      if (imFenster(tage)) out.push({ bereich: "fahrzeug", titel: `${plate} – Zulassung läuft ab`, detail: beschreibung(v), datum: reg, tage });
+      if (imFenster(tage, voraus)) out.push({ bereich: "fahrzeug", titel: `${plate} – Zulassung läuft ab`, detail: beschreibung(v), datum: reg, tage });
     }
     const ende = isoTag(cortex.ownershipEnd) || isoTag(obj(v.metadata).contractEndDate);
     if (ende) {
       const tage = tageBis(ende, today);
       // Miet-/Leasingende nur nach vorn melden – danach ist das Fahrzeug weg
-      if (tage >= 0 && tage <= CODRIVER_TAGE_VORAUS) {
+      if (tage >= 0 && tage <= voraus) {
         const art = /LEASE|LEASED/.test(str(cortex.ownershipType)) ? "Leasingende" : "Mietende";
         out.push({ bereich: "fahrzeug", titel: `${plate} – ${art}`, detail: beschreibung(v), datum: ende, tage });
       }
@@ -152,18 +152,18 @@ export function codriverFaelligkeiten(q: CodriverQuellen, today: string): Codriv
 
     if (aktuell.ende) {
       const tage = tageBis(aktuell.ende, today);
-      if (tage >= 0 && tage <= CODRIVER_TAGE_VORAUS) out.push({ bereich: "fahrer", titel: `${name} – Vertrag endet`, detail, datum: aktuell.ende, tage });
+      if (tage >= 0 && tage <= voraus) out.push({ bereich: "fahrer", titel: `${name} – Vertrag endet`, detail, datum: aktuell.ende, tage });
     }
     const ob = obj(f.onboarding);
     const fs = isoTag(ob.licenseExpiry);
     if (fs) {
       const tage = tageBis(fs, today);
-      if (imFenster(tage)) out.push({ bereich: "fahrer", titel: `${name} – Führerschein läuft ab`, detail, datum: fs, tage });
+      if (imFenster(tage, voraus)) out.push({ bereich: "fahrer", titel: `${name} – Führerschein läuft ab`, detail, datum: fs, tage });
     }
     const ausweis = isoTag(ob.idDocExpiry);
     if (ausweis) {
       const tage = tageBis(ausweis, today);
-      if (imFenster(tage)) out.push({ bereich: "fahrer", titel: `${name} – Ausweis/Aufenthaltstitel läuft ab`, detail, datum: ausweis, tage });
+      if (imFenster(tage, voraus)) out.push({ bereich: "fahrer", titel: `${name} – Ausweis/Aufenthaltstitel läuft ab`, detail, datum: ausweis, tage });
     }
   }
 
