@@ -10,6 +10,7 @@ import {
   forwardBlock,
   forwardSubject,
   htmlToText,
+  inlineCidFor,
   parseAttachmentMeta,
   parseAddressList,
   replySubject,
@@ -217,4 +218,12 @@ test("Weiterleiten: Betreff, Kopf und Anhang-Liste", () => {
   ]);
   assert.deepEqual(parseAttachmentMeta("kaputt"), []);
   assert.deepEqual(parseAttachmentMeta(null), []);
+});
+
+test("Gestaltete Mail: nur per cid eingebundene Bilder werden eingebettet", () => {
+  const html = '<img src="cid:fleetfix-logo.png" alt="Fleet Fix">';
+  assert.equal(inlineCidFor("fleetfix-logo.png", "image/png", html), "fleetfix-logo.png");
+  assert.equal(inlineCidFor("tacho.jpg", "image/jpeg", html), undefined);
+  assert.equal(inlineCidFor("fleetfix-logo.png", "application/pdf", html), undefined);
+  assert.equal(inlineCidFor("fleetfix-logo.png", "image/png", ""), undefined);
 });

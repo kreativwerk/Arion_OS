@@ -4,7 +4,7 @@ import MailComposer from "nodemailer/lib/mail-composer";
 import type { DB } from "@/lib/db";
 import { decryptSecret } from "@/lib/secret-store";
 import { openImap } from "@/lib/mail-archive";
-import { parseAddressList, sentFolder, smtpFor, type FolderInfo } from "@/lib/mail-parts";
+import { inlineCidFor, parseAddressList, sentFolder, smtpFor, type FolderInfo } from "@/lib/mail-parts";
 import { loadForwardAttachments, type LoadedAttachment } from "@/lib/mail-forward";
 import { signDraft } from "@/lib/draft-sign";
 
@@ -27,6 +27,7 @@ type DraftRow = {
   bcc_addr: string;
   subject: string;
   body_text: string;
+  body_html: string | null;
   reply_mail_id: number | null;
   forward_mail_id: number | null;
   sign_spec: string | null;
@@ -51,7 +52,10 @@ type AccountRow = {
 
 export type SendResult = { ok: boolean; status: string; messageId?: string; hinweis?: string; error?: string };
 
-/** `html`: optionale HTML-Fassung (z. B. Tagesbericht); der Text bleibt als Alternative dabei. */
+/**
+ * `html`: optionale HTML-Fassung (z. B. Tagesbericht). Ohne Angabe gilt die am Entwurf
+ * gespeicherte gestaltete Fassung (`body_html`). Der Text bleibt immer als Alternative dabei.
+ */
 export async function sendDraft(d: DB, draftId: number, opts: { html?: string } = {}): Promise<SendResult> {
   const claimed = await d.all<{ id: number }>(
     "UPDATE mail_drafts SET status = 'sendet', error = '', updated_at = ? WHERE id = ? AND status IN ('entwurf','fehler') RETURNING id",
@@ -116,6 +120,10 @@ export async function sendDraft(d: DB, draftId: number, opts: { html?: string } 
     }
   }
 
+  const html = opts.html || draft.body_html || "";
+  // Bilder, die die gestaltete Fassung per „cid:Dateiname“ einbindet (z. B. das Logo), gehen
+  // eingebettet mit, damit sie ohne Nachladen erscheinen. Alle anderen Dateien bleiben Anhänge.
+
   const composer = new MailComposer({
     from: acc.display_name ? { name: acc.display_name, address: fromAddr } : fromAddr,
     to,
@@ -123,12 +131,20 @@ export async function sendDraft(d: DB, draftId: number, opts: { html?: string } 
     bcc: bcc.length ? bcc : undefined,
     subject: draft.subject,
     text: draft.body_text,
-    html: opts.html || undefined,
+    html: html || undefined,
     messageId,
     inReplyTo: draft.in_reply_to || undefined,
     references: draft.references_hdr || undefined,
     attachments: [
-      ...files.map((f) => ({ filename: f.filename, contentType: f.mime, content: Buffer.from(f.data) })),
+      ...files.map((f) => {
+        const cid = inlineCidFor(f.filename, f.mime, html);
+        return {
+          filename: f.filename,
+          contentType: f.mime,
+          content: Buffer.from(f.data),
+          ...(cid ? { cid, contentDisposition: "inline" as const } : {}),
+        };
+      }),
       ...forwarded.map((f) => ({ filename: f.filename, contentType: f.mime, content: f.content })),
     ],
   });

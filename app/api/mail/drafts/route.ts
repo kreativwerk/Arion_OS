@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
  */
 
 const COLS = `d.id, d.account_id, a.label AS account, a.username AS from_addr, d.to_addr, d.cc_addr, d.bcc_addr, d.subject,
-  d.body_text, d.reply_mail_id, d.forward_mail_id, d.sign_status, d.sign_error, d.source, d.note, d.status, d.error, d.created_at, d.updated_at, d.sent_at`;
+  d.body_text, CASE WHEN COALESCE(d.body_html, '') <> '' THEN 1 ELSE 0 END AS has_html, d.reply_mail_id, d.forward_mail_id, d.sign_status, d.sign_error, d.source, d.note, d.status, d.error, d.created_at, d.updated_at, d.sent_at`;
 
 async function list(status: string | null) {
   const d = await getDb();
@@ -142,7 +142,7 @@ export const PATCH = withApi(async (req: NextRequest) => {
   const b = (await req.json().catch(() => ({}))) as Body;
   if (!b.id) return NextResponse.json({ error: "id erforderlich" }, { status: 400 });
   const d = await getDb();
-  const cur = await d.get<{ status: string }>("SELECT status FROM mail_drafts WHERE id = ?", [b.id]);
+  const cur = await d.get<{ status: string; body_text: string }>("SELECT status, body_text FROM mail_drafts WHERE id = ?", [b.id]);
   if (!cur) return NextResponse.json({ error: "Entwurf nicht gefunden" }, { status: 404 });
   if (!["entwurf", "fehler"].includes(cur.status)) {
     return NextResponse.json({ error: `Entwurf ist „${cur.status}“ und kann nicht mehr geändert werden.` }, { status: 409 });
@@ -174,6 +174,9 @@ export const PATCH = withApi(async (req: NextRequest) => {
       params.push(k === "account_id" ? Number(b[k]) : String(b[k]));
     }
   }
+  // Die gestaltete Fassung gehört zum gespeicherten Text. Ändert sich der Text, wäre sie veraltet:
+  // dann fällt sie weg, und die Mail geht als reiner Text raus.
+  if (b.body !== undefined && String(b.body) !== cur.body_text) sets.push("body_html = ''");
   sets.push("status = 'entwurf'", "updated_at = ?");
   params.push(now, b.id);
   await d.run(`UPDATE mail_drafts SET ${sets.join(", ")} WHERE id = ?`, params);
