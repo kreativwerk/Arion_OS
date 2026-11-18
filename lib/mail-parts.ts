@@ -247,3 +247,12 @@ export function forwardBlock(m: ForwardSource): string {
   ].filter(Boolean);
   return `${kopf.join("\n")}\n\n${(m.body_text || "").replace(/\r\n/g, "\n")}`;
 }
+
+/**
+ * Eingebettetes Bild einer gestalteten Mail: Bindet die HTML-Fassung eine Bilddatei des Entwurfs
+ * per „cid:Dateiname“ ein (z. B. das Logo), liefert das die Content-ID. Alles andere bleibt Anhang.
+ */
+export function inlineCidFor(filename: string, mime: string, html: string): string | undefined {
+  if (!html || !filename || !/^image\//i.test(mime || "")) return undefined;
+  return html.includes(`cid:${filename}`) ? filename : undefined;
+}

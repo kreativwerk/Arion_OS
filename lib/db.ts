@@ -751,6 +751,7 @@ async function ensureSchema(d: DB) {
     await addColumn("assistant_messages", "conversation_id", "TEXT DEFAULT ''");
     await addColumn("mail_drafts", "notified_at", "TEXT");
     await addColumn("mail_drafts", "forward_mail_id", "INTEGER");
+    await addColumn("mail_drafts", "body_html", "TEXT DEFAULT ''");
     for (const col of DRAFT_SIGN_COLUMNS) await addColumn("mail_drafts", col, "TEXT DEFAULT ''");
     await addColumn("buch_ausgaben", "beleg_url", "TEXT DEFAULT ''");
   } else {
@@ -778,6 +779,8 @@ async function ensureSchema(d: DB) {
     await d.run("ALTER TABLE mail_drafts ADD COLUMN IF NOT EXISTS notified_at TEXT");
     // Weiterleiten: Verweis auf die Originalmail, Anhänge kommen beim Versand per IMAP (lib/mail-forward.ts)
     await d.run("ALTER TABLE mail_drafts ADD COLUMN IF NOT EXISTS forward_mail_id INTEGER");
+    // Gestaltete Fassung (HTML) eines Entwurfs; der Text bleibt die Alternative (lib/mail-send.ts)
+    await d.run("ALTER TABLE mail_drafts ADD COLUMN IF NOT EXISTS body_html TEXT DEFAULT ''");
     // Unterschreiben auf dem Server: Auftrag (JSON) + Status/Fehler (lib/draft-sign.ts)
     for (const col of DRAFT_SIGN_COLUMNS) await d.run(`ALTER TABLE mail_drafts ADD COLUMN IF NOT EXISTS ${col} TEXT DEFAULT ''`);
     // Belegabgleich: Link zum gefundenen Beleg im Drive (lib/beleg-abgleich.ts)

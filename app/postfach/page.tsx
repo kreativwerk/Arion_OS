@@ -40,6 +40,7 @@ type Draft = {
   bcc_addr: string;
   subject: string;
   body_text: string;
+  has_html?: number | boolean;
   reply_mail_id: number | null;
   forward_mail_id: number | null;
   source: string;
@@ -738,6 +739,13 @@ function Composer({
             rows={14}
             className="leading-relaxed min-h-[40dvh]"
           />
+          {Boolean(draft.has_html) && (
+            <p className="text-[12px] text-ink-3">
+              {body === draft.body_text
+                ? "Diese Mail geht gestaltet raus (Tabelle, Farben). Änderst du den Text, wird nur der Text gesendet."
+                : "Text geändert: Die Mail geht jetzt als reiner Text raus."}
+            </p>
+          )}
           {files.length + (draft.forward_files?.length ?? 0) > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {files.map((f) => (
