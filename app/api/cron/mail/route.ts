@@ -4,6 +4,7 @@ import { getDb } from "@/lib/db";
 import { antwortWache } from "@/lib/antwort-wache";
 import { notifyNewDrafts } from "@/lib/draft-notify";
 import { sendFreigegebene } from "@/lib/draft-freigabe";
+import { ladeDriveAnhaenge } from "@/lib/draft-drive-files";
 import { signPendingDrafts } from "@/lib/draft-sign";
 import { runMailFetch } from "@/lib/mail-fetch";
 import { tagesberichtFaellig } from "@/lib/tagesbericht";
@@ -18,9 +19,9 @@ export const maxDuration = 60;
  * Vercel schickt automatisch `Authorization: Bearer ${CRON_SECRET}`,
  * wenn die Umgebungsvariable CRON_SECRET gesetzt ist.
  *
- * `?nur=senden` verschickt nur die im Claude-Chat freigegebenen Entwürfe
- * (lib/draft-freigabe.ts) – so kann Claude den Versand sofort anstoßen, ohne
- * einen kompletten Mail-Abruf auszulösen.
+ * `?nur=senden` lädt Drive-Anhänge von Entwürfen nach (lib/draft-drive-files.ts)
+ * und verschickt die im Claude-Chat freigegebenen Entwürfe (lib/draft-freigabe.ts) –
+ * so kann Claude beides sofort anstoßen, ohne einen kompletten Mail-Abruf.
  */
 export const GET = withApi(async (req: NextRequest) => {
   const secret = process.env.CRON_SECRET;
@@ -39,11 +40,15 @@ export const GET = withApi(async (req: NextRequest) => {
   const start = Date.now();
   if (req.nextUrl.searchParams.get("nur") === "senden") {
     const sign = await signPendingDrafts(d, start + 12_000).catch((e) => ({ unterschrieben: 0, fehler: [String(e)] }));
+    // Drive-Anhänge auch für normale Entwürfe nachladen, damit sie in der App sofort dranhängen
+    const driveAnhaenge = await ladeDriveAnhaenge(d, { deadline: start + 30_000 }).catch((e) => ({ geladen: 0, fehler: [String(e)], offen: 0 }));
     const versand = await sendFreigegebene(d, start + 45_000).catch((e) => ({ gesendet: 0, fehler: [String(e)] }));
-    return NextResponse.json({ versand, unterschrieben: sign.unterschrieben, unterschrift_fehler: sign.fehler });
+    return NextResponse.json({ versand, drive_anhaenge: driveAnhaenge, unterschrieben: sign.unterschrieben, unterschrift_fehler: sign.fehler });
   }
   // Unterschrifts-Aufträge vor der Meldung erledigen, damit der Push den fertigen Anhang zählt
   const sign = await signPendingDrafts(d, start + 12_000).catch((e) => ({ unterschrieben: 0, fehler: [String(e)] }));
+  // Anhänge aus Google Drive an Entwürfe nachladen (höchstens bis Sekunde 16)
+  const driveAnhaenge = await ladeDriveAnhaenge(d, { deadline: start + 16_000 }).catch((e) => ({ geladen: 0, fehler: [String(e)], offen: 0 }));
   // Im Chat freigegebene Claude-Entwürfe verschicken (höchstens bis Sekunde 20)
   const versand = await sendFreigegebene(d, start + 20_000).catch((e) => ({ gesendet: 0, fehler: [String(e)] }));
   const entwuerfe = await notifyNewDrafts(d).catch(() => ({ gemeldet: 0 }));
@@ -58,6 +63,7 @@ export const GET = withApi(async (req: NextRequest) => {
     antwort_wache: wache,
     freigegeben_gesendet: versand.gesendet,
     freigabe_fehler: versand.fehler,
+    drive_anhaenge: driveAnhaenge,
     entwuerfe_gemeldet: entwuerfe.gemeldet,
     unterschrieben: sign.unterschrieben,
     unterschrift_fehler: sign.fehler,

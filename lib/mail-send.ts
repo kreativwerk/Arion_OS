@@ -7,6 +7,7 @@ import { openImap } from "@/lib/mail-archive";
 import { inlineCidFor, parseAddressList, sentFolder, smtpFor, type FolderInfo } from "@/lib/mail-parts";
 import { loadForwardAttachments, type LoadedAttachment } from "@/lib/mail-forward";
 import { signDraft } from "@/lib/draft-sign";
+import { fehlendeDriveAnhaenge, ladeDriveAnhaenge } from "@/lib/draft-drive-files";
 
 /**
  * Versand freigegebener Entwürfe über den SMTP-Server des Postfachs.
@@ -106,6 +107,10 @@ export async function sendDraft(d: DB, draftId: number, opts: { html?: string } 
   const fromAddr = acc.username || acc.address;
   const domain = fromAddr.split("@")[1] || "arion-os.local";
   const messageId = `<${randomUUID()}@${domain}>`;
+  // Anhänge, die Claude über Google Drive bereitgestellt hat, jetzt nachladen – fehlt einer, wird nicht gesendet
+  await ladeDriveAnhaenge(d, { draftId, deadline: Date.now() + 20_000 }).catch(() => null);
+  const fehlend = await fehlendeDriveAnhaenge(d, draftId);
+  if (fehlend.length) return fail(`Anhang aus Google Drive nicht geladen: ${fehlend.join(", ")} – Google-Verbindung prüfen.`);
   const files = await d.all<{ filename: string; mime: string; data: Buffer | Uint8Array }>(
     "SELECT filename, mime, data FROM mail_draft_files WHERE draft_id = ? ORDER BY id",
     [draftId]

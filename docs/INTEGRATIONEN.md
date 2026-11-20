@@ -114,6 +114,15 @@ schickt ihn. Versendet werden nur freigegebene Entwürfe mit `source = 'claude'`
 Push „Gesendet: an …“ bzw. „Nicht gesendet“. Bis dahin kannst du den Entwurf in der App
 noch ändern oder verwerfen – jede Änderung nimmt die Freigabe zurück.
 
+**Anhänge aus dem Chat über Google Drive:** Größere Dateien kann Claude nicht direkt in die
+Datenbank schreiben. Claude lädt sie deshalb nach Google Drive hoch (gleiches Konto wie
+„Mit Google verbinden“) und legt in `mail_draft_files` eine Zeile mit `drive_file_id` und
+leerem `data` an. Der Mail-Cron und `/api/cron/mail?nur=senden` laden die Datei nach
+(`lib/draft-drive-files.ts`, max. 20 MB); spätestens direkt vor dem Versand wird nachgeladen –
+fehlt ein Drive-Anhang dann noch, geht die Mail **nicht** raus (Status „fehler“ mit Hinweis).
+Ist die Google-Verbindung abgelaufen, zeigt /buchhaltung das jetzt rot an, mit „Neu mit Google
+verbinden“ (sonst steht neben „Google Drive verbunden“ ein Link „Neu verbinden“).
+
 **Automatischer Abruf alle 15 Minuten** (pg_cron ist kostenlos, jeder Abruf kostet aber Vercel-Rechenzeit, siehe „Abruf-Takt“ unten) –
 im Supabase-Projekt „Arion OS“ → SQL Editor, einmalig:
 
