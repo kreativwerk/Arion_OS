@@ -131,7 +131,7 @@ async function fetchOverview(m: string | null): Promise<{ data?: Overview; error
   }
 }
 
-type DriveStatus = { oauth_client: boolean; service_account: boolean; konto: string; verbunden: boolean };
+type DriveStatus = { oauth_client: boolean; service_account: boolean; konto: string; verbunden: boolean; abgelaufen?: boolean; fehler?: string };
 
 /** „Mit Google verbinden“ – Drive-Ablage über das eigene Google-Konto (OAuth). */
 function DriveVerbindung() {
@@ -174,12 +174,35 @@ function DriveVerbindung() {
           {meldung.text}
         </div>
       )}
-      {st.verbunden ? (
+      {st.verbunden && st.abgelaufen ? (
+        <div className="flex flex-col gap-2 bg-bad/10 border border-bad/30 rounded-[10px] px-3 py-2.5 text-[12px] text-bad">
+          <div className="flex items-start gap-2">
+            <Icon name="link_off" size={16} className="mt-0.5" />
+            <span className="[overflow-wrap:anywhere]">
+              Google-Verbindung abgelaufen{st.konto ? ` (${st.konto})` : ""} – Belege und Anhänge aus Drive warten. Bitte neu verbinden.
+            </span>
+          </div>
+          {st.oauth_client && (
+            <a
+              href="/api/google/connect"
+              className="self-start inline-flex items-center gap-1.5 px-3 h-8 rounded-full bg-accent text-on-accent text-[12px] font-semibold"
+            >
+              <Icon name="add_link" size={15} />
+              Neu mit Google verbinden
+            </a>
+          )}
+        </div>
+      ) : st.verbunden ? (
         <div className="flex items-center gap-2 text-[12px] text-ink-2">
           <Icon name="cloud_done" size={16} className="text-accent" />
           <span className="flex-1 min-w-0 [overflow-wrap:anywhere]">
             Google Drive verbunden{st.konto ? ` als ${st.konto}` : st.service_account ? " (Service-Account)" : ""}
           </span>
+          {st.oauth_client && (
+            <a href="/api/google/connect" className="text-[12px] text-ink-3 shrink-0">
+              Neu verbinden
+            </a>
+          )}
           {st.konto && (
             <button onClick={trennen} className="text-[12px] text-ink-3 shrink-0">
               Trennen

@@ -754,6 +754,7 @@ async function ensureSchema(d: DB) {
     await addColumn("mail_drafts", "body_html", "TEXT DEFAULT ''");
     for (const col of DRAFT_SIGN_COLUMNS) await addColumn("mail_drafts", col, "TEXT DEFAULT ''");
     await addColumn("buch_ausgaben", "beleg_url", "TEXT DEFAULT ''");
+    await addColumn("mail_draft_files", "drive_file_id", "TEXT DEFAULT ''");
   } else {
     // Postgres kennt IF NOT EXISTS direkt
     for (const [col, def] of [
@@ -785,6 +786,8 @@ async function ensureSchema(d: DB) {
     for (const col of DRAFT_SIGN_COLUMNS) await d.run(`ALTER TABLE mail_drafts ADD COLUMN IF NOT EXISTS ${col} TEXT DEFAULT ''`);
     // Belegabgleich: Link zum gefundenen Beleg im Drive (lib/beleg-abgleich.ts)
     await d.run("ALTER TABLE buch_ausgaben ADD COLUMN IF NOT EXISTS beleg_url TEXT DEFAULT ''");
+    // Anhang aus Google Drive: Claude legt die Zeile mit Drive-ID an, der Inhalt wird nachgeladen (lib/draft-drive-files.ts)
+    await d.run("ALTER TABLE mail_draft_files ADD COLUMN IF NOT EXISTS drive_file_id TEXT DEFAULT ''");
     // Scans sind sensibel: öffentliche Supabase-API sperren (die App selbst
     // verbindet als Tabellen-Owner und ist davon nicht betroffen).
     await d.run("ALTER TABLE letter_blobs ENABLE ROW LEVEL SECURITY");

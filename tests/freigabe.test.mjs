@@ -41,3 +41,19 @@ test("abgelaufenes Zeitbudget: nichts wird gesendet", async () => {
   const res = await sendFreigegebene(fakeDb, Date.now() - 1);
   assert.deepEqual(res, { gesendet: 0, fehler: [] });
 });
+
+test("Drive-Anhänge: abgelaufenes Zeitbudget lädt nichts, zählt aber als offen", async () => {
+  const { ladeDriveAnhaenge, fehlendeDriveAnhaenge } = await import("../lib/draft-drive-files.ts");
+  const fakeDb = {
+    all: async (sql) =>
+      sql.includes("JOIN mail_drafts")
+        ? [{ id: 5, draft_id: 3, filename: "a.pdf", drive_file_id: "abc123" }]
+        : [{ filename: "a.pdf" }],
+    run: async () => {
+      throw new Error("darf nicht aufgerufen werden");
+    },
+  };
+  const res = await ladeDriveAnhaenge(fakeDb, { draftId: 3, deadline: Date.now() - 1 });
+  assert.deepEqual(res, { geladen: 0, fehler: [], offen: 1 });
+  assert.deepEqual(await fehlendeDriveAnhaenge(fakeDb, 3), ["a.pdf"]);
+});
