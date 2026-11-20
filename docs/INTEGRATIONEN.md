@@ -104,6 +104,16 @@ Absendername pro Postfach: `mail_accounts.display_name` (PATCH `/api/mail/accoun
 (`source = 'claude'`, `note` = kurze Erklärung); sie erscheinen unter „Entwürfe“ mit
 dem Hinweis „von Claude“ und gehen erst nach deinem Tipp auf „Senden“ raus.
 
+**Freigabe im Chat („senden“):** Claude zeigt jede Mail vorher vollständig im Chat
+(Absender, Empfänger, Betreff, Text, Anhänge). Antwortest du „passt“, bleibt es beim
+Entwurf. Antwortest du „senden“, setzt Claude den Entwurf auf `status = 'freigegeben'`
+und stößt den Versand sofort an (`/api/cron/mail?nur=senden`, aus der Datenbank per
+`net.http_post` mit dem Cron-Secret aus dem Vault); spätestens der nächste Mail-Cron
+schickt ihn. Versendet werden nur freigegebene Entwürfe mit `source = 'claude'`
+(`lib/draft-freigabe.ts`), über denselben Weg wie der Senden-Knopf. Danach kommt ein
+Push „Gesendet: an …“ bzw. „Nicht gesendet“. Bis dahin kannst du den Entwurf in der App
+noch ändern oder verwerfen – jede Änderung nimmt die Freigabe zurück.
+
 **Automatischer Abruf alle 15 Minuten** (pg_cron ist kostenlos, jeder Abruf kostet aber Vercel-Rechenzeit, siehe „Abruf-Takt“ unten) –
 im Supabase-Projekt „Arion OS“ → SQL Editor, einmalig:
 

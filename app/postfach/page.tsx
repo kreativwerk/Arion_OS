@@ -278,7 +278,7 @@ export default function PostfachPage() {
     }
   };
 
-  const openDrafts = drafts.filter((d) => ["entwurf", "fehler", "sendet"].includes(d.status));
+  const openDrafts = drafts.filter((d) => ["entwurf", "freigegeben", "fehler", "sendet"].includes(d.status));
 
   return (
     <div>
@@ -534,6 +534,7 @@ export default function PostfachPage() {
 
 function statusBadge(status: string) {
   if (status === "entwurf") return <Badge>Entwurf</Badge>;
+  if (status === "freigegeben") return <Badge tone="warn">freigegeben – geht gleich raus</Badge>;
   if (status === "sendet") return <Badge tone="warn">wird gesendet</Badge>;
   if (status === "gesendet") return <Badge tone="good">gesendet</Badge>;
   if (status === "fehler") return <Badge tone="bad">Fehler</Badge>;
@@ -592,7 +593,7 @@ function Composer({
   const [files, setFiles] = useState(draft.files);
   const [uploading, setUploading] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
-  const readOnly = !["entwurf", "fehler"].includes(draft.status);
+  const readOnly = !["entwurf", "fehler", "freigegeben"].includes(draft.status);
 
   const addFiles = async (list: FileList | null) => {
     if (!list?.length) return;
@@ -667,11 +668,11 @@ function Composer({
       list = await api<Draft[]>("/api/mail/drafts?status=alle");
       if (!res.ok || !data?.ok) {
         setError(data?.error ?? `Server-Fehler ${res.status}`);
-        onChanged(list.filter((d) => ["entwurf", "fehler", "sendet"].includes(d.status)), true);
+        onChanged(list.filter((d) => ["entwurf", "freigegeben", "fehler", "sendet"].includes(d.status)), true);
         return;
       }
       setSent(data.hinweis ? `Gesendet. ${data.hinweis}` : "Gesendet.");
-      onChanged(list.filter((d) => ["entwurf", "fehler", "sendet"].includes(d.status)), true);
+      onChanged(list.filter((d) => ["entwurf", "freigegeben", "fehler", "sendet"].includes(d.status)), true);
       setTimeout(onClose, 1200);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

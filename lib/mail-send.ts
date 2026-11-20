@@ -58,7 +58,7 @@ export type SendResult = { ok: boolean; status: string; messageId?: string; hinw
  */
 export async function sendDraft(d: DB, draftId: number, opts: { html?: string } = {}): Promise<SendResult> {
   const claimed = await d.all<{ id: number }>(
-    "UPDATE mail_drafts SET status = 'sendet', error = '', updated_at = ? WHERE id = ? AND status IN ('entwurf','fehler') RETURNING id",
+    "UPDATE mail_drafts SET status = 'sendet', error = '', updated_at = ? WHERE id = ? AND status IN ('entwurf','fehler','freigegeben') RETURNING id",
     [new Date().toISOString(), draftId]
   );
   if (!claimed.length) {

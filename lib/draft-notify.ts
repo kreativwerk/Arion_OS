@@ -4,9 +4,11 @@ import { pushConfigured, sendPushToAll, type PushPayload } from "@/lib/push";
 /**
  * Push aufs Handy, sobald Claude einen Mail-Entwurf anlegt.
  *
- * Claude legt Entwürfe an, verschickt sie aber nie selbst. Gesendet wird nur
- * per Knopfdruck in der App (Startseite „Wartet auf dich“ oder Postfach →
- * Entwürfe). Diese Benachrichtigung bringt den Entwurf schnell vor Albert.
+ * Claude legt Entwürfe an. Gesendet wird per Knopfdruck in der App (Startseite
+ * „Wartet auf dich“ oder Postfach → Entwürfe) – oder, wenn Albert im Chat
+ * ausdrücklich „senden“ sagt, über die Freigabe (lib/draft-freigabe.ts; solche
+ * Entwürfe haben status „freigegeben“ und werden hier nicht gemeldet).
+ * Diese Benachrichtigung bringt den Entwurf schnell vor Albert.
  *
  * Läuft im Mail-Cron (pg_cron alle 10 Minuten) und lässt sich zusätzlich über
  * /api/mail/drafts/notify sofort anstoßen. Jeder Entwurf wird nur einmal

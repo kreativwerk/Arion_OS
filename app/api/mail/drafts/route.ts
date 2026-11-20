@@ -18,7 +18,7 @@ const COLS = `d.id, d.account_id, a.label AS account, a.username AS from_addr, d
 
 async function list(status: string | null) {
   const d = await getDb();
-  const where = status === "alle" ? "" : status ? "WHERE d.status = ?" : "WHERE d.status IN ('entwurf','sendet','fehler')";
+  const where = status === "alle" ? "" : status ? "WHERE d.status = ?" : "WHERE d.status IN ('entwurf','freigegeben','sendet','fehler')";
   const rows = await d.all<Record<string, unknown>>(
     `SELECT ${COLS} FROM mail_drafts d LEFT JOIN mail_accounts a ON a.id = d.account_id ${where} ORDER BY d.id DESC LIMIT 100`,
     status && status !== "alle" ? [status] : []
@@ -144,12 +144,13 @@ export const PATCH = withApi(async (req: NextRequest) => {
   const d = await getDb();
   const cur = await d.get<{ status: string; body_text: string }>("SELECT status, body_text FROM mail_drafts WHERE id = ?", [b.id]);
   if (!cur) return NextResponse.json({ error: "Entwurf nicht gefunden" }, { status: 404 });
-  if (!["entwurf", "fehler"].includes(cur.status)) {
+  if (!["entwurf", "fehler", "freigegeben"].includes(cur.status)) {
     return NextResponse.json({ error: `Entwurf ist „${cur.status}“ und kann nicht mehr geändert werden.` }, { status: 409 });
   }
   const now = new Date().toISOString();
   if (b.discard) {
-    await d.run("UPDATE mail_drafts SET status = 'verworfen', updated_at = ? WHERE id = ?", [now, b.id]);
+    // Bedingt: Läuft der Versand gerade (status „sendet“), bleibt der Entwurf unangetastet
+    await d.run("UPDATE mail_drafts SET status = 'verworfen', updated_at = ? WHERE id = ? AND status IN ('entwurf','fehler','freigegeben')", [now, b.id]);
     return NextResponse.json({ ok: true, drafts: await list(null) });
   }
   try {
@@ -179,6 +180,8 @@ export const PATCH = withApi(async (req: NextRequest) => {
   if (b.body !== undefined && String(b.body) !== cur.body_text) sets.push("body_html = ''");
   sets.push("status = 'entwurf'", "updated_at = ?");
   params.push(now, b.id);
-  await d.run(`UPDATE mail_drafts SET ${sets.join(", ")} WHERE id = ?`, params);
+  // Jede Änderung nimmt eine Freigabe zurück (status → „entwurf“). Bedingt, damit ein
+  // gerade laufender Versand nicht überschrieben wird.
+  await d.run(`UPDATE mail_drafts SET ${sets.join(", ")} WHERE id = ? AND status IN ('entwurf','fehler','freigegeben')`, params);
   return NextResponse.json({ ok: true, drafts: await list(null) });
 });
